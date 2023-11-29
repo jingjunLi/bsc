@@ -90,6 +90,7 @@ func New(conf *Config) (*Node, error) {
 		}
 		conf.DataDir = absdatadir
 	}
+
 	if conf.LogConfig != nil {
 		if conf.LogConfig.TermTimeFormat != nil && *conf.LogConfig.TermTimeFormat != "" {
 			log.SetTermTimeFormat(*conf.LogConfig.TermTimeFormat)
@@ -172,6 +173,10 @@ func New(conf *Config) (*Node, error) {
 	node.config.checkLegacyFiles()
 	if node.server.Config.NodeDatabase == "" {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
+	}
+
+	if conf.TrieDir != "" {
+		node.config.enableSeparateTrie(conf.TrieDir)
 	}
 
 	// Check HTTP/WS prefixes are valid.
@@ -811,6 +816,38 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 			Type:              n.config.DBEngine,
 			Directory:         n.ResolvePath(name),
 			AncientsDirectory: n.ResolveAncient(name, ancient),
+			Namespace:         namespace,
+			Cache:             cache,
+			Handles:           handles,
+			ReadOnly:          readonly,
+			DisableFreeze:     disableFreeze,
+			IsLastOffset:      isLastOffset,
+			PruneAncientData:  pruneAncientData,
+		})
+	}
+
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
+	return db, err
+}
+
+func (n *Node) OpenDatabaseForTrie(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
+	}
+	var db ethdb.Database
+	var err error
+	if n.config.DataDir == "" {
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		direcrory := filepath.Join(n.config.trieDir(), name)
+		db, err = rawdb.Open(rawdb.OpenOptions{
+			Type:              n.config.DBEngine,
+			Directory:         direcrory,
+			AncientsDirectory: filepath.Join(direcrory, "ancient"),
 			Namespace:         namespace,
 			Cache:             cache,
 			Handles:           handles,

@@ -64,6 +64,9 @@ type Config struct {
 	// in memory.
 	DataDir string
 
+	// TrieDir is the file system folder the node should use for storing trie data.
+	TrieDir string
+
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
 
@@ -393,6 +396,13 @@ func (c *Config) instanceDir() string {
 	return filepath.Join(c.DataDir, c.name())
 }
 
+func (c *Config) trieDir() string {
+	if c.TrieDir == "" {
+		return ""
+	}
+	return filepath.Join(c.TrieDir, c.name())
+}
+
 // NodeKey retrieves the currently configured private key of the node, checking
 // first any manually set key, falling back to the one found in the configured
 // data folder. If no key can be found, a new one is generated.
@@ -436,6 +446,10 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 func (c *Config) checkLegacyFiles() {
 	c.checkLegacyFile(c.ResolvePath(datadirStaticNodes))
 	c.checkLegacyFile(c.ResolvePath(datadirTrustedNodes))
+}
+
+func (c *Config) enableSeparateTrie(trieDir string) {
+	c.TrieDir = trieDir
 }
 
 // checkLegacyFile will only raise an error if a file at the given path exists.

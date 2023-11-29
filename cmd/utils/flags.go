@@ -95,6 +95,12 @@ var (
 		Value:    flags.DirectoryString(node.DefaultDataDir()),
 		Category: flags.EthCategory,
 	}
+
+	TrieDirFlag = &flags.DirectoryFlag{
+		Name:     "triedir",
+		Usage:    "Data directory for the trie data base",
+		Category: flags.EthCategory,
+	}
 	DirectBroadcastFlag = &cli.BoolFlag{
 		Name:     "directbroadcast",
 		Usage:    "Enable directly broadcast mined block to all peers",
@@ -1121,6 +1127,7 @@ var (
 		RemoteDBFlag,
 		DBEngineFlag,
 		HttpHeaderFlag,
+		TrieDirFlag,
 	}
 )
 
@@ -1658,6 +1665,9 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.Bool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	}
+	if ctx.IsSet(TrieDirFlag.Name) {
+		cfg.TrieDir = ctx.String(TrieDirFlag.Name)
+	}
 }
 
 func setVoteJournalDir(ctx *cli.Context, cfg *node.Config) {
@@ -2151,6 +2161,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend, nil
 	}
+
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
@@ -2340,12 +2351,26 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	case ctx.String(SyncModeFlag.Name) == "light":
 		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
-		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false)
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles/2, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false)
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 	return chainDb
+}
+
+func SplitTrieDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
+	var (
+		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
+		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
+	)
+
+	trieDB, err := stack.OpenDatabaseForTrie("chaindata", cache, handles/2,
+		ctx.String(AncientFlag.Name), "eth/db/chaindata/", false, false, false, false)
+	if err != nil {
+		Fatalf("Could not open trie database: %v", err)
+	}
+	return trieDB
 }
 
 // tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
