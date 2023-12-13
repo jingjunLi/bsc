@@ -189,6 +189,10 @@ nodes.
 )
 
 // makeAccountManager creates an account manager with backends
+/*
+首先以700权限创建keystore目录，默认位置是datadir/keystore。
+然后初始化backend列表，创建KeyStore实例。看一下NewKeyStore()函数
+*/
 func makeAccountManager(ctx *cli.Context) *accounts.Manager {
 	cfg := loadBaseConfig(ctx)
 	am := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.Node.InsecureUnlockAllowed})

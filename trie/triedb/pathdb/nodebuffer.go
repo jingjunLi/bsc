@@ -34,6 +34,10 @@ var _ trienodebuffer = &nodebuffer{}
 // nodebuffer is a collection of modified trie nodes to aggregate the disk
 // write. The content of the nodebuffer must be checked before diving into
 // disk (since it basically is not-yet-written data).
+/*
+用途, 用法, API ?
+nodebuffer 将 修改的 trie nodes 聚合写到磁盘;
+*/
 type nodebuffer struct {
 	layers uint64                                    // The number of diff layers aggregated inside
 	size   uint64                                    // The size of aggregated writes
@@ -82,6 +86,7 @@ func (b *nodebuffer) node(owner common.Hash, path []byte, hash common.Hash) (*tr
 // the ownership of the nodes map which belongs to the bottom-most diff layer.
 // It will just hold the node references from the given map which are safe to
 // copy.
+/**/
 func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) trienodebuffer {
 	var (
 		delta         int64
@@ -208,6 +213,9 @@ func (b *nodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.
 
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
+/*
+flush 将内存的 dirty trie node 持久化到磁盘, 如果配置的 内存限制到达;
+*/
 func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
 	if b.size <= b.limit && !force {
 		return nil

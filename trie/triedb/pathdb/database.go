@@ -51,6 +51,9 @@ const (
 	// disk. It's meant to be used once the initial sync is finished.
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
+	/*
+		1) DefaultDirtyBufferSize, node buffer 在内存中 聚集写的大小; 不要随意的增加 buffer size, 否则 当 database write 的时候系统暂停时间会增加
+	*/
 	DefaultDirtyBufferSize = 64 * 1024 * 1024
 
 	// DefaultBackgroundFlushInterval defines the default the wait interval
@@ -64,6 +67,10 @@ const (
 
 // layer is the interface implemented by all state layers which includes some
 // public methods and some additional methods for internal usage.
+/*
+layer 是什么 ? 实现 state layers 的接口 ?
+layer 的实现有两种: 1) diffLayer; 2) diskLayer
+*/
 type layer interface {
 	// Node retrieves the trie node with the node info. An error will be returned
 	// if the read operation exits abnormally. For example, if the layer is already
@@ -93,6 +100,10 @@ type layer interface {
 }
 
 // Config contains the settings for database.
+/*
+设置 database
+1) SyncFlush 控制是 AsyncNodeBuffer 还是 NodeBuffer
+*/
 type Config struct {
 	SyncFlush      bool   // Flag of trienodebuffer sync flush cache to disk
 	StateHistory   uint64 // Number of recent blocks to maintain state history for
@@ -133,22 +144,41 @@ var ReadOnly = &Config{ReadOnly: true}
 // At most one readable and writable database can be opened at the same time in
 // the whole system which ensures that only one database writer can operate disk
 // state. Unexpected open operations can cause the system to panic.
+/*
+Database 是一个维护内存 trie nodes 的多层的结构; 它由一个基于 kv store 的持久化层和任意堆叠的内存 diff layers;
+1) reorg 影响 ?
+2) diskdb 是什么 ?
+*/
 type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly   bool                     // Indicator if database is opened in read only mode
-	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
-	config     *Config                  // Configuration for database
-	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
-	tree       *layerTree               // The group for all known layers
-	freezer    *rawdb.ResettableFreezer // Freezer for storing trie histories, nil possible in tests
-	lock       sync.RWMutex             // Lock to prevent mutations from happening at the same time
+	/*
+		1) readOnly mutation 突变 是否被允许,  ?
+		2) waitSync 如果 database deactivated, initial state sync 还未完成 ?
+	*/
+	readOnly   bool           // Indicator if database is opened in read only mode
+	bufferSize int            // Memory allowance (in bytes) for caching dirty nodes
+	config     *Config        // Configuration for database
+	diskdb     ethdb.Database // Persistent storage for matured trie nodes
+	tree       *layerTree     // The group for all known layers
+	/*
+		Freezer 作用 ? 存储 trie 历史数据 ?
+	*/
+	freezer *rawdb.ResettableFreezer // Freezer for storing trie histories, nil possible in tests
+	lock    sync.RWMutex             // Lock to prevent mutations from happening at the same time
 }
 
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
+/*
+New 函数尝试从持久化的 kv 存储里加载一个已经存在的 layer, 如果日志与基础持久层不匹配，所有记录的差异层将被丢弃。函数内部流程：
+
+1) 检查config，填充Database结构体
+2) db.tree = newLayerTree(db.loadLayers())，通过解析磁盘中的单例状态和内存层日志构建layerTree这一行代码的核心在于loadLayers()，它会加载一个由key-value存储支撑的预先存在的状态层
+3) 如果New函数入参传递的diskdb里包含一个ancient store，为状态历史打开一个freezerdb；freezerdb同时只能打开一次确保数据库同时只有一个非可读状态，防止偶然性的变更mutation。打开后截断freezerdb中额外的状态历史，以防freezerdb没有和disk layer对齐。
+*/
 func New(diskdb ethdb.Database, config *Config) *Database {
 	if config == nil {
 		config = Defaults
@@ -171,6 +201,10 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	// Because the freezer can only be opened once at the same time, this
 	// mechanism also ensures that at most one **non-readOnly** database
 	// is opened at the same time to prevent accidental mutation.
+	/*
+		1) 如果传入的 diskdb 支持 ancient store
+		2) 阻止意外发生, 因为 leveldb 最多只能一个 non-readOnly 用户打开
+	*/
 	if ancient, err := diskdb.AncientDatadir(); err == nil && ancient != "" && !db.readOnly {
 		offset := uint64(0) // differ from in block data, only metadata is used in state data
 		freezer, err := rawdb.NewStateFreezer(ancient, false, offset)
@@ -209,11 +243,15 @@ func (db *Database) Reader(root common.Hash) (layer, error) {
 //
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
 // Therefore, these maps must not be changed afterwards.
+/*
+
+ */
 func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Hold the lock to prevent concurrent mutations.
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
+	// 对应 layerTree
 	// Short circuit if the database is in read only mode.
 	if db.readOnly {
 		return errSnapshotReadOnly
@@ -301,6 +339,19 @@ func (db *Database) Reset(root common.Hash) error {
 // Recover rollbacks the database to a specified historical point.
 // The state is supported as the rollback destination only if it's
 // canonical state and the corresponding trie histories are existent.
+/*
+pathdb 的 recover 逻辑，以及 state history（ancient） 数据
+1) Recover 将 database 回滚到一个特定的历史时间点;
+
+该方法将数据库会滚到特定的历史时间点：
+Recover需要先加写锁，执行完成后使用defer解锁
+判断会滚操作是否被支持：db不是readOnly并且freezer不为空
+调用Recoverable方法判断目标状态是否可以被恢复
+按顺序在diskLayer上应用状态历史：根据当前diskLayer的stateID从数据库中读取history object；调用diskLayer的revert方法返回一个已经回滚的diskLayer；最后调用reset方法用新diskLayer重置layer。revert方法会根据nodebuffer是否为空选择从nodebuffer或db进行revert
+重复上述过程一直到生成的diskLayer的rootHash等于指定的root
+根据结果对rawdb和freezerdb进行数据清理。
+
+*/
 func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -317,7 +368,8 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 	// Apply the state histories upon the disk layer in order.
 	var (
 		start = time.Now()
-		dl    = db.tree.bottom()
+		// disk layer
+		dl = db.tree.bottom()
 	)
 	for dl.rootHash() != root {
 		h, err := readHistory(db.freezer, dl.stateID())

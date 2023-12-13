@@ -2205,6 +2205,10 @@ func (s *TransactionAPI) sign(addr common.Address, tx *types.Transaction) (*type
 }
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
+/*
+这里有一个Backend参数，是在 eth Service 初始化时创建的，具体实现在 EthApiBackend 中，代码位于 eth/api_backend.go。
+可以看到，这里先调用了 SendTx() 函数提交交易，然后如果发现目标地址为空，表明这是一个创建智能合约的交易，会创建合约地址。
+*/
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
 	// If the transaction fee cap is already specified, ensure the
 	// fee of the given transaction is _reasonable_.
@@ -2238,6 +2242,12 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
+/*
+首先根据 from 地址查找到对应的 wallet，检查一下参数值，然后做了以下3件事：
+1) 通过 SendTxArgs.toTransaction() 创建交易
+2) 通过 Wallet.SignTx() 对交易进行签名
+3) 通过 submitTransaction() 提交交易
+*/
 func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.from()}

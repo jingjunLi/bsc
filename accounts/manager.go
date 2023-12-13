@@ -46,16 +46,25 @@ type newBackendEvent struct {
 
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
+/*
+Manager 是一个包含所有东西的账户管理工具。 可以和所有的 Backends 来通信来签署交易。
+*/
 type Manager struct {
-	config      *Config                    // Global account manager configurations
-	backends    map[reflect.Type][]Backend // Index of backends currently registered
-	updaters    []event.Subscription       // Wallet update subscriptions for all backends
-	updates     chan WalletEvent           // Subscription sink for backend wallet changes
-	newBackends chan newBackendEvent       // Incoming backends to be tracked by the manager
-	wallets     []Wallet                   // Cache of all wallets from all registered backends
+	config *Config // Global account manager configurations
+	// 所有已经注册的 Backend
+	backends map[reflect.Type][]Backend // Index of backends currently registered
+	// 所有 Backend 的更新订阅器
+	updaters []event.Subscription // Wallet update subscriptions for all backends
+	// backend 更新的订阅槽 是一个channel类型，用于接收钱包相关的事件。Manager需要调用backend的 Subscribe() 函数把这个channel注册到后端中去。
+	updates     chan WalletEvent     // Subscription sink for backend wallet changes
+	newBackends chan newBackendEvent // Incoming backends to be tracked by the manager
+	// 所有已经注册的 Backends 的钱包的缓存
+	wallets []Wallet // Cache of all wallets from all registered backends
 
+	// 钱包到达和离开的通知
 	feed event.Feed // Wallet feed notifying of arrivals/departures
 
+	// 退出队列
 	quit chan chan error
 	term chan struct{} // Channel is closed upon termination of the update loop
 	lock sync.RWMutex
@@ -63,6 +72,13 @@ type Manager struct {
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
+/*
+NewManager 创建通用的 account manager , 通过 各种 backends 对 transaction 进行签名
+
+1) 调用所有 backend 的 Wallets() 方法，合并成完整的钱包列表
+2) 创建channel，并调用所有 backend 的 Subscribe() 函数进行注册
+3) 初始化 Manager 实例，调用 update() 函数进入钱包事件监听循环
+*/
 func NewManager(config *Config, backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
 	var wallets []Wallet
@@ -110,6 +126,9 @@ func (am *Manager) Config() *Config {
 
 // AddBackend starts the tracking of an additional backend for wallet updates.
 // cmd/geth assumes once this func returns the backends have been already integrated.
+/*
+生成 newBackendEvent 通知 newBackends
+*/
 func (am *Manager) AddBackend(backend Backend) {
 	done := make(chan struct{})
 	am.newBackends <- newBackendEvent{backend, done}
@@ -118,6 +137,11 @@ func (am *Manager) AddBackend(backend Backend) {
 
 // update is the wallet event loop listening for notifications from the backends
 // and updating the cache of wallets.
+/*
+update 方法。 是一个 goroutine 。会监听所有 backend 触发的更新信息。 然后转发给 feed.
+这就是一个无限循环，监听后端发送过来的钱包事件。
+细心的朋友可能发现Manager也有个feed字段，而且还有个Subscribe()函数，这个是干什么用的呢？其实是为了把钱包事件再转发给上层的订阅者，也就是Node。订阅代码参见cmd/geth/main.go中的startNode()函数：
+*/
 func (am *Manager) update() {
 	// Close all subscriptions when the manager terminates
 	defer func() {
@@ -130,6 +154,9 @@ func (am *Manager) update() {
 	}()
 
 	// Loop until termination
+	/*
+		监听三种 event: 1) updates WalletEvent; 2) newBackends newBackendEvent 3) quit
+	*/
 	for {
 		select {
 		case event := <-am.updates:
@@ -167,6 +194,7 @@ func (am *Manager) update() {
 }
 
 // Backends retrieves the backend(s) with the given type from the account manager.
+// 返回 backend
 func (am *Manager) Backends(kind reflect.Type) []Backend {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
@@ -237,6 +265,7 @@ func (am *Manager) Find(account Account) (Wallet, error) {
 
 // Subscribe creates an async subscription to receive notifications when the
 // manager detects the arrival or departure of a wallet from any of its backends.
+// 订阅消息
 func (am *Manager) Subscribe(sink chan<- WalletEvent) event.Subscription {
 	return am.feed.Subscribe(sink)
 }

@@ -412,6 +412,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 
 // FilterCriteria represents a request to create a new filter.
 // Same as ethereum.FilterQuery but with UnmarshalJSON() method.
+// FilterCriteria 是外部请求的过滤条件，可以根据起始区块，日志的合约地址，日志topics的hash值来设置过滤条件。
 type FilterCriteria ethereum.FilterQuery
 
 // NewFilter creates a new filter and returns the filter id. It can be
@@ -458,6 +459,8 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 }
 
 // GetLogs returns logs matching the given argument that are stored within the state.
+// 1) 以太坊内部根据 FilterCriteria，创建一个过滤器，把合约地址和topics的hash作为bloombit的匹配器的匹配条件。
+// 2) 调用filter.Logs(ctx)来获取日志
 func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
 	var filter *Filter
 	if crit.BlockHash != nil {

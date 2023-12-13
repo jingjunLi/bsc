@@ -171,6 +171,7 @@ func (p *TxPool) Close() error {
 // loop is the transaction pool's main event loop, waiting for and reacting to
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
+// 在交易池启动后，将订阅链的区块头事件 ChainHeadEvent，当区块链发生变化时，会触发该事件，从而触发交易池的重置。
 func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 	// Subscribe to chain head events to trigger subpool resets
 	var (

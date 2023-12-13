@@ -35,6 +35,12 @@ type journalEntry interface {
 // journal contains the list of state modifications applied since the last state
 // commit. These are tracked to be able to be reverted in the case of an execution
 // exception or request for reversal.
+/*
+journal 用途 ?
+日志包含 自上次状态提交以来 应用的状态修改列表。 这些被跟踪以便能够在执行异常或请求撤销的情况下恢复。
+1) dirties 含义 ?
+2) append 操作 将 journalEntry 追加到 entries 数组, 并且保存到 dirties map 中
+*/
 type journal struct {
 	entries []journalEntry         // Current changes tracked by the journal
 	dirties map[common.Address]int // Dirty accounts and the number of changes
@@ -87,9 +93,11 @@ func (j *journal) length() int {
 
 type (
 	// Changes to the account trie.
+	// 创建对象的日志。 undo方法就是从StateDB中删除创建的对象。
 	createObjectChange struct {
 		account *common.Address
 	}
+	// 对于stateObject的修改， undo方法就是把值改为原来的对象。
 	resetObjectChange struct {
 		account      *common.Address
 		prev         *stateObject
@@ -101,6 +109,7 @@ type (
 		prevAccountOrigin      []byte
 		prevStorageOrigin      map[common.Hash][]byte
 	}
+	// 删除账号，但是如果没有commit的化，对象还没有从stateDB删除。
 	selfDestructChange struct {
 		account     *common.Address
 		prev        bool // whether account had already self-destructed
@@ -126,12 +135,15 @@ type (
 	}
 
 	// Changes to other state values.
+	// DAO事件的退款处理
 	refundChange struct {
 		prev uint64
 	}
+	// 增加了日志的修改
 	addLogChange struct {
 		txhash common.Hash
 	}
+	// 这个是增加 VM看到的 SHA3的 原始byte[], 增加SHA3 hash -> byte[] 的对应关系
 	addPreimageChange struct {
 		hash common.Hash
 	}

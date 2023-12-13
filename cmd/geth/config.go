@@ -147,6 +147,7 @@ func loadBaseConfig(ctx *cli.Context) gethConfig {
 }
 
 // makeConfigNode loads geth configuration and creates a blank node instance.
+// 主要是初始化和加载一些配置，其中最重要的一行是通过 node.New() 创建结点，变量名叫 stack ，代表协议栈的含义。
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	cfg := loadBaseConfig(ctx)
 	stack, err := node.New(&cfg.Node)
@@ -168,6 +169,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 }
 
 // makeFullNode loads geth configuration and creates the Ethereum backend.
+/*
+创建结点、注册EthService。
+*/
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.IsSet(utils.OverrideCancun.Name) {
@@ -291,6 +295,9 @@ func deprecated(field string) bool {
 	}
 }
 
+/*
+然后初始化backend列表，创建KeyStore实例
+*/
 func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir string) error {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP

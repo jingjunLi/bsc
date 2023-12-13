@@ -79,6 +79,9 @@ func inspect(name string, order map[string]bool, reader ethdb.AncientReader) (fr
 }
 
 // inspectFreezers inspects all freezers registered in the system.
+/*
+
+ */
 func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 	var infos []freezerInfo
 	for _, freezer := range freezers {

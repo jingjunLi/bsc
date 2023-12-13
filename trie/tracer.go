@@ -39,6 +39,16 @@ import (
 //
 // Note tracer is not thread-safe, callers should be responsible for handling
 // the concurrency issues by themselves.
+/*
+用途: 跟踪记录 trie nodes 的一些修改; 在 trie 操作中, 一些 nodes 可能会从 trie 中删除,
+这些 nodes 没有被  trie.Hasher or trie.Committer 捕获;
+
+变化的 nodes 主要被分为两类:
+1) the leaf node
+被 callers inserted/deleted
+2) intermediate node
+根据 rule 做的一些修改 inserted/deleted
+*/
 type tracer struct {
 	inserts    map[string]struct{}
 	deletes    map[string]struct{}

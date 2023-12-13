@@ -19,6 +19,11 @@ package rawdb
 import "path/filepath"
 
 // The list of table names of chain freezer.
+/*
+总共有这几种 ancient tables ?
+为什么会有这几种 table ?
+1) headers
+*/
 const (
 	// ChainFreezerHeaderTable indicates the name of the freezer header table.
 	ChainFreezerHeaderTable = "headers"
@@ -38,6 +43,9 @@ const (
 
 // chainFreezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
+/*
+1) hashes, diffs 开启压缩
+*/
 var chainFreezerNoSnappy = map[string]bool{
 	ChainFreezerHeaderTable:     false,
 	ChainFreezerHashTable:       true,
@@ -58,6 +66,9 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
+/*
+1) history.meta 开启压缩
+*/
 var stateFreezerNoSnappy = map[string]bool{
 	stateHistoryMeta:         true,
 	stateHistoryAccountIndex: false,
@@ -73,6 +84,13 @@ var (
 )
 
 // freezers the collections of all builtin freezers.
+/*
+区别实现:
+1) chain
+- 用途 ? `NewDatabaseWithFreezer` 调用 core/rawdb/database.go,
+    - 核心流程 `chainFreezer`::`freeze` → 执行数据导出 后面批量进行删除;
+2) state
+*/
 var freezers = []string{chainFreezerName, stateFreezerName}
 
 // NewStateFreezer initializes the freezer for state history.

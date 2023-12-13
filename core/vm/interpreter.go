@@ -42,6 +42,9 @@ type Config struct {
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
 // but not transients like pc and gas
+/*
+ScopeContext 包含每次调用的内容，例如堆栈和内存，但不包含像 pc 和 Gas 这样的瞬态数据
+*/
 type ScopeContext struct {
 	Memory   *Memory
 	Stack    *Stack
@@ -49,6 +52,9 @@ type ScopeContext struct {
 }
 
 // EVMInterpreter represents an EVM interpreter
+/*
+EVM 解释器 ?
+*/
 type EVMInterpreter struct {
 	evm   *EVM
 	table *JumpTable

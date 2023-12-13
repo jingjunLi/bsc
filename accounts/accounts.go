@@ -30,6 +30,7 @@ import (
 
 // Account represents an Ethereum account located at a specific location defined
 // by the optional URL field.
+// 一个账号是 20 个字节的数据。 URL是可选的字段。
 type Account struct {
 	Address common.Address `json:"address"` // Ethereum account address derived from the key
 	URL     URL            `json:"url"`     // Optional resource locator within a backend
@@ -45,15 +46,21 @@ const (
 
 // Wallet represents a software or hardware wallet that might contain one or more
 // accounts (derived from the same seed).
+/*
+钱包。钱包应该是这里面最重要的一个接口了。 具体的钱包也是实现了这个接口。 钱包又有所谓的分层确定性钱包和普通钱包。
+ Wallet 是指包含了一个或多个账户的软件钱包或者硬件钱包
+*/
 type Wallet interface {
 	// URL retrieves the canonical path under which this wallet is reachable. It is
 	// used by upper layers to define a sorting order over all wallets from multiple
 	// backends.
+	// URL 用来获取这个钱包可以访问的规范路径。 它会被上层使用用来从所有的后端的钱包来排序。
 	URL() URL
 
 	// Status returns a textual status to aid the user in the current state of the
 	// wallet. It also returns an error indicating any failure the wallet might have
 	// encountered.
+	// 用来返回一个文本值用来标识当前钱包的状态。 同时也会返回一个 error 用来标识钱包遇到的任何错误。
 	Status() (string, error)
 
 	// Open initializes access to a wallet instance. It is not meant to unlock or
@@ -67,6 +74,7 @@ type Wallet interface {
 	//
 	// Please note, if you open a wallet, you must close it to release any allocated
 	// resources (especially important when working with hardware wallets).
+	// Open 初始化对钱包实例的访问。这个方法并不意味着解锁或者解密账户，而是简单地建立与硬件钱包的连接和/或访问衍生种子。
 	Open(passphrase string) error
 
 	// Close releases any resources held by an open wallet instance.
@@ -156,6 +164,7 @@ type Wallet interface {
 
 // Backend is a "wallet provider" that may contain a batch of accounts they can
 // sign transactions with and upon request, do so.
+// Backend 是一个钱包提供器。 可以包含一批账号。他们可以根据请求签署交易，这样做。
 type Backend interface {
 	// Wallets retrieves the list of wallets the backend is currently aware of.
 	//
@@ -167,10 +176,15 @@ type Backend interface {
 	// URL assigned by the backend. Since wallets (especially hardware) may come and
 	// go, the same wallet might appear at a different positions in the list during
 	// subsequent retrievals.
+	// Wallets 获取当前能够查找到的钱包, 返回的钱包默认是没有打开的。
+	/*
+		所产生的钱包列表将根据后端分配的内部URL按字母顺序排序。 由于钱包（特别是硬件钱包）可能会打开和关闭，所以在随后的检索过程中，相同的钱包可能会出现在列表中的不同位置。
+	*/
 	Wallets() []Wallet
 
 	// Subscribe creates an async subscription to receive notifications when the
 	// backend detects the arrival or departure of a wallet.
+	// 订阅创建异步订阅，以便在后端检测到钱包的到达或离开时接收通知。
 	Subscribe(sink chan<- WalletEvent) event.Subscription
 }
 

@@ -26,6 +26,9 @@ import (
 // committer is the tool used for the trie Commit operation. The committer will
 // capture all dirty nodes during the commit process and keep them cached in
 // insertion order.
+/*
+dirty nodes
+*/
 type committer struct {
 	nodes       *trienode.NodeSet
 	tracer      *tracer

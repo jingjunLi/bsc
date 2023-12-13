@@ -30,6 +30,9 @@ import (
 // The randomness is printed on startup in order to make failures reproducible.
 var prng = initRand()
 
+/*
+生成随机数据的工具代码
+*/
 func initRand() *mrand.Rand {
 	var seed [8]byte
 	crand.Read(seed[:])

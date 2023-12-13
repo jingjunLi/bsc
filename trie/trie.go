@@ -35,6 +35,17 @@ import (
 // based on the updated trie database.
 //
 // Trie is not safe for concurrent use.
+/*
+Trie is a Merkle Patricia Trie. 1) 使用 New 来创建 trie, 基于 database; 档 trie 执行 commit 操作时, 生成的 nodes 会聚集返回一个 set;
+一旦 trie committed, 它就变成不可用 ?
+对外提供的接口:
+
+
+trie的结构， root包含了当前的root节点， db是后端的KV存储，trie的结构最终都是需要通过KV的形式存储到数据库里面去，然后启动的时候是需要从数据库里面加载的。
+originalRoot 启动加载的时候的hash值，通过这个hash值可以在数据库里面恢复出整颗的trie树。cachegen字段指示了当前Trie树的cache时代，
+每次调用Commit操作的时候，会增加Trie树的cache时代。 cache时代会被附加在node节点上面，如果当前的cache时代 - cachelimit参数 大于node的cache时代，
+那么node会从cache里面卸载，以便节约内存。 其实这就是缓存更新的LRU算法， 如果一个缓存在多久没有被使用，那么就从缓存里面移除，以节约内存空间。
+*/
 type Trie struct {
 	root  node
 	owner common.Hash
@@ -140,6 +151,10 @@ func (t *Trie) MustGet(key []byte) []byte {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
+/*
+1) Trie::root 从 root 节点开始查找;
+2) key 是 SHA 之后的 字节数组, 转换为 Hex Key
+*/
 func (t *Trie) Get(key []byte) ([]byte, error) {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
@@ -152,6 +167,18 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 	return value, err
 }
 
+/*
+1) valueNode
+2) shortNode
+3) fullNode
+4) hashNode
+---
+1) origNode: 当前查找的起始 node 位置
+2) key: 输入要查找的数据的 hash
+3) pos: 当前hash匹配到第几位
+
+起始输入参数: t.root, key, 0
+*/
 func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	switch n := (origNode).(type) {
 	case nil:
@@ -203,6 +230,10 @@ func (t *Trie) MustGetNode(path []byte) ([]byte, int) {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
+/*
+GetNode 方法与 Get 方法流程几乎一样，除了它采用 COMPACT 对 key 编码去查找 node。
+通过 compact-encoded path 来检索 trie node;
+*/
 func (t *Trie) GetNode(path []byte) ([]byte, int, error) {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
@@ -299,6 +330,12 @@ func (t *Trie) MustUpdate(key, value []byte) {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
+/*
+Update
+1) insert
+2) delete
+
+*/
 func (t *Trie) Update(key, value []byte) error {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
@@ -326,6 +363,11 @@ func (t *Trie) update(key, value []byte) error {
 	return nil
 }
 
+/*
+没有了 ??
+Trie 树的 cache 管理。 还记得Trie树的结构里面有两个参数， 一个是cachegen,一个是cachelimit。这两个参数就是cache控制的参数。
+Trie 树每一次调用 Commit 方法，会导致当前的cachegen增加1。
+*/
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
 		if v, ok := n.(valueNode); ok {
@@ -607,6 +649,10 @@ func (t *Trie) Hash() common.Hash {
 // The returned nodeset can be nil if the trie is clean (nothing to commit).
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
+/*
+Commit 搜集 trie 内所有的 dirty nodes, 并使用对应的 node hash 进行替换;
+所有收集的 nodes(包含 dirty leaves) 封装到 nodeset, 并返回;
+*/
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	defer t.tracer.reset()
 	defer func() {
@@ -639,6 +685,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 		t.root = hashedNode
 		return rootHash, nil, nil
 	}
+	// 初始化 NodeSet,
 	nodes := trienode.NewNodeSet(t.owner)
 	for _, path := range t.tracer.deletedNodes() {
 		nodes.AddNode([]byte(path), trienode.NewDeleted())

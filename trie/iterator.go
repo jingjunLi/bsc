@@ -30,9 +30,14 @@ import (
 // where trie nodes can be recovered from some external mechanism without reading
 // from disk. In those cases, this resolver allows short circuiting accesses and
 // returning them from memory.
+/*
+1) NodeResolver
+
+*/
 type NodeResolver func(owner common.Hash, path []byte, hash common.Hash) []byte
 
 // Iterator is a key-value trie iterator that traverses a Trie.
+// 用于遍历 Trie, kv trie iterator;
 type Iterator struct {
 	nodeIt NodeIterator
 
@@ -72,6 +77,7 @@ func (it *Iterator) Prove() [][]byte {
 }
 
 // NodeIterator is an iterator to traverse the trie pre-order.
+// 用于 前序遍历 trie
 type NodeIterator interface {
 	// Next moves the iterator to the next node. If the parameter is false, any child
 	// nodes will be skipped.
@@ -138,8 +144,17 @@ type nodeIteratorState struct {
 	pathlen int         // Length of the path to this node
 }
 
+/*
+1) Trie 要遍历的内容
+2) stack 将迭代状态持久化, 堆叠的 trie nodes; 针对 stack 的操作:
+
+对外提供的 接口 API:
+Next(descend bool)
+NodeBlob()
+*/
 type nodeIterator struct {
-	trie  *Trie                // Trie being iterated
+	trie *Trie // Trie being iterated
+	// Trie节点的层次结构持续存在迭代状态
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
 	path  []byte               // Path to the current node
 	err   error                // Failure set in case of an internal error in the iterator
@@ -212,6 +227,9 @@ func (it *nodeIterator) LeafBlob() []byte {
 	panic("not at leaf")
 }
 
+/*
+LeafProof stack
+*/
 func (it *nodeIterator) LeafProof() [][]byte {
 	if len(it.stack) > 0 {
 		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
@@ -262,6 +280,12 @@ func (it *nodeIterator) Error() error {
 // further nodes. In case of an internal error this method returns false and
 // sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
+/*
+移动到下一个 node, 返回是否还有 nodes;
+descend 下降 ?
+1) seek
+2) push
+*/
 func (it *nodeIterator) Next(descend bool) bool {
 	if it.err == errIteratorEnd {
 		return false
@@ -520,6 +544,7 @@ func (it *nodeIterator) nextChildAt(parent *nodeIteratorState, ancestor common.H
 	return parent, it.path, false
 }
 
+// state, parentIndex ?
 func (it *nodeIterator) push(state *nodeIteratorState, parentIndex *int, path []byte) {
 	it.path = path
 	it.stack = append(it.stack, state)
@@ -553,6 +578,7 @@ func compareNodes(a, b NodeIterator) int {
 	return 0
 }
 
+// 对比两个 node  a b 是否一样 ?
 type differenceIterator struct {
 	a, b  NodeIterator // Nodes returned are those in b - a.
 	eof   bool         // Indicates a has run out of elements

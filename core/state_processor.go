@@ -58,6 +58,11 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
+/*
+Process 根据以太坊规则运行交易信息来对 statedb 进行状态改变，以及 奖励挖矿者 或者是 其他的叔父节点。
+Process 返回执行过程中累计的收据和日志，并返回过程中使用的 Gas 。 如果由于 Gas 不足而导致任何交易执行失败，将返回错误。
+1) receipt 是 applyTransaction 构造并且返回;
+*/
 func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*state.StateDB, types.Receipts, []*types.Log, uint64, error) {
 	var (
 		usedGas     = new(uint64)

@@ -88,22 +88,45 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 //go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
 
 // Header represents a block header in the Ethereum blockchain.
+/*
+链接：https://www.jianshu.com/p/b7e6e8d1b9cb
+*/
 type Header struct {
-	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+	// - ParentHash: 该区块的父区块的哈希值
+	//- UncleHash: 该区块所包含的叔块的哈希值
+	ParentHash common.Hash `json:"parentHash"       gencodec:"required"`
+	UncleHash  common.Hash `json:"sha3Uncles"       gencodec:"required"`
+	/*
+		1) Root -> stateRoot
+		2) TxHash -> transaction root
+		3) ReceiptHash -> receipt root
+	*/
+	// - Coinbase: 打包该区块矿工的地址，矿工费和打包区块的奖金将发送到这个地址
+	//- Root: 存储账户状态的Merkle树的根节点的哈希
+	//- TxHash: 存储该区块中的交易的Merkle树的根节点的哈希
+	//- ReceiptHash: 存储该区块的交易的回单的Merkle树的根节点的哈希
+	//- Bloom: 交易日志的布隆过滤器，用于查询
+	//- Difficulty: 该区块的难度
 	Coinbase    common.Address `json:"miner"`
 	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
 	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
 	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
 	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
 	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
-	Number      *big.Int       `json:"number"           gencodec:"required"`
-	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
-	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
-	Time        uint64         `json:"timestamp"        gencodec:"required"`
-	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
+	// - Number: 区块号，也是区块高度，也是所有祖先区块的数量
+	//- GasLimit: 该区块的汽油（gas）上限
+	//- GasUsed: 该区块使用的汽油（gas）
+	//- Time: 区块开始打包时间戳（调用Engine.Prepare函数的时候设置）
+	//- MixDigest: 该哈希值与Nonce值一起证明该区块上已经进行了足够的计算，用于证明挖矿成功
+	//- Nonce: 该哈希值与MixDigest哈希值一起证明该区块上已经进行了足够的计算，用于证明挖矿成功
+	//- Extra: 预留它用（例如Clique共识机制使用)
+	Number    *big.Int    `json:"number"           gencodec:"required"`
+	GasLimit  uint64      `json:"gasLimit"         gencodec:"required"`
+	GasUsed   uint64      `json:"gasUsed"          gencodec:"required"`
+	Time      uint64      `json:"timestamp"        gencodec:"required"`
+	Extra     []byte      `json:"extraData"        gencodec:"required"`
+	MixDigest common.Hash `json:"mixHash"`
+	Nonce     BlockNonce  `json:"nonce"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
@@ -213,6 +236,21 @@ type Body struct {
 //
 //   - We do not copy body data on access because it does not affect the caches, and also
 //     because it would be too expensive.
+/*
+Block represents an Ethereum block.
+- header: 该区块的信息
+- uncles: 该区块所包含的叔块的信息, 分叉的情况下 ?
+- transactions: 该区块所包含的交易信息
+- withdrawals: ?
+//- td: 总难度，即从开始区块到本区块（包括本区块）所有的难度的累加; 新版本放在哪里了 ?
+- ReceivedAt: 用于跟踪区块的生成
+- ReceivedFrom: 用于跟踪区块的生成
+
+作者：疾风2018
+链接：https://www.jianshu.com/p/b7e6e8d1b9cb
+来源：简书
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+*/
 type Block struct {
 	header       *Header
 	uncles       []*Header

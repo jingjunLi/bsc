@@ -69,6 +69,14 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
+/*
+主要工作是确认指定区块的叔块，验证区块头中的交易和叔块根Hash。注意：验证区块体之前已有其他流程验证过区块头。验证过程具体如下。
+1）根据区块 Hash 和区块号查询 Blockchain 数据库中是否已经存储有该区块和该区块的状态根，如果已存在，则表明无须验证，返回 ErrKnownBlock。
+2）通过 Engine 的接口 VerifyUncles 验证给定块的叔块是否符合给定引擎的共识规则。
+3）计算 uncle 的 Hash，检查是否与区块头中存储的叔块 Hash 一致。计算方法为：对当前区块的所有 uncle 区块头进行 RLP 编码并生成 Hash。
+4）计算交易树根 Hash，检查是否与区块头中存储的根 Hash 一致。
+5）检查该区块的父块是否存储在 Blockchain 数据库中：如果不在，同时也不在缓存中，则表示该区块具有一个未知的祖先，返回 ErrUnknownAncestor，如果在缓存中，则表明该区块具有已知的祖先，但是状态是无效的，返回 ErrPrunedAncestor。
+*/
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block is already imported.
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
@@ -161,6 +169,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
+/*
+主要工作是验证状态转换后发生的各种更改，例如使用的Gas数量，交易凭证根Hash和状态根Hash。状态转换功能由链管理的处理器processer提供，
+该processer在父区块的状态基础上，执行状态转换，生成Gas数量，交易凭证根Hash和状态根Hash。
+*/
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
 	header := block.Header()
 	if block.GasUsed() != usedGas {

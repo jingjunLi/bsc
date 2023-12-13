@@ -35,6 +35,11 @@ const (
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.
+/*
+1) DatabaseVersion
+2) ChainConfig
+GenesisStateSpec
+*/
 func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
 	var version uint64
 
@@ -110,6 +115,11 @@ type crashList struct {
 }
 
 const crashesToKeep = 10
+
+/*
+1) UncleanShutdownMarker
+2) TransitionStatus
+*/
 
 // PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
 // the previous data
@@ -196,6 +206,14 @@ func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
 }
 
 // ReadOffSetOfCurrentAncientFreezer return prune block start
+/*
+Ancient 相关:
+OffSetOfCurrentAncientFreezer
+OffSetOfLastAncientFreezer
+FrozenOfAncientFreezer
+SafePointBlockNumber
+AncientType
+*/
 func ReadOffSetOfCurrentAncientFreezer(db ethdb.KeyValueReader) uint64 {
 	offset, _ := db.Get(offSetOfCurrentAncientFreezer)
 	if offset == nil {
@@ -228,6 +246,7 @@ func WriteOffSetOfLastAncientFreezer(db ethdb.KeyValueWriter, offset uint64) {
 }
 
 // ReadFrozenOfAncientFreezer return freezer block number
+
 func ReadFrozenOfAncientFreezer(db ethdb.KeyValueReader) uint64 {
 	fozen, _ := db.Get(frozenOfAncientDBKey)
 	if fozen == nil {

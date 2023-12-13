@@ -115,6 +115,10 @@ type TxContext struct {
 // sure that any errors generated are to be considered faulty code.
 //
 // The EVM should never be reused and is not thread safe.
+/*
+revert-state-and-consume-all-gas
+1) EVM
+*/
 type EVM struct {
 	// Context provides auxiliary blockchain related information
 	Context BlockContext

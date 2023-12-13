@@ -171,6 +171,11 @@ type worker struct {
 	chainHeadSub event.Subscription
 
 	// Channels
+	/*
+		挖矿启动工作时由 mainLoop 中根据三个信号来管理。首先是新工作启动信号(newWorkCh)、再是根据新交易信号(txsCh)和最长链链切换信号(chainSideCh)来管理挖矿。
+		1) newWorkCh
+		2)
+	*/
 	newWorkCh          chan *newWorkReq
 	getWorkCh          chan *getWorkReq
 	taskCh             chan *task
@@ -221,6 +226,12 @@ type worker struct {
 	recentMinedBlocks *lru.Cache
 }
 
+/*
+这个的核心全部在 worker 中，worker 是一个工作管理器。订阅了 blockchain 的三个事件，分别监听新区块事件 chainHeadeCh，新分叉链事件
+chainSideCh和新交易事件txCh。
+以及定义了内部一系列的信号，如 newWork 信号、task信号等。根据信号，执行不同的工作，在各种信号综合作用下协同作业。
+在创建worker 时，将在 worker 内开启四个 goroutine 来分别监听不同信号。
+*/
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	recentMinedBlocks, _ := lru.New(recentMinedCacheLimit)
 	worker := &worker{
@@ -380,6 +391,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	<-timer.C // discard the initial tick
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
+	// commit 终止正在执行的交易，并重新提交一个新的交易。
 	commit := func(reason int32) {
 		if interruptCh != nil {
 			// each commit work will have its own interruptCh to stop work with a reason
@@ -407,11 +419,13 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 	for {
 		select {
+		// 1) 接收到 start 信号，表示需要开始挖矿。
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().Number.Uint64())
 			timestamp = time.Now().Unix()
 			commit(commitInterruptNewHead)
 
+		// 2) 接收到 chainHeadCh 新区块信号，表示已经有新区块出现。你所处理的交易或者区块高度都极有可能重复，需要终止当下工作，立即开始新一轮挖矿。
 		case head := <-w.chainHeadCh:
 			if !w.isRunning() {
 				continue
@@ -431,6 +445,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			}
 			commit(commitInterruptNewHead)
 
+		// 3) timer计时器，默认每三秒检查一次是否有新交易需要处理。如果有则需要重新开始挖矿。以便将加高的交易优先打包到区块中。
 		case <-timer.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
@@ -440,6 +455,12 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 				commit(commitInterruptResubmit)
 			}
 
+		/*
+			4) 在 newWorkLoop 中还有一个辅助信号，resubmitAdjustCh 和 resubmitIntervalCh。运行外部修改timer计时器的时钟。
+			resubmitAdjustCh是根据历史情况重新计算一个合理的间隔时间。
+			而resubmitIntervalCh则允许外部，实时通过 Miner 实例方法 SetRecommitInterval 修改间隔时间。
+			resubmitAdjustCh BSC 删了 ?
+		*/
 		case interval := <-w.resubmitIntervalCh:
 			// Adjust resubmit interval explicitly by user.
 			if interval < minRecommitInterval {
@@ -462,6 +483,11 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 // mainLoop is responsible for generating and submitting sealing work based on
 // the received event. It can support two modes: automatically generate task and
 // submit it or return task according to given parameters for various proposes.
+/*
+channel 变了:
+1) automatically generate task
+2) submit it or return task according to given parameters for various proposes
+*/
 func (w *worker) mainLoop() {
 	defer w.wg.Done()
 	defer w.chainHeadSub.Unsubscribe()
@@ -473,6 +499,7 @@ func (w *worker) mainLoop() {
 
 	for {
 		select {
+		// 一旦收到信号，立即开始挖矿
 		case req := <-w.newWorkCh:
 			w.commitWork(req.interruptCh, req.timestamp)
 
@@ -511,12 +538,16 @@ func (w *worker) taskLoop() {
 	}
 	for {
 		select {
+		/*
+			当接收到挖矿任务后，先计算出这个区块所对应的一个哈希摘要❷，并登记此哈希对应的挖矿任务❸。登记的用途是方便查找该区块对应的挖矿任务信息，
+			同时在开始新一轮挖矿时，会取消旧的挖矿工作，并从pendingTasks 中删除标记。以便快速作废挖矿任务。
+		*/
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
 			}
 			// Reject duplicate sealing work due to resubmitting.
-			sealHash := w.engine.SealHash(task.block.Header())
+			sealHash := w.engine.SealHash(task.block.Header()) // 先计算出这个区块所对应的一个哈希摘要❷
 			if sealHash == prev {
 				continue
 			}
@@ -528,7 +559,7 @@ func (w *worker) taskLoop() {
 				continue
 			}
 			w.pendingMu.Lock()
-			w.pendingTasks[sealHash] = task
+			w.pendingTasks[sealHash] = task // 登记此哈希对应的挖矿任务❸
 			w.pendingMu.Unlock()
 
 			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
@@ -546,6 +577,7 @@ func (w *worker) taskLoop() {
 
 // resultLoop is a standalone goroutine to handle sealing result submitting
 // and flush relative data to the database.
+// 存储与广播挖出的新块
 func (w *worker) resultLoop() {
 	defer w.wg.Done()
 	for {
@@ -556,6 +588,10 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			// Short circuit when receiving duplicate result caused by resubmitting.
+			/*
+				也许挖矿任务已被取消，如果Pending Tasks 中不存在区块对应的挖矿任务信息，则说明任务已被取消，就不需要继续处理❸。
+				从挖矿任务中，整理交易回执，补充缺失信息，并收集所有区块事件日志信息❹。
+			*/
 			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
 				continue
 			}
@@ -567,6 +603,7 @@ func (w *worker) resultLoop() {
 			task, exist := w.pendingTasks[sealhash]
 			w.pendingMu.RUnlock()
 			if !exist {
+				// ❸
 				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", hash)
 				continue
 			}
@@ -575,7 +612,7 @@ func (w *worker) resultLoop() {
 				receipts = make([]*types.Receipt, len(task.receipts))
 				logs     []*types.Log
 			)
-			for i, taskReceipt := range task.receipts {
+			for i, taskReceipt := range task.receipts { // ❹
 				receipt := new(types.Receipt)
 				receipts[i] = receipt
 				*receipt = *taskReceipt
@@ -622,9 +659,10 @@ func (w *worker) resultLoop() {
 			}
 
 			// Commit block and state to database.
+			// 随后，将区块所有信息写入本地数据库❺，对外发送挖出新块事件❻。在 eth 包中会监听并订阅此事件。
 			task.state.SetExpectedStateRoot(block.Root())
 			start := time.Now()
-			status, err := w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true)
+			status, err := w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true) // ❺
 			if status != core.CanonStatTy {
 				if err != nil {
 					log.Error("Failed writing block to chain", "err", err, "status", status)
@@ -637,7 +675,7 @@ func (w *worker) resultLoop() {
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 			// Broadcast the block and announce chain insertion event
-			w.mux.Post(core.NewMinedBlockEvent{Block: block})
+			w.mux.Post(core.NewMinedBlockEvent{Block: block}) // ❻
 
 		case <-w.exitCh:
 			return
@@ -673,6 +711,9 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 }
 
 // updateSnapshot updates pending snapshot block, receipts and state.
+/*
+更新 environment 快照。快照中记录了区块内容和区块StateDB信息。相对于把当前 environment 备份到内存中。这个备份对挖矿没什么用途，只是方便外部查看 PendingBlock
+*/
 func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotMu.Lock()
 	defer w.snapshotMu.Unlock()
@@ -706,6 +747,9 @@ func (w *worker) commitTransaction(env *environment, tx *txpool.Transaction, rec
 	return receipt.Logs, nil
 }
 
+/*
+提交交易到当前挖矿的上下文环境(environment)中。上下文环境中记录了当前挖矿工作信息，如当前挖矿高度、已提交的交易、当前State等信息
+*/
 func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce,
 	interruptCh chan int32, stopTimer *time.Timer) error {
 	gasLimit := env.header.GasLimit
@@ -981,6 +1025,9 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, *big.Int, e
 
 // commitWork generates several new sealing tasks based on the parent block
 // and submit them to the sealer.
+/*
+重新开始下一个区块的挖矿的第一个环节“构建新区块”。这个是整个挖矿业务处理的一个核心，值得关注。
+*/
 func (w *worker) commitWork(interruptCh chan int32, timestamp int64) {
 	// Abort committing if node is still syncing
 	if w.syncing.Load() {
@@ -1049,6 +1096,7 @@ LOOP:
 		}
 
 		// subscribe before fillTransactions
+		// 交易池在将交易推入交易池后，将向事件订阅者发送 NewTxsEvent。在 miner 中也订阅了此事件。
 		txsCh := make(chan core.NewTxsEvent, txChanSize)
 		sub := w.eth.TxPool().SubscribeNewTxsEvent(txsCh)
 		// if TxPool has been stopped, `sub` would be nil, it could happen on shutdown.
@@ -1158,6 +1206,9 @@ LOOP:
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
 // the deep copy first.
+/*
+提交新区块工作，发送 PoW 计算信号。
+*/
 func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
 	if w.isRunning() {
 		if interval != nil {

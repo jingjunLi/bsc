@@ -45,6 +45,11 @@ var (
 )
 
 // DefaultConfig contains reasonable default settings.
+/*
+结点的默认配置
+mac 默认的datadir位于 $HOME/Library/Ethereum，HTTP 默认端口号 8545，WebSocket 默认端口号8546，P2P默认端口号30303，最大支持25个对等结点。
+utils.SetNodeConfig() 代码位于 cmd/utils/flags.go，主要是检查有没有一些global的配置，如果有的话覆盖掉刚刚的默认配置。代码比较简单就不分析了。
+*/
 var DefaultConfig = Config{
 	DataDir:              DefaultDataDir(),
 	HTTPPort:             DefaultHTTPPort,

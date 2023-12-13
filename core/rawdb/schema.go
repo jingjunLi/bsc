@@ -157,6 +157,7 @@ type LegacyTxLookupEntry struct {
 }
 
 // encodeBlockNumber encodes a block number as big endian uint64
+// 将number转化为大端
 func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
@@ -209,6 +210,10 @@ func txLookupKey(hash common.Hash) []byte {
 }
 
 // accountSnapshotKey = SnapshotAccountPrefix + hash
+/*
+accountSnapshotKey = SnapshotAccountPrefix + hash
+扁平化的 snapshot kv ?
+*/
 func accountSnapshotKey(hash common.Hash) []byte {
 	return append(SnapshotAccountPrefix, hash.Bytes()...)
 }

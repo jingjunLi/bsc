@@ -53,6 +53,12 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 // solution is to hash any input before calculating the signature.
 //
 // The produced signature is in the [R || S || V] format where V is 0 or 1.
+/*
+通过ECDSA算法生成签名数据, 最终会返回的签名是一个字节数组，按R / S / V的顺序排列。 ?
+计算 ECDSA 签名;
+
+
+*/
 func Sign(digestHash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	if len(digestHash) != DigestLength {
 		return nil, fmt.Errorf("hash is required to be exactly %d bytes (%d)", DigestLength, len(digestHash))

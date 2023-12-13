@@ -70,6 +70,11 @@ func (f *Feed) init(etype reflect.Type) {
 //
 // The channel should have ample buffer space to avoid blocking other subscribers.
 // Slow subscribers are not dropped.
+/*
+这里首先把 channel 封装进一个 feedSub 结构返回，同时在 inbox 数组中添加了一个 SelectCase 实例。
+这些SelectCase最终会在需要发送事件时被使用: 首先以非阻塞的方式（TrySend()）向这些channel发送事件，如果没有立即成功则阻塞在这些SelectCase上，等待发送完成。
+具体可以参见Feed的Send()函数。
+*/
 func (f *Feed) Subscribe(channel interface{}) Subscription {
 	chanval := reflect.ValueOf(channel)
 	chantyp := chanval.Type()

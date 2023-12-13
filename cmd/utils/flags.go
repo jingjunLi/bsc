@@ -2142,6 +2142,12 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
+/*
+Ethereum client
+1) 如果 downloader 同步模式是 LightSync, 则 创建 LightEthereum, ApiBackend 注册;
+2) full node,
+2.1) 如果允许
+*/
 func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)

@@ -97,8 +97,20 @@ func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.
 
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
+/*
+查找 log entries
+1) 如果没有设定起始位置，就认为从最新区块的header开始。找到开始位置区块对应的的 section，
+1.1) 如果开始位置在 section 里面就走 f.indexedLogs() 在 chainIndexer 里面找 log
+1.2) 如果不是就调用 f.unindexedLogs() 不再 chainIndexer 里面找
+2) rangeLogsAsync -> f.unindexedLogs() 相对简单。
+*/
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// If we're doing singleton block filtering, execute and return
+	/*
+		filter 是指定的 block
+		blockLogs -> bloomFilter -> checkMatches
+	*/
+	//
 	if f.block != nil {
 		header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
 		if err != nil {
@@ -110,6 +122,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return f.blockLogs(ctx, header)
 	}
 
+	// beginPending 含义 ?
 	var (
 		beginPending = f.begin == rpc.PendingBlockNumber.Int64()
 		endPending   = f.end == rpc.PendingBlockNumber.Int64()
@@ -121,6 +134,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 
 	// Short-cut if all we care about is pending logs
+	// begin 和 end 都是 pending
 	if beginPending && endPending {
 		return f.pendingLogs(), nil
 	}
@@ -224,6 +238,9 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
+/*
+f.indexedLogs() 在chainIndexer里面查找日志
+*/
 func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
@@ -302,6 +319,13 @@ func (f *Filter) blockLogs(ctx context.Context, header *types.Header) ([]*types.
 // checkMatches checks if the receipts belonging to the given header contain any log events that
 // match the filter criteria. This function is called when the bloom filter signals a potential match.
 // skipFilter signals all logs of the given block are requested.
+/*
+1) 调用ethApi的f.backend.GetLogs(ctx, header.Hash())方法，找到这个区块的所有收据下的所有日志。
+cachedLogElem
+2) 调用filterLogs(unfiltered, nil, nil, f.addresses, f.topics)，根据f.addresses, f.topics过滤出想要的logs。如果第一个log的hash是空的，需要通过light client重现获取一遍所有的日志，再走一下过滤。
+3) f.indexedLogs() 在 chainIndexer 里面查找日志
+
+*/
 func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*types.Log, error) {
 	hash := header.Hash()
 	// Logs in cache are partially filled with context data

@@ -94,6 +94,9 @@ type blockTxHashes struct {
 // number(s) given, and yields the hashes on a channel. If there is a signal
 // received from interrupt channel, the iteration will be aborted and result
 // channel will be closed.
+/*
+迭代所有给定的 canon block 的 [from, to) 区间的 transactions
+*/
 func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
 	// One thread sequentially reads data from db
 	type numberRlp struct {
@@ -137,6 +140,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		}
 	}
 	// process runs in parallel
+	// 用途 ? 对 rlpCh 内容进行处理 DecodeBytes ?
 	var nThreadsAlive atomic.Int32
 	nThreadsAlive.Store(int32(threads))
 	process := func() {

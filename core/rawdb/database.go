@@ -37,6 +37,14 @@ import (
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
+/*
+封装了 KeyValueStore 和 AncientStore
+1) AncientDatadir() 返回 ancient directory
+2) Close(), 实现  io.Closer 接口, 关闭 快速的 kv store 和 slow ancient tables;
+3) Freeze 辅助函数用于测试,
+---
+diffStore 用途? TODO?
+*/
 type freezerdb struct {
 	ancientRoot string
 	ethdb.KeyValueStore
@@ -102,6 +110,9 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 }
 
 // nofreezedb is a database wrapper that disables freezer data retrievals.
+/*
+封装 database, 禁止 freezer data
+*/
 type nofreezedb struct {
 	ethdb.KeyValueStore
 	diffStore ethdb.KeyValueStore
@@ -244,6 +255,10 @@ func resolveChainFreezerDir(ancient string) string {
 // value data store with a freezer moving immutable chain segments into cold
 // storage. The passed ancient indicates the path of root ancient directory
 // where the chain freezer can be opened.
+/*
+基于给定的 kv store 创建更高 level 的 database, 使用 a freezer 将 immutable chain segments 移到冷存储中;
+1) ancient: root ancient 的路径 path, 主要是 chain freezer
+*/
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
 	var offset uint64
 	// The offset of ancientDB should be handled differently in different scenarios.
@@ -308,7 +323,14 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	// it to the freezer content.
 	// Only to check the followings when offset equal to 0, otherwise the block number
 	// in ancientdb did not start with 0, no genesis block in ancientdb as well.
+	/*
+		1) freezer 和 key-value store 都是空;
+		2) key-value store 为空, freezer 非空; 和 用户的 genesis 对比,
+		3) 都非空, 检查验证 genesis hashes, 确保两者兼容;
+		4) key-value store 非空, freezer 为空; 两种场景,a) 链比较小,还没有触发 frozen ; b) 刚升级到待 freezer 的版本;
 
+		如果 genesis hash 为空, 新创建的 kv store, 无需进行验证;
+	*/
 	if kvgenesis, _ := db.Get(headerHashKey(0)); offset == 0 && len(kvgenesis) > 0 {
 		if frozen, _ := frdb.Ancients(); frozen > 0 {
 			// If the freezer already contains something, ensure that the genesis blocks
@@ -479,6 +501,10 @@ type OpenOptions struct {
 //	                   +----------------------------------------
 //	db is non-existent |  leveldb default  |  specified type
 //	db is existent     |  from db         |  specified type (if compatible)
+/*
+1) 不指定 type, 默认是 Pebble
+2) 指定 type, leveldb 或者 pebble
+*/
 func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	// Reject any unsupported database type
 	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble {
@@ -511,6 +537,9 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 // set on the provided OpenOptions.
 // The passed o.AncientDir indicates the path of root ancient directory where
 // the chain freezer can be opened.
+/*
+
+ */
 func Open(o OpenOptions) (ethdb.Database, error) {
 	kvdb, err := openKeyValueDatabase(o)
 	if err != nil {
@@ -610,6 +639,9 @@ func PruneHashTrieNodeInDataBase(db ethdb.Database) error {
 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
+/*
+
+ */
 func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	it := db.NewIterator(keyPrefix, keyStart)
 	defer it.Release()
@@ -734,6 +766,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		}
 	}
 	// Display the database statistic of key-value store.
+	/*
+
+	 */
 	stats := [][]string{
 		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
 		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count()},

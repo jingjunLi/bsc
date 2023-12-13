@@ -24,6 +24,7 @@ import (
 )
 
 // Reader wraps the Node method of a backing trie store.
+// 封装 Node 方法, 基于 backing trie store;
 type Reader interface {
 	// Node retrieves the trie node blob with the provided trie identifier, node path and
 	// the corresponding node hash. No error will be returned if the node is not found.
@@ -38,6 +39,9 @@ type Reader interface {
 
 // trieReader is a wrapper of the underlying node reader. It's not safe
 // for concurrent usage.
+/*
+trieReader 封装 底层的 node reader
+*/
 type trieReader struct {
 	owner  common.Hash
 	reader Reader
@@ -86,6 +90,11 @@ func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 }
 
 // trieLoader implements triestate.TrieLoader for constructing tries.
+/*
+实现 triestate.TrieLoader 来构造 tries
+1) OpenTrie
+2) OpenStorageTrie:
+*/
 type trieLoader struct {
 	db *Database
 }

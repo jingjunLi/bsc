@@ -144,8 +144,9 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 	DatabaseDiff       string
-	PersistDiff        bool
-	DiffBlock          uint64
+	// 用途 ?
+	PersistDiff bool
+	DiffBlock   uint64
 	// PruneAncientData is an optional config and disabled by default, and usually you do not need it.
 	// When this flag is enabled, only keep the latest 9w blocks' data, the older blocks' data will be
 	// pruned instead of being dumped to freezerdb, the pruned data includes CanonicalHash, Header, Block,

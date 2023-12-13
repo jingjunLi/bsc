@@ -33,8 +33,15 @@ import (
 // state layers linked with each other in a tree structure. It's
 // thread-safe to use. However, callers need to ensure the thread-safety
 // of the referenced layer by themselves.
+/*
+layerTree 是由 state root 标识的一组状态层。
+该结构定义了一些基本操作，用于操作在树结构中相互链接的状态层 state layers 。 使用起来是线程安全的。 但是调用者需要自己保证引用层的线程安全。
+1) layers 是一个 map, state root hash -> layer 的映射;
+2) diffLayer 通过 parent 串连起来;
+*/
 type layerTree struct {
-	lock   sync.RWMutex
+	lock sync.RWMutex
+	// root hash -> layer
 	layers map[common.Hash]layer
 }
 
@@ -69,6 +76,7 @@ func (tree *layerTree) get(root common.Hash) layer {
 
 // forEach iterates the stored layers inside and applies the
 // given callback on them.
+// forEach 对所有的 layer 执行给定的 回调函数 onLayer
 func (tree *layerTree) forEach(onLayer func(layer)) {
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
@@ -87,6 +95,13 @@ func (tree *layerTree) len() int {
 }
 
 // add inserts a new layer into the tree if it can be linked to an existing old parent.
+/*
+用户传入进来的参数 : parentRoot 是目前 layerTree 的 parent, root 是想要新加入的 layer
+1) root
+2) parentRoot 作用 ?
+
+新创建一个 layer(l), 其 parent 指向 root;
+*/
 func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Reject noop updates to avoid self-loops. This is a special case that can
 	// happen for clique networks and proof-of-stake networks where empty blocks
@@ -112,6 +127,10 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 
 // cap traverses downwards the diff tree until the number of allowed diff layers
 // are crossed. All diffs beyond the permitted number are flattened downwards.
+/*
+cap 向下遍历 diff 树，直到超出允许的 diff 层数。 所有超出允许数量的差异都会向下展平 ?
+1) layers 有可能是 0 或者 maxDiffLayers(128)
+*/
 func (tree *layerTree) cap(root common.Hash, layers int) error {
 	// Retrieve the head layer to cap from
 	root = types.TrieRootHash(root)
@@ -148,6 +167,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	}
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
+	// 超过 128 层的部分 的 diffLayer
 	switch parent := diff.parentLayer().(type) {
 	case *diskLayer:
 		return nil
@@ -171,6 +191,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		panic(fmt.Sprintf("unknown data layer in triedb: %T", parent))
 	}
 	// Remove any layer that is stale or links into a stale layer
+	// stale 含义 ?
 	children := make(map[common.Hash][]common.Hash)
 	for root, layer := range tree.layers {
 		if dl, ok := layer.(*diffLayer); ok {

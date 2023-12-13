@@ -253,6 +253,7 @@ func (q *queue) Idle() bool {
 
 // ScheduleSkeleton adds a batch of header retrieval tasks to the queue to fill
 // up an already retrieved header skeleton.
+// 将一批header检索任务添加到队列中，以填充已检索的header skeleton
 func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()

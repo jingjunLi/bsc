@@ -180,6 +180,9 @@ func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 
 // Merge merges the provided dirty nodes of a trie into the set. The assumption
 // is held that no duplicated set belonging to the same trie will be merged twice.
+/*
+Merge 将 一个 trie 提供的 dirty nodes 放入 set 内.
+*/
 func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	subset, present := set.Sets[other.Owner]
 	if present {

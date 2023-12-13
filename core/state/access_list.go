@@ -20,6 +20,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+/*
+AddSlot
+DeleteSlot
+1) address map, value -1 表示 存在 address, 其他值表示 address 对应的 slot ?
+address -> slot index 的映射, 然后通过 slot index 找到对应的 slot map, 再进行查询;
+2) slots map
+*/
 type accessList struct {
 	addresses map[common.Address]int
 	slots     []map[common.Hash]struct{}
@@ -73,6 +80,13 @@ func (a *accessList) Copy() *accessList {
 
 // AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
+/*
+1) AddAddress: 将 address 添加到 access list
+true: change
+false: address 之前已经存在;
+2) AddSlot (addr, slot)
+3) DeleteSlot
+*/
 func (al *accessList) AddAddress(address common.Address) bool {
 	if _, present := al.addresses[address]; present {
 		return false
@@ -86,6 +100,9 @@ func (al *accessList) AddAddress(address common.Address) bool {
 // - address added
 // - slot added
 // For any 'true' value returned, a corresponding journal entry must be made.
+/*
+idx 是 addresses map 的值, addrPresent bool 表示是否存在; 表示什么 ?
+*/
 func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrChange bool, slotChange bool) {
 	idx, addrPresent := al.addresses[address]
 	if !addrPresent || idx == -1 {

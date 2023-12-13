@@ -71,6 +71,25 @@ import (
 type Config = ethconfig.Config
 
 // Ethereum implements the Ethereum full node service.
+/*
+Ethereum 实现 区块链 full node service
+1) accounts.Manager: 账户管理
+2) consensus.Engine: 共识引擎, 支持 Pow, PoA
+3) miner.Miner : 矿工和挖矿管理
+4) core.BlockChain: 区块和链管理
+5) txpool.TxPool: 还未上链的交易缓冲池
+6) ProtocolManager:p2p 协议层消息收发处理 ??? 对应 p2p.Server ??
+7) EthAPIBackend: Ethereum 公开的对外操作接口, 主要实现  ethapi.Backend and tracers.Backend, 为 full node 提供服务;
+8) ethapi.NetAPI: 网络相关的 RPC 方法
+9) chainDb : 区块和链的数据库
+----
+数据库的引用 ? 创建一个数据库用于存储链相关的数据
+1) 引用的地方
+1.1) chainDb
+2) db 的创建 chainDb ? New 的时候创建, 然后将其用于初始化 Ethereum
+3) db 的读写操作
+
+*/
 type Ethereum struct {
 	config *ethconfig.Config
 
@@ -85,6 +104,10 @@ type Ethereum struct {
 	merger              *consensus.Merger
 
 	// DB interfaces
+	/*
+		是什么, 具体的实现 ?
+		stack.OpenDatabaseWithFreezer 的返回值,
+	*/
 	chainDb ethdb.Database // Block chain database
 
 	eventMux       *event.TypeMux
@@ -151,6 +174,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
 	// Assemble the Ethereum object
+	/*
+
+	 */
 	chainDb, err := stack.OpenAndMergeDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles,
 		config.DatabaseFreezer, config.DatabaseDiff, "eth/db/chaindata/", false, config.PersistDiff, config.PruneAncientData)
 	if err != nil {

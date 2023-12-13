@@ -130,6 +130,12 @@ func (s *Server) untrackCodec(codec ServerCodec) {
 // serveSingleRequest reads and processes a single RPC request from the given codec. This
 // is used to serve HTTP connections. Subscriptions and reverse calls are not allowed in
 // this mode.
+/*
+就是一个循环，每次调用readRequest()解析请求数据，然后调用exec()或者execBatch()执行API调用
+1) handler 负责执行
+2) readBatch
+3) handleBatch/handleMsg
+*/
 func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	// Don't serve if server is stopped.
 	if !s.run.Load() {

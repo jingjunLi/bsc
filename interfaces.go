@@ -153,6 +153,7 @@ type ContractCaller interface {
 }
 
 // FilterQuery contains options for contract log filtering.
+// contract log filtering 的配置
 type FilterQuery struct {
 	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
 	FromBlock *big.Int         // beginning of the queried range, nil means genesis block

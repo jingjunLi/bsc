@@ -33,6 +33,12 @@ import (
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
+/*
+主要提供两个方法，Prove方法获取指定Key的proof证明， proof证明是从根节点到叶子节点的所有节点的hash值列表。
+VerifyProof方法，接受一个roothash值和proof证明和key来验证key是否存在。
+1) Prove方法，从根节点开始。把经过的节点的hash值一个一个存入到list中。然后返回。
+2) VerifyProof方法，接收一个rootHash参数，key参数，和proof数组， 来一个一个验证是否能够和数据库里面的能够对应上。
+*/
 func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {

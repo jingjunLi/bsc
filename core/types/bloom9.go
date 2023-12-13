@@ -103,6 +103,14 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 }
 
 // CreateBloom creates a bloom filter out of the give Receipts (+Logs)
+/*
+CreateBloom(receipts Receipts) 方法创建收据的 bloom
+3.1，创建一个空的bigInt bloomBin，遍历receipts，取得receipt里的日志，调用LogsBloom(receipt.Logs)将取得所有日志的bloom值按位或和到bloomBin。这意味着bloomBin包括了所有日志的bloom9数据。
+3.2，调用BytesToBloom(bloomBin.Bytes())方法，把bloomBin加入区块的bloom过滤器中，这时Bloom过滤器就有了本次交易的所有收据。
+3.3，需要说明的是Bloom过滤器只是提供一个查找数据是否存在的工具，它本身不包含任何数据。
+
+给定 Receipts, 将其内的 所有 Log 中的 Topics 存入到 Bloom 中. 两层遍历;
+*/
 func CreateBloom(receipts Receipts) Bloom {
 	buf := make([]byte, 6)
 	var bin Bloom
@@ -118,6 +126,7 @@ func CreateBloom(receipts Receipts) Bloom {
 }
 
 // LogsBloom returns the bloom bytes for the given logs
+// 把日志数据转成对应的 bloom9 值，包括日志的合约地址以及每个日志 Topic
 func LogsBloom(logs []*Log) []byte {
 	buf := make([]byte, 6)
 	var bin Bloom
@@ -138,6 +147,13 @@ func Bloom9(data []byte) []byte {
 }
 
 // bloomValues returns the bytes (index-value pairs) to set for the given data
+/*
+先看看 bloom9(b []byte) 算法函数。
+1.1 首先将传入的数据，进行hash256的运算，得到一个32字节的hash
+1.2 然后取第0和第1字节的值合成一个2字节无符号的int，和2047做按位与运算，得到一个小于2048的值b，这个值就表示bloom里面第b位的值为1。同理取第2,3 和第4,5字节合成另外两个无符号int，增加在bloom里面的命中率。
+1.3 也就是说对于任何一个输入，如果它对应的三个下标的值不都为1，那么它肯定不在这个区块中。 当如如果对应的三位都为1，也不能说明一定在这个区块中。 这就是布隆过滤器的特性。
+1.4 这三个数取或，得到一个bigInt，代表这个传参数据的 bloom9 值。
+*/
 func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byte) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	sha.Reset()
@@ -157,6 +173,7 @@ func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byt
 }
 
 // BloomLookup is a convenience-method to check presence in the bloom filter
+// 给定 topic, 查询其是否在 bloom 中
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	return bin.Test(topic.Bytes())
 }

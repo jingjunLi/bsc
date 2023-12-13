@@ -174,6 +174,9 @@ The export-preimages command exports hash preimages to an RLP encoded stream.
 It's deprecated, please use "geth db export" instead.
 `,
 	}
+	/*
+		1) dump 命令做什么 ?
+	*/
 	dumpCommand = &cli.Command{
 		Action:    dump,
 		Name:      "dump",
@@ -197,6 +200,10 @@ This command dumps out the state for a given block (or latest, if none provided)
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
+/*
+1) makeConfigNode 加载并应用全局配置信息
+2) SetupGenesisBlockWithOverride 创建创世区块
+*/
 func initGenesis(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
 		utils.Fatalf("need genesis.json file as the only argument")

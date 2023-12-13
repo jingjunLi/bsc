@@ -584,6 +584,10 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
+/*让传入的 head 标记为 canonical chan
+1)(bc *BlockChain) loadLastState()
+2) (bc *BlockChain) ResetWithGenesisBlock
+3) (bc *BlockChain) writeHeadBlock(block *types.Block)*/
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()

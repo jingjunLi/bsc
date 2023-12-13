@@ -214,6 +214,11 @@ func (config *Config) sanitize() Config {
 // The pool separates processable transactions (which can be applied to the
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
+/*
+pending 字段中包含了当前所有可被处理的交易列表，而 queue 字段中包含了所有不可被处理、也就是新加入进来的交易。
+它们是按账号地址来组织的，每个地址对应一个 txList
+1) 分离 processable transactions 和 future transactions 这两种 transactions;
+*/
 type LegacyPool struct {
 	config       Config
 	chainconfig  *params.ChainConfig
@@ -419,6 +424,8 @@ func (pool *LegacyPool) loop() {
 			}
 
 		// Handle local transaction journal rotation
+		// journal 并不是保存所有的本地交易以及历史，他仅仅是存储当前交易池中存在的本地交易。
+		// 因此交易池会定期对 journal 文件执行 rotate，将交易池中的本地交易写入journal文件，并丢弃旧数据。
 		case <-journal.C:
 			if pool.journal != nil {
 				pool.mu.Lock()
@@ -655,6 +662,21 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
+/*
+consensus rules and adheres();
+1) 检查 transaction 是否满足 共识规则, 并且 遵守本地节点的一些启发式限制（价格和大小）
+txpool.ValidateTransactionWithState
+这一段是验证交易的有效性，主要进行以下几个方面的检查：
+
+数据量必须<32KB
+交易金额必须非负（>=0）
+交易的gas limit必须低于block的gas limit
+签名数据必须有效，能够解析出发送者地址
+交易的gas price必须高于pool设定的最低gas price（除非是本地交易）
+交易的nonce值必须高于当前链上该账户的nonce值（低于则说明这笔交易已经被打包过了）
+当前账户余额必须大于“交易金额 + gasprice * gaslimit”
+交易的gas limit必须大于对应数据量所需的最低gas水平
+*/
 func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 	sender, err := types.Sender(pool.signer, tx)
 	if err != nil {
@@ -709,6 +731,12 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 // If a newly added transaction is marked as local, its sending account will be
 // be added to the allowlist, preventing any associated transaction from being dropped
 // out of the pool due to pricing constraints.
+/*
+1) If the transaction is already known, discard it; LegacyPool::all
+2) Make the local flag
+3) If the transaction fails basic validation, discard it
+4) If the transaction pool is full, discard underpriced transactions
+*/
 func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
@@ -753,6 +781,12 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 		}()
 	}
 	// If the transaction pool is full, discard underpriced transactions
+	/*
+		这一段是在当前txpool已满的情况下，剔除掉低油价的交易。还记得之前有个priced字段存储了按gas price以及nonce排序的交易列表吗？
+		这里会先把当前交易的gas price和当前池中的最低价进行比较:
+		1) 如果低于最低价，直接丢弃该交易返回
+		2) 如果高于最低价，则从txpool中剔除一些低价的交易
+	*/
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
@@ -815,6 +849,10 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 	}
 
 	// Try to replace an existing transaction in the pending pool
+	/*
+		这一段是为了处理两个交易nonce相同的问题。如果用户发起了一笔交易，在还没有被执行之前又用同样的nonce发起了另一笔交易，则只会保留gas price高的那一笔。
+		这个list.Overlaps()函数就是用来判断pending列表中是否包含相同nonce的交易的。
+	*/
 	if list := pool.pending[from]; list != nil && list.Contains(tx.Nonce()) {
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
@@ -839,6 +877,7 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 		return old != nil, nil
 	}
 	// New transaction isn't replacing a pending one, push into queue
+	// 如果之前的那些检查都没有问题，就真正调用enqueueTx()函数把交易加入到queue列表中了。
 	replaced, err = pool.enqueueTx(hash, tx, isLocal, true)
 	if err != nil {
 		return false, err
@@ -924,6 +963,7 @@ func (pool *LegacyPool) enqueueTx(hash common.Hash, tx *types.Transaction, local
 
 // journalTx adds the specified transaction to the local disk journal if it is
 // deemed to have been sent from a local account.
+// 只有属于 local 账户的交易才会被记录。你又没有注意到，如果仅仅是这样的话，journal 文件是否会跟随本地交易而无限增长？答案是否定的，虽然无法实时从journal中移除交易。但是支持定期更新journal文件。
 func (pool *LegacyPool) journalTx(from common.Address, tx *types.Transaction) {
 	// Only journal if it's enabled and the transaction is local
 	if pool.journal == nil || !pool.locals.contains(from) {
@@ -938,6 +978,13 @@ func (pool *LegacyPool) journalTx(from common.Address, tx *types.Transaction) {
 // and returns whether it was inserted or an older was better.
 //
 // Note, this method assumes the pool lock is held!
+/*
+promoteTx
+1) 将 transaction 放到 pending (processable) list 中;
+先更新了最后一次心跳时间，然后更新账户的 nonce 值，最后一行就是发送一个 TxPreEvent 事件，外部可以通过SubscribeTxPreEvent()函数订阅该事件
+---
+
+*/
 func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
@@ -1309,6 +1356,11 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
+/*
+1) reset -> pool.reset
+2) Check for pending transactions for every account that sent new ones
+
+*/
 func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*sortedMap) {
 	defer func(t0 time.Time) {
 		reorgDurationTimer.Update(time.Since(t0))
@@ -1491,6 +1543,9 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 // promoteExecutables moves transactions that have become processable from the
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
+/*
+把交易从queue列表“提拔”到pending列表，代码逻辑比较清楚，具体可以参见下面这张图：
+*/
 func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.Transaction {
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*types.Transaction

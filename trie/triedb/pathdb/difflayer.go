@@ -31,20 +31,34 @@ import (
 //
 // The goal of a diff layer is to act as a journal, tracking recent modifications
 // made to the state, that have not yet graduated into a semi-immutable state.
+/*
+diffLayer 表示 内存中 tries 的一系列修改,
+diff layer 的目标是与 journal 相似, 追踪最近修改的 state;
+*/
 type diffLayer struct {
 	// Immutables
-	root   common.Hash                               // Root hash to which this layer diff belongs to
-	id     uint64                                    // Corresponding state id
-	block  uint64                                    // Associated block number
+	root common.Hash // Root hash to which this layer diff belongs to
+	/*
+		id 用途 ?, the state id of the layer ?
+	*/
+	id    uint64 // Corresponding state id
+	block uint64 // Associated block number
+	// nodes trie nodes ?
 	nodes  map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
 	states *triestate.Set                            // Associated state change set for building history
 	memory uint64                                    // Approximate guess as to how much memory we use
 
+	/*
+		lock 用户 保护 parent ? 为什么只保护 parent, 存在并发读写 ?
+	*/
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
 	lock   sync.RWMutex // Lock used to protect parent
 }
 
 // newDiffLayer creates a new diff layer on top of an existing layer.
+/*
+基于 existing layer 创建一个新的 diff layer ? 新创建一个 diffLayer, 并且 其 parent 指向 传入的 parent 参数;
+*/
 func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
 	var (
 		size  int64
@@ -143,6 +157,9 @@ func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes map
 }
 
 // persist flushes the diff layer and all its parent layers to disk layer.
+/*
+ persist 这是一个递归调用, 将 所有的 parent 的 diff layer 持久化 TODO(优化), 递归不高效
+*/
 func (dl *diffLayer) persist(force bool) (layer, error) {
 	if parent, ok := dl.parentLayer().(*diffLayer); ok {
 		// Hold the lock to prevent any read operation until the new

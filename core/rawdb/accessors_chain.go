@@ -35,6 +35,15 @@ import (
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
+/*
+1) 传入的 db 参数, ethdb.KeyValueReader ethdb.Reader ethdb.Iteratee 分别是什么 ?
+
+数据类型:
+1) CanonicalHash
+2) HeaderNumber
+3) HeadHeaderHash
+
+*/
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
@@ -64,6 +73,9 @@ func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
 
 // ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
 // both canonical and reorged forks included.
+/*
+number -> hashes
+*/
 func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	prefix := headerKeyPrefix(number)
 
@@ -374,6 +386,7 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
+// Headers: headerPrefix + num (uint64 big endian) + hash -> header
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	var (
 		hash   = header.Hash()
@@ -420,6 +433,12 @@ func isCanon(reader ethdb.AncientReaderOp, number uint64, hash common.Hash) bool
 }
 
 // ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
+/*
+1) (bc *BlockChain) GetBodyRLP
+2) ReadBody
+3) (f *chainFreezer) freezeRange
+4) GetBodyRLP -> (lc *LightChain) GetBodyRLP
+*/
 func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
@@ -440,6 +459,9 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 
 // ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the canonical
 // block at number, in RLP encoding.
+/*
+1) iterateTransactions -> indexTransactions ??
+*/
 func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
@@ -458,6 +480,10 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 }
 
 // WriteBodyRLP stores an RLP encoded block body into the database.
+/*
+1) LesOdr
+2) WriteBody
+*/
 func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
 	if err := db.Put(blockBodyKey(number, hash), rlp); err != nil {
 		log.Crit("Failed to store block body", "err", err)
@@ -465,6 +491,9 @@ func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp 
 }
 
 // HasBody verifies the existence of a block body corresponding to the hash.
+/*
+(bc *BlockChain) HasBlock
+*/
 func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db, number, hash) {
 		return true
@@ -476,6 +505,13 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadBody retrieves the block body corresponding to the hash.
+/*
+调用的地方:
+1) (bc *BlockChain) GetBody
+2) ReadReceipts
+3) ReadBlock
+4) ReadTransaction
+*/
 func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 	data := ReadBodyRLP(db, hash, number)
 	if len(data) == 0 {
@@ -490,6 +526,11 @@ func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 }
 
 // WriteBody stores a block body into the database.
+// Bodies: blockBodyPrefix + num (uint64 big endian) + hash -> block body
+/*
+1) (bc *BlockChain) InsertReceiptChain 中 writeLive 分 batch , 不保证原子写入
+2) WriteBlock ->
+*/
 func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *types.Body) {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
@@ -560,6 +601,10 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 }
 
 // ReadTd retrieves a block's total difficulty corresponding to the hash.
+/*
+1) (hc *HeaderChain) GetTd, HeaderChain 的 chainDb, 另外创建新的 ?
+2) (c *ChtIndexerBackend) Process ChtIndexerBackend diskdb?
+*/
 func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
 	data := ReadTdRLP(db, hash, number)
 	if len(data) == 0 {
@@ -574,6 +619,10 @@ func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
 }
 
 // WriteTd stores the total difficulty of a block into the database.
+// HeaderTD: headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
+/*
+
+ */
 func WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td *big.Int) {
 	data, err := rlp.EncodeToBytes(td)
 	if err != nil {
@@ -593,6 +642,10 @@ func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // HasReceipts verifies the existence of all the transaction receipts belonging
 // to a block.
+/*
+引用:
+1) (bc *BlockChain) HasFastBlock 换成 bc.blockDb
+*/
 func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db, number, hash) {
 		return true
@@ -604,6 +657,11 @@ func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
+/*
+1) ReadRawReceipts
+2) ReadLogs
+3) (f *chainFreezer) freezeRange: nofreezedb 也要存到 blockDb(ethdb.KeyValueStore), 多保存一个 ethdb.KeyValueStore;
+*/
 func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
@@ -622,6 +680,12 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 // ReadRawReceipts retrieves all the transaction receipts belonging to a block.
 // The receipt metadata fields are not guaranteed to be populated, so they
 // should not be used. Use ReadReceipts instead if the metadata is needed.
+/*
+1) (bc *BlockChain) collectLogs 简单替换 bc.blockDb
+2) ReadReceipts
+3) (p *BlockPruner) backUpOldDb, chainDb 的改动
+4) GetBlockReceipts 改动 ??
+*/
 func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
@@ -648,6 +712,10 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Rec
 // The current implementation populates these metadata fields by reading the receipts'
 // corresponding block body, so if the block body is not found it will return nil even
 // if the receipt itself is stored.
+/*
+1) (bc *BlockChain) GetReceiptsByHash 直接替换
+2) ReadReceipt -> (b *SimulatedBackend) TransactionReceipt
+*/
 func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, time uint64, config *params.ChainConfig) types.Receipts {
 	// We're deriving many fields from the block body, retrieve beside the receipt
 	receipts := ReadRawReceipts(db, hash, number)
@@ -680,6 +748,11 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, time uint64,
 }
 
 // WriteReceipts stores all the transaction receipts belonging to a block.
+// Receipts: blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+/*
+1) (bc *BlockChain) InsertReceiptChain
+2) (g *Genesis) Commit
+*/
 func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, receipts types.Receipts) {
 	// Convert the receipts into their storage form and serialize them
 	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
@@ -697,6 +770,9 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 }
 
 // DeleteReceipts removes all receipt data associated with a block hash.
+/*
+1) (bc *BlockChain) setHeadBeyondRoot
+*/
 func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockReceiptsKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block receipts", "err", err)
@@ -753,6 +829,9 @@ func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, t
 // ReadLogs retrieves the logs for all transactions in a block. In case
 // receipts is not found, a nil is returned.
 // Note: ReadLogs does not derive unstored log fields.
+/*
+(b *EthAPIBackend) GetLogs 需要替换 Ethereum::blockDb
+*/
 func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
@@ -778,6 +857,14 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 //
 // Note, due to concurrent download of header and block body the header and thus
 // canonical hash can be stored in the database but the body data not (yet).
+/*
+传入的 db 参数都需要修改
+调用的地方:
+1) ReadGenesis(db ethdb.Database) 接口多传入一个 database, cmd 命令;
+2) ReadHeadBlock -> 被很多 cmd 引用, 需要修改 chainDb ?
+3) (bc *BlockChain) GetBlock 被 blockchain 很多地方引用
+4) (p *BlockPruner) backUpOldDb 创建 chainDb 和 blockDb
+*/
 func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	header := ReadHeader(db, hash, number)
 	if header == nil {
@@ -791,6 +878,14 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
+// 将区块体和区块头分别存储
+/*
+引用的地方:
+1) (bc *BlockChain) ResetWithGenesisBlock
+2) (bc *BlockChain) writeBlockWithoutState
+3) (bc *BlockChain) writeBlockWithState
+4) (g *Genesis) Commit 不太好改, 函数多传入一个 db ?
+*/
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	WriteHeader(db, block.Header())
@@ -851,6 +946,9 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
 // the hash to number mapping.
+/*
+为什么要保留 hash number 的 mapping ?
+*/
 func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
@@ -988,6 +1086,19 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 }
 
 // ReadHeadBlock returns the current canonical head block.
+/*
+返回当前 canonical head block
+调用的地方: cmd
+1) showMetaData
+2) pruneBlock -> accessDb
+3) verifyState ->
+4) traverseState
+traverseRawState
+verifyVerkle
+---
+pruneState 也是 cmd
+RecoverPruning backend
+*/
 func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	headBlockHash := ReadHeadBlockHash(db)
 	if headBlockHash == (common.Hash{}) {

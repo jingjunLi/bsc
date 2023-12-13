@@ -41,6 +41,7 @@ func TestPebbleDB(t *testing.T) {
 	})
 }
 
+// 记录没有什么调参数
 func BenchmarkPebbleDB(b *testing.B) {
 	dbtest.BenchDatabaseSuite(b, func() ethdb.KeyValueStore {
 		db, err := pebble.Open("", &pebble.Options{

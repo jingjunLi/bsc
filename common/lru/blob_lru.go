@@ -32,6 +32,10 @@ type blobType interface {
 //
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
+/*
+SizeConstrainedCache 按照 bytes 来统计容量, 而不是 item count;
+假设: items 是内容寻址的,每个 value(content) 对应的 key 都是唯一的;
+*/
 type SizeConstrainedCache[K comparable, V blobType] struct {
 	size    uint64
 	maxSize uint64

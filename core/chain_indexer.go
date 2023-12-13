@@ -36,6 +36,15 @@ import (
 // ChainIndexerBackend defines the methods needed to process chain segments in
 // the background and write the segment results into the database. These can be
 // used to create filter blooms or CHTs.
+// ChainIndexerBackend定义了处理区块链片段的方法，并把处理结果写入数据库。 这些可以用来创建布隆过滤器或者CHTs.
+// BloomIndexer 其实就是实现了这个接口 ChainIndexerBackend 这里的CHTs不知道是什么东西。
+/*
+就是用来给区块链创建索引的功能,
+给区块链的布隆过滤器创建了索引，以便快速的响应用户的日志搜索功能.
+ChainIndexer: 1) BlooomBits 2) CHT
+1) BloomIndexer
+其实BloomIndexer是chain_indexer的一个特殊的实现， 可以理解为派生类
+*/
 type ChainIndexerBackend interface {
 	// Reset initiates the processing of a new chain segment, potentially terminating
 	// any partially completed operations (in case of a reorg).
@@ -70,19 +79,30 @@ type ChainIndexerChain interface {
 // section indexer. These child indexers receive new head notifications only
 // after an entire section has been finished or in case of rollbacks that might
 // affect already finished sections.
+/*
+ChainIndexer 对区块链进行 大小相等的片段 进行处。 ChainIndexer在ChainEventLoop方法中通过事件系统与区块链通信，
+更远可以添加使用父section索引器的输出的更多子链式索引器。 这些子链式索引器只有在整个部分完成后或在可能影响已完成部分的回滚的情况下才接收新的头部通知。
+*/
 type ChainIndexer struct {
-	chainDb  ethdb.Database      // Chain database to index the data from
-	indexDb  ethdb.Database      // Prefixed table-view of the db to write index metadata into
-	backend  ChainIndexerBackend // Background processor generating the index data content
-	children []*ChainIndexer     // Child indexers to cascade chain updates to
+	// 区块链所在的数据库
+	chainDb ethdb.Database // Chain database to index the data from
+	// 索引存储的数据库
+	indexDb ethdb.Database // Prefixed table-view of the db to write index metadata into
+	// 索引生成的后端
+	backend ChainIndexerBackend // Background processor generating the index data content
+	// 子索引
+	children []*ChainIndexer // Child indexers to cascade chain updates to
 
-	active    atomic.Bool     // Flag whether the event loop was started
+	active atomic.Bool // Flag whether the event loop was started
+	// 接收到的headers
 	update    chan struct{}   // Notification channel that headers should be processed
 	quit      chan chan error // Quit channel to tear down running goroutines
 	ctx       context.Context
 	ctxCancel func()
 
+	// section的大小。 默认是4096个区块为一个section
 	sectionSize uint64 // Number of blocks in a single chain segment to process
+	// 处理完成的段之前的确认次数
 	confirmsReq uint64 // Number of confirmations before processing a completed segment
 
 	storedSections uint64 // Number of sections successfully indexed into the database
@@ -92,6 +112,7 @@ type ChainIndexer struct {
 	checkpointSections uint64      // Number of sections covered by the checkpoint
 	checkpointHead     common.Hash // Section head belonging to the checkpoint
 
+	// 磁盘限制，以防止大量资源的大量升级
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
 	log  log.Logger
@@ -101,6 +122,19 @@ type ChainIndexer struct {
 // NewChainIndexer creates a new chain indexer to do background processing on
 // chain segments of a given size after certain number of confirmations passed.
 // The throttling parameter might be used to prevent database thrashing.
+/*
+1) chainDb 是整个区块链的 Db
+2) indexDb 是这个 BloomIndexer 的 Db
+3) sectionSize 等于4096，把每4096个区块划到一个section中, section 是什么概念 ? BloomBitsBlocks 的定义
+a single bloom bit section vector 包含的 blocks 数量;
+
+4) loadValidSections 取得indexDb里面存放的section的数量
+c.updateLoop 是 chainIndexer 更新的主循环，有新的区块，或者有新的没有在indexDb里面存放的section产生都会send到c.updateLoop的goroutine里面去。
+
+1) throttling
+database 负载过高 ?
+
+*/
 func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string) *ChainIndexer {
 	c := &ChainIndexer{
 		chainDb:     chainDb,
@@ -146,6 +180,7 @@ func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 // Start creates a goroutine to feed chain head events into the indexer for
 // cascading background processing. Children do not need to be started, they
 // are notified about new events by their parents.
+// 子链不需要被启动。 以为他们的父节点会通知他们。
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
@@ -195,6 +230,7 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
+// eventLoop 循环只会在最外面的索引节点被调用。 所有的Child indexer不会被启动这个方法。
 func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	c.active.Store(true)
@@ -241,6 +277,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 }
 
 // newHead notifies the indexer about new chain heads and/or reorgs.
+// newHead方法,通知indexer新的区块链头，或者是需要重建索引，newHead方法会触发
 func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -302,6 +339,13 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 
 // updateLoop is the main event loop of the indexer which pushes chain segments
 // down into the processing backend.
+/*
+updateLoop,是主要的事件循环，用于调用backend来处理区块链section，这个需要注意的是，所有的主索引节点和所有的 child indexer 都会启动这个goroutine 方法。
+1) quit
+Chain indexer 终止退出;
+2) update
+3)
+*/
 func (c *ChainIndexer) updateLoop() {
 	var (
 		updating bool
@@ -316,10 +360,16 @@ func (c *ChainIndexer) updateLoop() {
 			return
 
 		case <-c.update:
+			/*
+				当需要使用 backend 处理的时候，其他 goroutine 会往这个 channel 上面发送消息
+				有新的区块，或者有新的没有在indexDb里面存放的section产生都会send到c.updateLoop的goroutine里面去。
+			*/
 			// Section headers completed (or rolled back), update the index
 			c.lock.Lock()
 			if c.knownSections > c.storedSections {
+				// 如果当前以知的 Section 大于已经存储的 Section
 				// Periodically print an upgrade log message to the user
+				// 每隔8秒打印一次日志信息。
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
 						updating = true
@@ -331,11 +381,13 @@ func (c *ChainIndexer) updateLoop() {
 				c.verifyLastHead()
 				section := c.storedSections
 				var oldHead common.Hash
-				if section > 0 {
+				if section > 0 { // section - 1 代表 section 的下标是从0开始的。
+					// sectionHead 用来获取 section 的最后一个区块的 hash 值。
 					oldHead = c.SectionHead(section - 1)
 				}
 				// Process the newly defined section in the background
 				c.lock.Unlock()
+				// 处理 返回新的section的最后一个区块的hash值
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
 					select {
@@ -350,12 +402,15 @@ func (c *ChainIndexer) updateLoop() {
 
 				// If processing succeeded and no reorgs occurred, mark the section completed
 				if err == nil && (section == 0 || oldHead == c.SectionHead(section-1)) {
+					// 更新数据库的状态
 					c.setSectionHead(section, newHead)
 					c.setValidSections(section + 1)
 					if c.storedSections == c.knownSections && updating {
 						updating = false
 						c.log.Info("Finished upgrading chain index")
 					}
+					// cascadedHead 是更新后的section的最后一个区块的高度
+					// 用法是什么 ？
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
 					for _, child := range c.children {
 						c.log.Trace("Cascading chain index update", "head", c.cascadedHead)
@@ -363,6 +418,7 @@ func (c *ChainIndexer) updateLoop() {
 					}
 				} else {
 					// If processing failed, don't retry until further notification
+					// 如果处理失败，那么在有新的通知之前不会重试。
 					c.log.Debug("Chain index processing failed", "section", section, "err", err)
 					c.verifyLastHead()
 					c.knownSections = c.storedSections
@@ -370,6 +426,7 @@ func (c *ChainIndexer) updateLoop() {
 			}
 			// If there are still further sections to process, reschedule
 			if c.knownSections > c.storedSections {
+				// 如果还有section等待处理，那么等待throttling时间再处理。避免磁盘过载。
 				time.AfterFunc(c.throttling, func() {
 					select {
 					case c.update <- struct{}{}:
@@ -386,6 +443,15 @@ func (c *ChainIndexer) updateLoop() {
 // ensuring the continuity of the passed headers. Since the chain mutex is not
 // held while processing, the continuity can be broken by a long reorg, in which
 // case the function returns with an error.
+/*
+processSection 通过 调用后端函数 来处理整个部分，同时确保传递的头文件的连续性。 由于 chain 互斥锁在处理过程中没有保持，连续性可能会被重新打断，在这种情况下，函数返回一个错误。
+1) 调用c.backend.Reset(section, lastHead)产生一个待组装的 section，每个section中存在一个bloom过滤器。
+2) 把number等于 section * c.sectionSize 到 (section+1)*c.sectionSize 的block依次加入到待组装的section中。
+并把这些 block 的 header.bloom 加入到 section 的 bloom 过滤器中。
+3) 调用c.backend.Commit()，把新的section写入db。返回最近的那block的header。
+
+3，更新sectionHead和ValidSctions，如果还有新的没有在db里面的section的话，在throttling时间后在循环更新一次。
+*/
 func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (common.Hash, error) {
 	c.log.Trace("Processing new chain section", "section", section)
 
@@ -469,14 +535,21 @@ func (c *ChainIndexer) Prune(threshold uint64) error {
 
 // loadValidSections reads the number of valid sections from the index database
 // and caches is into the local state.
+/*
+用来从数据库里面加载我们之前的处理信息, storedSections 表示我们已经处理到哪里了
+*/
 func (c *ChainIndexer) loadValidSections() {
 	data, _ := c.indexDb.Get([]byte("count"))
+	// 8 含义 ?
 	if len(data) == 8 {
 		c.storedSections = binary.BigEndian.Uint64(data)
 	}
 }
 
 // setValidSections writes the number of valid sections to the index database
+/*
+setValidSections 方法，写入当前已经存储的 sections 的数量。 如果传入的值小于已经存储的数量，那么从数据库里面删除对应的section
+*/
 func (c *ChainIndexer) setValidSections(sections uint64) {
 	// Set the current number of valid sections in the database
 	var data [8]byte

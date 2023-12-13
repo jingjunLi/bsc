@@ -36,24 +36,53 @@ import (
 )
 
 var (
+	/*
+		memcacheCleanHitMeter: 用在Node函数中，记录被 fastcache 缓存的内容命中，Mark(1)
+		memcacheCleanMissMeter: 用在Node函数中，记录被 fastcache 缓存的内容未命中，Mark(1)
+		memcacheCleanReadMeter: 用在Node函数中，当key即hash[:]被 fastcache 缓存的内容命中时，记录根据key读取到命中的value长度，Mark(int64(len(enc)))
+		memcacheCleanWriteMeter:
+			1) 用在Node函数中，fastcache中找不到key对应的数据，记录从数据库中加载到的value长度，`Mark(int64(len(enc)))`；
+		 	2) 另外一个用在cleaner Put( (c *cleaner) Put )方法，记录从flushed node到clean cache中数据长度
+	*/
 	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/clean/hit", nil)
 	memcacheCleanMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/miss", nil)
 	memcacheCleanReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/clean/read", nil)
 	memcacheCleanWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/clean/write", nil)
 
+	/*
+		memcacheDirtyHitMeter: 用在Node函数中，当从dirties里读取到的数据不为nil时，`Mark(1)`
+		memcacheDirtyReadMeter: 用在Node函数中，当key即hash[:]被fastcache缓存的内容命中时，记录根据key读取到命中的value长度，Mark(int64(len(enc)))
+
+		用在Node函数中，当从dirties里读取到的数据不为nil时，记录一下根据key读取到命中的value长度，`Mark(int64(len(enc)))`
+	*/
 	memcacheDirtyHitMeter   = metrics.NewRegisteredMeter("hashdb/memcache/dirty/hit", nil)
 	memcacheDirtyMissMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/miss", nil)
 	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/read", nil)
 	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/dirty/write", nil)
 
+	/*
+		memcacheFlushTimeTimer: 用在Cap函数中，记录flush nodes的时间
+		memcacheFlushNodesMeter :用在Cap函数中，记录flush nodes的数量
+		memcacheFlushBytesMeter : 用在Cap函数中，记录flush nodes的大小
+	*/
 	memcacheFlushTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/time", nil)
 	memcacheFlushNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/flush/nodes", nil)
 	memcacheFlushBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/flush/bytes", nil)
 
+	/*
+		memcacheGCTimeTimer : 用在Dereference函数中，记录gc的时间
+		memcacheGCNodesMeter : 用在Dereference函数中，记录gc的节点的数量
+		memcacheGCBytesMeter : 用在Dereference函数中，记录gc的节点的大小
+	*/
 	memcacheGCTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/gc/time", nil)
 	memcacheGCNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/nodes", nil)
 	memcacheGCBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/bytes", nil)
 
+	/*
+		memcacheCommitTimeTimer : 用在Commit函数中，记录commit的时间
+		memcacheCommitBytesMeter : 用在Commit函数中，记录commit的数量
+		memcacheCommitBytesMeter : 用在Commit函数中，记录commit的大小
+	*/
 	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", nil)
 	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", nil)
 	memcacheCommitBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
@@ -87,14 +116,33 @@ var Defaults = &Config{
 // thread safe in providing individual, independent node access. The rationale
 // behind this split design is to provide read access to RPC handlers and sync
 // servers even while the trie is executing expensive garbage collection.
+/*
+trie 结构和 disk database 中间层; 将 trie 写入 缓存到内存, 周期性的 flush tries 到磁盘;
+*/
 type Database struct {
 	diskdb   ethdb.Database // Persistent storage for matured trie nodes
 	resolver ChildResolver  // The handler to resolve children of nodes
 
-	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
+	/*
+		Database 具有两层 cache:
+		1) cleans (fastcache); clean 是 cache, 缓存从磁盘读取的 node 和 (c *cleaner) Put 的 node;
+		2) dirties (dirty node cache)
+		区别 ?
+		1) dirties 插入的接口:  insert
+		2) Cap 可能会删除 ?
+		dirties 这个 map 的 key 就是 hashdb 里的hash做为key
+	*/
+	cleans *fastcache.Cache // GC friendly memory cache of clean node RLPs
+	// Data 和 引用关系 (references relationships),
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
-	oldest  common.Hash                 // Oldest tracked node, flush-list head
-	newest  common.Hash                 // Newest tracked node, flush-list tail
+	/*
+		flush-list 的设计 ? 双向链表
+		1) oldest , newest
+		最老的 tracked node
+		cachedNode 是一个双向链表,
+	*/
+	oldest common.Hash // Oldest tracked node, flush-list head
+	newest common.Hash // Newest tracked node, flush-list tail
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -104,6 +152,9 @@ type Database struct {
 	flushnodes uint64             // Nodes flushed since last commit
 	flushsize  common.StorageSize // Data storage flushed since last commit
 
+	/*
+		1)dirtiesSize -> 记录 上面 dirties (dirty node cache) 的大小
+	*/
 	dirtiesSize  common.StorageSize // Storage size of the dirty node cache (exc. metadata)
 	childrenSize common.StorageSize // Storage size of the external children tracking
 
@@ -112,9 +163,16 @@ type Database struct {
 
 // cachedNode is all the information we know about a single cached trie node
 // in the memory database write layer.
+/*
+cachedNode 是一个 cached trie node, 内存数据库的 write layer
+cachedNode 代表链表的节点，双向链表所以有 prev 和 next; 双向链表
+children 和 parents 如何理解 ?
+1) flushPrev 的处理 ?
+*/
 type cachedNode struct {
-	node      []byte                   // Encoded node blob
-	parents   uint32                   // Number of live nodes referencing this one
+	node    []byte // Encoded node blob
+	parents uint32 // Number of live nodes referencing this one
+	// 什么时候设置 ?
 	external  map[common.Hash]struct{} // The set of external children
 	flushPrev common.Hash              // Previous node in the flush-list
 	flushNext common.Hash              // Next node in the flush-list
@@ -155,6 +213,15 @@ func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Databas
 // insert inserts a simplified trie node into the memory database.
 // All nodes inserted by this function will be reference tracked
 // and in theory should only used for **trie nodes** insertion.
+/*
+oldest和newest指向flush-list头节点和尾节点。
+Nodes方法注释说该方法extremely expensive是因为：1.使用了RWMutex；2.db.dirties数据量很大，线上一般为4GB左右。
+
+internal node: fullNode, shortNode; external node: storage trie root.
+插入的数据:  hash, node;
+1) dirties 已经存在, 则返回;
+2) 创建新的 cachedNode entry, flushPrev 指向目前的 newest
+*/
 func (db *Database) insert(hash common.Hash, node []byte) {
 	// If the node's already cached, skip
 	if _, ok := db.dirties[hash]; ok {
@@ -176,8 +243,16 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 
 	// Update the flush-list endpoints
 	if db.oldest == (common.Hash{}) {
+		/*
+			如果 db.oldest 为空，代表当前flush-list为空，即该链表还没有任何节点，因此更新flush-list的头节点和尾节点为当前hash，
+			flush-list中只有一个节点，即是头节点也是尾节点
+		*/
 		db.oldest, db.newest = hash, hash
 	} else {
+		/*
+			1) 双向链表插入数据; 正常只需要 a) 目前最新的节点的 next 指向新节点 b) 更新 newest 节点;
+		*/
+		// 更新双向链表对应的数据
 		db.dirties[db.newest].flushNext, db.newest = hash, hash
 	}
 	db.dirtiesSize += common.StorageSize(common.HashLength + len(node))
@@ -185,6 +260,12 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
+/*
+node 从内存检索 编码的 cached trie node; 如果查不到, 从持久化的 database 中查询;
+1) 先查询 cleans (clean cache)
+2) 再查询 dirties
+3) 都不命中, 查询 rawdb.ReadLegacyTrieNode 从 磁盘读取
+*/
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// It doesn't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {
@@ -193,6 +274,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
+			// 1) 命中 cleans fast cache
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
 			return enc, nil
@@ -204,6 +286,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	db.lock.RUnlock()
 
 	if dirty != nil {
+		// 2) 命中 dirty cachedNode
 		memcacheDirtyHitMeter.Mark(1)
 		memcacheDirtyReadMeter.Mark(int64(len(dirty.node)))
 		return dirty.node, nil
@@ -214,6 +297,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	enc := rawdb.ReadLegacyTrieNode(db.diskdb, hash)
 	if len(enc) != 0 {
 		if db.cleans != nil {
+			// 3) 从 disk 读取成功
 			db.cleans.Set(hash[:], enc)
 			memcacheCleanMissMeter.Mark(1)
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
@@ -226,6 +310,10 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 // Nodes retrieves the hashes of all the nodes cached within the memory database.
 // This method is extremely expensive and should only be used to validate internal
 // states in test code.
+/*
+eth 没有 ??
+Nodes方法注释说该方法extremely expensive是因为：1.使用了RWMutex；2.db.dirties数据量很大，线上一般为4GB左右。
+*/
 func (db *Database) Nodes() []common.Hash {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -241,6 +329,10 @@ func (db *Database) Nodes() []common.Hash {
 // This function is used to add reference between internal trie node
 // and external node(e.g. storage trie root), all internal trie nodes
 // are referenced together by database itself.
+/*
+增加 parent 对 child 的 新的 reference;
+internal trie node 与 external node(e.g. storage trie root) 之间的引用 ?
+*/
 func (db *Database) Reference(child common.Hash, parent common.Hash) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -274,6 +366,9 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 }
 
 // Dereference removes an existing reference from a root node.
+/*
+Dereference 移除已存在的 reference
+*/
 func (db *Database) Dereference(root common.Hash) {
 	// Sanity check to ensure that the meta-root is not removed
 	if root == (common.Hash{}) {
@@ -299,6 +394,7 @@ func (db *Database) Dereference(root common.Hash) {
 }
 
 // dereference is the private locked version of Dereference.
+// dereference 是 Dereference 具体实现
 func (db *Database) dereference(hash common.Hash) {
 	// If the node does not exist, it's a previously committed node.
 	node, ok := db.dirties[hash]
@@ -347,6 +443,9 @@ func (db *Database) dereference(hash common.Hash) {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
+/*
+1) 创建一个 Batch (leveldb pebble)
+*/
 func (db *Database) Cap(limit common.StorageSize) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
@@ -364,6 +463,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	batch := db.diskdb.NewBatch()
 
 	// Keep committing nodes from the flush-list until we're below allowance
+	// 按照新旧顺序, 依次将 oldest 的下盘, 直至满足 limit 需求
 	oldest := db.oldest
 	err := func() error {
 		db.lock.RLock()
@@ -437,6 +537,12 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
+/*
+Commit 迭代特定节点的所有子节点，将它们写入磁盘，强制拆除两个方向的所有引用。 作为副作用，到目前为止积累的所有原像也会被写入。
+注意，这个方法是一个非同步的修改器。 与其他修改器同时调用它是不安全的。
+commit函数：当数据量大于等于 100KB 会将其写入disk, batch.Write() 和 batch.Replay(uncacher);
+外部的Commit函数会再调用一次batch.Write()和batch.Replay(uncacher)应该是为了防止一些小于100KB的数据没有被提交，因此再向disk提交一次。
+*/
 func (db *Database) Commit(node common.Hash, report bool) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
@@ -489,6 +595,9 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 }
 
 // commit is the private locked version of Commit.
+/*
+
+ */
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
 	// If the node does not exist, it's a previously committed node
 	db.lock.RLock()
@@ -529,6 +638,11 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 
 // cleaner is a database batch replayer that takes a batch of write operations
 // and cleans up the trie database from anything written to disk.
+/*
+cleaner 作用 ?cleaner 是一个数据库批量重放器，它接受一批写入操作并清除 trie 数据库中写入磁盘的任何内容。
+1) Put
+2) Update
+*/
 type cleaner struct {
 	db *Database
 }
@@ -538,6 +652,9 @@ type cleaner struct {
 // removed from the dirty cache and moved into the clean cache. The reason behind
 // the two-phase commit is to ensure data availability while moving from memory
 // to disk.
+/*
+
+ */
 func (c *cleaner) Put(key []byte, rlp []byte) error {
 	hash := common.BytesToHash(key)
 

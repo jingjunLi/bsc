@@ -62,7 +62,26 @@ import (
 // all history objects from n+1 up to the current disk layer are existent. The
 // history objects are applied to the state in reverse order, starting from the
 // current disk layer.
+/*
+State history 记录了执行块时涉及的状态变化。 通过应用关联的历史对象（状态反向差异）可以将状态恢复到以前的版本。
+保留状态历史对象是为了保证系统可以在深度重组的情况下执行状态回滚。
+每次状态转换都会生成一个状态历史对象。 请注意，并非每个块都有相应的状态历史对象。
+如果一个块不执行任何状态更改，则不会为其创建任何状态。 每个状态历史记录都会有一个连续递增的数字作为其唯一标识符。
 
+3) state history 被写入磁盘(ancient store) 当对应的 diff 层合并到 disk layer 时; 同时，系统可以根据配置修剪最旧的历史记录。
+4) Rollback
+
+*/
+
+/*
+State history 记录了执行块时涉及的状态变化。 通过应用关联的历史对象（状态反向差异）可以将状态恢复到以前的版本。
+保留状态历史对象是为了保证系统可以在深度重组的情况下执行状态回滚。
+每次状态转换都会生成一个状态历史对象。 请注意，并非每个块都有相应的状态历史对象。
+如果一个块不执行任何状态更改，则不会为其创建任何状态。 每个状态历史记录都会有一个连续递增的数字作为其唯一标识符。
+
+3) state history 被写入磁盘(ancient store) 当对应的 diff 层合并到 disk layer 时; 同时，系统可以根据配置修剪最旧的历史记录。
+4) Rollback
+*/
 const (
 	accountIndexSize = common.AddressLength + 13 // The length of encoded account index
 	slotIndexSize    = common.HashLength + 5     // The length of encoded slot index
@@ -138,7 +157,21 @@ const (
 //                | slot data 1 |
 //                +-------------+
 
+/*
+1) metadata
+2) account index
+3) account data
+storage index
+storage data
+*/
 // accountIndex describes the metadata belonging to an account.
+/*
+1) metadata
+2) account index
+3) account data
+storage index
+storage data
+*/
 type accountIndex struct {
 	address       common.Address // The address of account
 	length        uint8          // The length of account data, size limited by 255
@@ -244,6 +277,14 @@ func (m *meta) decode(blob []byte) error {
 // State history objects in disk are linked with each other by a unique id
 // (8-bytes integer), the oldest state history object can be pruned on demand
 // in order to control the storage size.
+/*
+用途 ? 保存哪些数据 ?
+history 表示 state transition 期间, 一个 block 内的 state changes;
+历史表示属于一个块的一组状态更改(state changes)以及包括状态转换中涉及的状态根的元数据(the metadata)。
+磁盘中的状态历史对象(State history objects)通过唯一的id（8字节整数）相互链接，可以根据需要修剪最旧的状态历史对象(the oldest state history object)以控制存储大小。
+1) meta
+2) accounts: address hash ->
+*/
 type history struct {
 	meta        *meta                                     // Meta data of history
 	accounts    map[common.Address][]byte                 // Account data keyed by its address hash
@@ -490,6 +531,11 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 }
 
 // readHistory reads and decodes the state history object by the given id.
+/*
+1) readHistory
+id: the state id of disk layer
+2) writeHistory
+*/
 func readHistory(freezer *rawdb.ResettableFreezer, id uint64) (*history, error) {
 	blob := rawdb.ReadStateHistoryMeta(freezer, id)
 	if len(blob) == 0 {
@@ -513,6 +559,10 @@ func readHistory(freezer *rawdb.ResettableFreezer, id uint64) (*history, error) 
 }
 
 // writeHistory persists the state history with the provided state set.
+/*
+writeHistory
+将 diffLayer 这个 block 持久化 ?
+*/
 func writeHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer) error {
 	// Short circuit if state set is not available.
 	if dl.states == nil {
@@ -566,6 +616,12 @@ func checkHistories(freezer *rawdb.ResettableFreezer, start, count uint64, check
 
 // truncateFromHead removes the extra state histories from the head with the given
 // parameters. It returns the number of items removed from the head.
+/*
+函数根据指定的参数从head移除额外的状态历史，返回从head移除的项数，流程如下：
+1) 调用`freezer.Ancients()`返回frozen项的长度ohead；判断ohead是否小于等于nhead（函数入参），小于的话return，比如nhead为10，ohead为5，没有必要去进行接下来的操作；
+2) 从rawdb中加载一批meta对象`rawdb.ReadStateHistoryMetaList`，解析、执行`rawdb.DeleteStateID`和`batch.Write()`
+3) 调用`freezer.TruncateHead(nhead)`，会丢弃大于nhead数字的相关数据，返回新的ohead；truncateFromHead函数返回值为ohead - nhead
+*/
 func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead uint64) (int, error) {
 	ohead, err := freezer.Ancients()
 	if err != nil {
@@ -608,6 +664,15 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 
 // truncateFromTail removes the extra state histories from the tail with the given
 // parameters. It returns the number of items removed from the tail.
+/*
+函数根据指定的参数从tail移除额外的状态历史，返回从tail移除的项数，流程如下：
+1) 调用`freezer.Tail()`返回frozen项的长度otail；判断otail是否大于等于ntail（函数入参），大于的话return，比如otail为10，ntail为5，没有必要去进行接下来的操作；
+2) 从rawdb中加载一批meta对象`rawdb.ReadStateHistoryMetaList`，解析、执行`rawdb.DeleteStateID`和`batch.Write()`
+3) 调用`freezer.TruncateHead(nhead)`，会丢弃大于nhead数字的相关数据，返回新的ohead；truncateFromHead函数返回值为ohead - nhead
+
+freezer是一个顺序写的文件，删除文件只能从head开始删除，从tail处写文件，read根据index在[tail, head]之间都可以；
+freezer可以看成一个队列模型，传统队列是FIFO（先进先出，tail进，head出），因为freezer结合了文件，所以现在是head进，tail出。
+*/
 func truncateFromTail(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, ntail uint64) (int, error) {
 	ohead, err := freezer.Ancients()
 	if err != nil {

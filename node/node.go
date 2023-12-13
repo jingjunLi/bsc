@@ -43,22 +43,38 @@ import (
 )
 
 // Node is a container on which services can be registered.
+/*
+2) config: 创建该结点使用的配置
+3) serviceFuncs: 一个函数指针数组，保存所有注册 Service 的构造函数
+---
+Node 装 服务(services) 的容器
+核心的功能:
+1) Ethereum: 区块链核心组件; 对应 lifecycles 用于提供运行区块链业务的核心服务
+2) eventmux: 事件发布 订阅
+3) account.Manager 账户管理;对应 accman: 刚刚创建的账号管理器实例
+4) RPC 服务
+5) p2p.Server 管理所有 peer 连接和消息分发;
+*/
 type Node struct {
-	eventmux      *event.TypeMux
-	config        *Config
-	accman        *accounts.Manager
-	log           log.Logger
-	keyDir        string        // key store directory
-	keyDirTemp    bool          // If true, key directory will be removed by Stop
-	dirLock       *flock.Flock  // prevents concurrent use of instance directory
-	stop          chan struct{} // Channel to wait for termination notifications
-	server        *p2p.Server   // Currently running P2P networking layer
-	startStopLock sync.Mutex    // Start/Stop are protected by an additional lock
-	state         int           // Tracks state of node lifecycle
+	// 事件发布 订阅
+	eventmux *event.TypeMux
+	config   *Config
+	// 账户管理
+	accman     *accounts.Manager
+	log        log.Logger
+	keyDir     string        // key store directory
+	keyDirTemp bool          // If true, key directory will be removed by Stop
+	dirLock    *flock.Flock  // prevents concurrent use of instance directory
+	stop       chan struct{} // Channel to wait for termination notifications
+	// 管理 peer 连接和消息分发
+	server        *p2p.Server // Currently running P2P networking layer
+	startStopLock sync.Mutex  // Start/Stop are protected by an additional lock
+	state         int         // Tracks state of node lifecycle
 
-	lock          sync.Mutex
-	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
-	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
+	lock       sync.Mutex
+	lifecycles []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
+	rpcAPIs    []rpc.API   // List of APIs currently provided by the node
+	// 4 种 RPC 通信方式 ? 4->5 ?
 	http          *httpServer //
 	ws            *httpServer //
 	httpAuth      *httpServer //
@@ -66,6 +82,9 @@ type Node struct {
 	ipc           *ipcServer  // Stores information about the ipc http server
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
+	/*
+		1) wrapDatabase 中增加;
+	*/
 	databases map[*closeTrackingDB]struct{} // All open databases
 }
 
@@ -78,6 +97,13 @@ const (
 const chainDataHandlesPercentage = 80
 
 // New creates a new P2P node, ready for protocol registration.
+/*
+可以看出，主要做了3件事：
+
+1) 把 DataDir 转成绝对路径
+2) 调用 accounts.NewManager 初始化账号管理器
+3) 创建一个 Node 实例并返回
+*/
 func New(conf *Config) (*Node, error) {
 	// Copy config and resolve the datadir so future changes to the current
 	// working directory don't affect the node.
@@ -148,6 +174,14 @@ func New(conf *Config) (*Node, error) {
 		databases:     make(map[*closeTrackingDB]struct{}),
 	}
 
+	/*
+		1) Register built-in APIs; rpcAPIs 主要是 Node::apis() 内的 api
+		2) Acquire the instance directory lock.
+		3) Creates an empty AccountManager with no backends. accounts.NewManager
+		4) Initialize the p2p server. This creates the node key and discovery databases.
+		5) Check HTTP/WS prefixes are valid.
+		6) Configure RPC servers.
+	*/
 	// Register built-in APIs.
 	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
 
@@ -345,6 +379,10 @@ func (n *Node) stopServices(running []Lifecycle) error {
 	return nil
 }
 
+/*
+Config::DataDir
+2) flock.New "LOCK"
+*/
 func (n *Node) openDataDir() error {
 	if n.config.DataDir == "" {
 		return nil // ephemeral
@@ -411,6 +449,10 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 // startRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
+/*
+辅助函数用于在启动的时候 配置 各种 RPC endpoints
+1) initHttp initWS initAuth
+*/
 func (n *Node) startRPC() error {
 	// Filter out personal api
 	var apis []rpc.API
@@ -583,11 +625,22 @@ func (n *Node) stopInProc() {
 }
 
 // Wait blocks until the node is closed.
+/*
+其实就是让主线程进入阻塞状态，保持进程不退出，直到从 channel 中收到 stop 消息。
+具体就是调用 Node 的 Wait() 函数：
+*/
 func (n *Node) Wait() {
 	<-n.stop
 }
 
 // RegisterLifecycle registers the given Lifecycle on the node.
+/*
+被调用的地方:
+1) eth.New 注册 Ethereum 实例
+2) ethstats.New 注册 ethstats.Service
+3) les.New LightEthereum
+4) LesServer
+*/
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -771,6 +824,11 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	return db, err
 }
 
+/*
+OpenAndMergeDatabase
+1) persistDiff 如果开启 diff, 会有两个 db, 按照 chainDataHandlesPercentage(80%) 的 handles 分给 chainDB
+启动两个 DB: 1) chainDB 2) diffStore
+*/
 func (n *Node) OpenAndMergeDatabase(name string, cache, handles int, freezer, diff, namespace string, readonly, persistDiff, pruneAncientData bool) (ethdb.Database, error) {
 	chainDataHandles := handles
 	if persistDiff {
@@ -796,6 +854,10 @@ func (n *Node) OpenAndMergeDatabase(name string, cache, handles int, freezer, di
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
+/*
+OpenDatabaseWithFreezer 根据 name 来 open database, 附加 a chain freezer
+1) 没有配置 DataDir ->NewMemoryDatabase 2) 配置的 DBEngine(pebble/leveldb)
+*/
 func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -827,6 +889,10 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 	return db, err
 }
 
+/*
+OpenDiffDatabase
+1) diff 作为 filename,  用途 ? root/diff
+*/
 func (n *Node) OpenDiffDatabase(name string, handles int, diff, namespace string, readonly bool) (*leveldb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -883,6 +949,10 @@ func (db *closeTrackingDB) Close() error {
 }
 
 // wrapDatabase ensures the database will be auto-closed when Node is closed.
+/*
+1) OpenDatabase
+2) OpenDatabaseWithFreezer
+*/
 func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
 	wrapper := &closeTrackingDB{db, n}
 	n.databases[wrapper] = struct{}{}

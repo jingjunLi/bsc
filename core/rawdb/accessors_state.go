@@ -18,19 +18,37 @@ package rawdb
 
 import (
 	"encoding/binary"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 // ReadPreimage retrieves a single preimage of the provided hash.
+/*
+accessors(访问器) state
+访问的 state 数据类型:
+1) Preimage: PreimagePrefix + hash -> preimage
+2) Code: CodePrefix + code hash -> account code
+3) StateID: stateIDPrefix + state root -> state id
+4) PersistentStateID: persistentStateIDKey
+5) TrieJournal : trieJournalKey
+
+操作类型: Read Write Delete;
+*/
 func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(preimageKey(hash))
 	return data
 }
 
 // WritePreimages writes the provided set of preimages to the database.
+/*
+preimages:
+
+引用:
+1) ImportPreimages cmd
+2) (bc *BlockChain) writeBlockWithState , block data 写入
+3) (store *preimageStore) commit , preimage 写入
+*/
 func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 	for hash, preimage := range preimages {
 		if err := db.Put(preimageKey(hash), preimage); err != nil {
@@ -164,6 +182,17 @@ func DeleteTrieJournal(db ethdb.KeyValueWriter) {
 // state history. Compute the position of state history in freezer by minus
 // one since the id of first state history starts from one(zero for initial
 // state).
+/*
+ReadStateHistoryMeta 检索与指定状态历史对应的元数据。 由于第一个状态历史记录的 id 从 1 开始（初始状态为零），因此计算状态历史记录在冰箱中的位置减一。
+*/
+/*
+6) StateHistoryMeta: stateHistoryMeta "history.meta"
+7) StateAccountIndex:stateHistoryAccountIndex -> account.index
+8) StateStorageIndex: stateHistoryStorageIndex -> "storage.index"
+9) StateAccountHistory: stateHistoryAccountData -> "account.data"
+10) StateStorageHistory: stateHistoryStorageData -> "storage.data"
+11) StateHistory
+*/
 func ReadStateHistoryMeta(db ethdb.AncientReaderOp, id uint64) []byte {
 	blob, err := db.Ancient(stateHistoryMeta, id-1)
 	if err != nil {
@@ -254,6 +283,9 @@ func ReadStateHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []by
 // WriteStateHistory writes the provided state history to database. Compute the
 // position of state history in freezer by minus one since the id of first state
 // history starts from one(zero for initial state).
+/*
+
+ */
 func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) {
 	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		err := op.AppendRaw(stateHistoryMeta, id-1, meta)

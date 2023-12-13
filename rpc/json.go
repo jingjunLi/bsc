@@ -166,6 +166,9 @@ type ConnRemoteAddr interface {
 
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has
 // support for parsing arguments and serializing (result) objects.
+/*
+1) 向 underlying connection 读取和写入 JSON-RPC msg; 并且支持 解析参数和序列化 objects
+*/
 type jsonCodec struct {
 	remote  string
 	closer  sync.Once        // close closed channel once

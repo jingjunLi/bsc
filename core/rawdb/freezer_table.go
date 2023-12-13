@@ -87,6 +87,10 @@ func (i *indexEntry) bounds(end *indexEntry) (startOffset, endOffset, fileId uin
 // freezerTable represents a single chained data table within the freezer (e.g. blocks).
 // It consists of a data file (snappy encoded arbitrary data blobs) and an indexEntry
 // file (uncompressed 64 bit indices into the data file).
+/*
+a single chained data table within the freezer (e.g. blocks) ?
+freezerTable 表示 chained data table, 单个 data file; 1) snappy encoded snappy 压缩;
+*/
 type freezerTable struct {
 	items      atomic.Uint64 // Number of items stored in the table (including items removed from tail)
 	itemOffset atomic.Uint64 // Number of items removed from the table
@@ -100,9 +104,10 @@ type freezerTable struct {
 
 	noCompression bool // if true, disables snappy compression. Note: does not work retroactively
 	readonly      bool
-	maxFileSize   uint32 // Max file size for data-files
-	name          string
-	path          string
+	// freezerTableSize 2GB ? 实际是 1.9G
+	maxFileSize uint32 // Max file size for data-files
+	name        string
+	path        string
 
 	head   *os.File            // File descriptor for the data head of the table
 	index  *os.File            // File descriptor for the indexEntry file of the table
@@ -128,6 +133,9 @@ func newFreezerTable(path, name string, disableSnappy, readonly bool) (*freezerT
 // newTable opens a freezer table, creating the data and index files if they are
 // non-existent. Both files are truncated to the shortest common length to ensure
 // they don't go out of sync.
+/*
+
+ */
 func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, maxFilesize uint32, noCompression, readonly bool) (*freezerTable, error) {
 	// Ensure the containing directory exists and open the indexEntry file
 	if err := os.MkdirAll(path, 0755); err != nil {
@@ -204,6 +212,7 @@ func newTable(path string, name string, readMeter metrics.Meter, writeMeter metr
 
 // repair cross-checks the head and the index file and truncates them to
 // be in sync with each other after a potential crash / data loss.
+/**/
 func (t *freezerTable) repair() error {
 	// Create a temporary offset buffer to init files with and read indexEntry into
 	buffer := make([]byte, indexEntrySize)
@@ -252,6 +261,7 @@ func (t *freezerTable) repair() error {
 	t.itemOffset.Store(uint64(firstIndex.offset))
 
 	// Load metadata from the file
+	// metadata of the table ?
 	meta, err := loadMetadata(t.meta, t.itemOffset.Load())
 	if err != nil {
 		return err
@@ -881,6 +891,9 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 // advanceHead should be called when the current head file would outgrow the file limits,
 // and a new file must be opened. The caller of this method must hold the write-lock
 // before calling this method.
+/*
+advanceHead 重新生成一个 file
+*/
 func (t *freezerTable) advanceHead() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()

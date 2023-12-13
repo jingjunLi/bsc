@@ -98,6 +98,13 @@ func init() {
 //
 // The goal of a diff layer is to act as a journal, tracking recent modifications
 // made to the state, that have not yet graduated into a semi-immutable state.
+/*
+对  state snapshot 的一系列修改;主要包含:
+1) 排序的 account trie list
+2) storage tries;
+
+diff layer 的目标是向 journal 一样, 记录 最近对 state 的修改, 但是它不能变成 semi-immutable state 状态;
+*/
 type diffLayer struct {
 	origin *diskLayer // Base disk layer to directly use on bloom misses
 	parent snapshot   // Parent snapshot modified by this one, never nil
@@ -358,6 +365,8 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
+	/*
+	 */
 	hit := dl.diffed.Contains(accountBloomHasher(hash))
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(hash))

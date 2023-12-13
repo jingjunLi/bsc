@@ -44,6 +44,13 @@ const HashScheme = "hash"
 // is native. At the same time, this scheme will put adjacent trie nodes in the same
 // area of the disk with good data locality property. But this scheme needs to rely
 // on extra state diffs to survive deep reorg.
+/*
+1) new path-based state scheme
+tries nodes 存储在磁盘上 是以 node path 作为 database key; 优势
+a) 这种方式只存储 一个 版本的 state data, 因此 不需要 state pruning 操作;
+b) 相邻的 trie nodes 在磁盘同样的区域, 具有更好的数据局部性;
+c) 但该方案需要依赖额外的状态差异才能在深度重组中生存 ?? 什么含义 ? 依赖 额外的 state diffs ; reorg 是什么 ?
+*/
 const PathScheme = "path"
 
 // hasher is used to compute the sha256 hash of the provided data.
@@ -67,6 +74,22 @@ func (h *hasher) release() {
 
 // ReadAccountTrieNode retrieves the account trie node and the associated node
 // hash with the specified node path.
+/*
+db 指什么 ?
+主要的数据类型:
+1) AccountTrieNode
+accountTrieNodeKey = trieNodeAccountPrefix + nodePath -> trieNodeAccountPrefix + hexPath -> trie node
+2) StorageTrieNode
+trieNodeStoragePrefix + accountHash + hexPath -> trie node
+3)LegacyTrieNode
+兼容 hashdb 的场景, 给定 hash 读写数据;
+---
+4)TrieNode: 对上面三种数据类型的封装, 提供给用户统一的接口: HasTrieNode, ReadTrieNode, WriteTrieNode, DeleteTrieNode
+
+5)StateScheme
+
+主要的操作类型: 1) Read 2) Has 3) Exists 3) Write 4) Delete
+*/
 func ReadAccountTrieNode(db ethdb.KeyValueReader, path []byte) ([]byte, common.Hash) {
 	data, err := db.Get(accountTrieNodeKey(path))
 	if err != nil {
@@ -286,6 +309,7 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 
 // ReadStateScheme reads the state scheme of persistent state, or none
 // if the state is not present in database.
+// State Scheme 方案, 1) PathScheme 2) HashScheme
 func ReadStateScheme(db ethdb.Reader) string {
 	// Check if state in path-based scheme is present
 	blob, _ := ReadAccountTrieNode(db, nil)

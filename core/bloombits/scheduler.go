@@ -24,12 +24,19 @@ import (
 
 // request represents a bloom retrieval task to prioritize and pull from the local
 // database or remotely from the network.
+/*
+request 表示一个 bloom 检索任务，以便优先从本地数据库中或从网络中剪检索。
+section 表示区块段号，每段4096个区块， bit代表检索的是布隆过滤器的哪一位(一共有2048位)。这个在之前的(eth-bloombits和filter源码分析.md)中有介绍。
+*/
 type request struct {
 	section uint64 // Section index to retrieve the a bit-vector from
 	bit     uint   // Bit index within the section to retrieve the vector of
 }
 
 // response represents the state of a requested bit-vector through a scheduler.
+/*
+response当前调度的请求的状态。 每发送一个请求，会生成一个response对象来最终这个请求的状态。 cached用来缓存这个section的结果。
+*/
 type response struct {
 	cached []byte        // Cached bits to dedup multiple requests
 	done   chan struct{} // Channel to allow waiting for completion
@@ -40,8 +47,14 @@ type response struct {
 // retrieval operations, this struct also deduplicates the requests and caches
 // the results to minimize network/database overhead even in complex filtering
 // scenarios.
+/*
+scheduler 是基于 section 的布隆过滤器的单个 bit 值检索的调度。
+除了调度检索操作之外，这个结构还可以对请求进行重复数据删除并缓存结果，从而即使在复杂的过滤情况下也可以将网络/数据库开销降至最低。
+*/
 type scheduler struct {
-	bit       uint                 // Index of the bit in the bloom filter this scheduler is responsible for
+	// 布隆过滤器的哪一个bit位(0-2047)
+	bit uint // Index of the bit in the bloom filter this scheduler is responsible for
+	// 当前正在进行的请求或者是已经缓存的结果
 	responses map[uint64]*response // Currently pending retrieval requests or already cached responses
 	lock      sync.Mutex           // Lock protecting the responses from concurrent access
 }
@@ -58,9 +71,18 @@ func newScheduler(idx uint) *scheduler {
 // run creates a retrieval pipeline, receiving section indexes from sections and
 // returning the results in the same order through the done channel. Concurrent
 // runs of the same scheduler are allowed, leading to retrieval task deduplication.
+/*
+run 方法创建了一个 retrieval 流水线， 从 sections channel 来接收需要请求的 sections, 通过 done channel 来按照请求的顺序返回结果。
+并发的运行同样的scheduler是可以的，这样会导致任务重复。
+
+1) sections 通道类型 这个是用来传递需要检索的section的通道，输入参数
+2) dist     通道类型， 属于输出通道(可能是网络发送或者是本地检索)，往这个通道上发送请求， 然后在done上获取回应。
+3) done  用来传递检索结果的通道， 可以理解为返回值通道。
+*/
 func (s *scheduler) run(sections chan uint64, dist chan *request, done chan []byte, quit chan struct{}, wg *sync.WaitGroup) {
 	// Create a forwarder channel between requests and responses of the same size as
 	// the distribution channel (since that will block the pipeline anyway).
+	// 在请求和响应之间创建一个与分发通道大小相同的转发器通道（因为这样会阻塞管道）
 	pend := make(chan uint64, cap(dist))
 
 	// Start the pipeline schedulers to forward between user -> distributor -> user
@@ -76,6 +98,7 @@ func (s *scheduler) run(sections chan uint64, dist chan *request, done chan []by
 // reset cleans up any leftovers from previous runs. This is required before a
 // restart to ensure the no previously requested but never delivered state will
 // cause a lockup.
+// reset用法用来清理之前的所有任何请求
 func (s *scheduler) reset() {
 	s.lock.Lock()
 	defer s.lock.Unlock()

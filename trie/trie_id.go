@@ -19,6 +19,7 @@ package trie
 import "github.com/ethereum/go-ethereum/common"
 
 // ID is the identifier for uniquely identifying a trie.
+// 底层的 trie; ID是唯一标识一个trie的标识符
 type ID struct {
 	StateRoot common.Hash // The root of the corresponding state(block.root)
 	Owner     common.Hash // The contract address hash which the trie belongs to

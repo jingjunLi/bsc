@@ -61,7 +61,17 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 //   - The memory mapping ensures we can max out system memory for caching without
 //     reserving it for go-ethereum. This would also reduce the memory requirements
 //     of Geth, and thus also GC overhead.
+/*
+Freezer 内存 将 append-only database 映射到 顺序的 flat files;
+1) append-only 保证了 磁盘顺序写;
+2) memory 映射尽可能的利用系统内存 ?
+3) freezerBatch 实现 ??
+*/
 type Freezer struct {
+	/*
+		1) frozen: 已经 frozen 到的 block number
+		2) tail: freezer 内第一个存储的 item
+	*/
 	frozen atomic.Uint64 // Number of blocks already frozen
 	tail   atomic.Uint64 // Number of the first stored item in the freezer
 
@@ -88,6 +98,9 @@ func NewChainFreezer(datadir string, namespace string, readonly bool, offset uin
 //
 // The 'tables' argument defines the data tables. If the value of a map
 // entry is true, snappy compression is disabled for the table.
+/*
+创建 freezer 实例, 维护 immutable
+*/
 func NewFreezer(datadir string, namespace string, readonly bool, offset uint64, maxTableSize uint32, tables map[string]bool) (*Freezer, error) {
 	// Create the initial freezer object
 	var (
@@ -270,6 +283,7 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 	defer func() {
 		if err != nil {
 			// The write operation has failed. Go back to the previous item position.
+			// 失败的回滚 ?
 			for name, table := range f.tables {
 				err := table.truncateHead(prevItem)
 				if err != nil {

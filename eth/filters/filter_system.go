@@ -102,6 +102,7 @@ type logCacheElem struct {
 }
 
 // cachedLogElem loads block logs from the backend and caches the result.
+// 查询 blockHash -> logCacheElem
 func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Hash, number uint64) (*logCacheElem, error) {
 	cached, ok := sys.logsCache.Get(blockHash)
 	if ok {

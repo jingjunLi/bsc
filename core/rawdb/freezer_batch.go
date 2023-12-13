@@ -30,6 +30,14 @@ import (
 const freezerBatchBufferLimit = 2 * 1024 * 1024
 
 // freezerBatch is a write operation of multiple items on a freezer.
+/*
+tables 表示 ChainFreezerHeaderTable 各种表;
+1) kind -> freezerTableBatch 的映射;
+kind : stateHistoryXXX
+
+2) Append 和 AppendRaw 的区别 ?
+
+*/
 type freezerBatch struct {
 	tables map[string]*freezerTableBatch
 }
@@ -82,6 +90,16 @@ func (batch *freezerBatch) commit() (item uint64, writeSize int64, err error) {
 }
 
 // freezerTableBatch is a batch for a freezer table.
+/*
+表示 Table 的 Batch
+用途, 用法 ?
+1) newBatch: 为 the freezer table 创建一个 新的 batch;
+2) Append
+3) AppendRaw
+---
+indexBuffer
+dataBuffer
+*/
 type freezerTableBatch struct {
 	t *freezerTable
 
@@ -119,6 +137,12 @@ func (batch *freezerTableBatch) reset() {
 // Append rlp-encodes and adds data at the end of the freezer table. The item number is a
 // precautionary parameter to ensure data correctness, but the table will reject already
 // existing data.
+/*
+Append rlp 编码并在冷冻表(freezer table)的末尾添加数据。 项目编号(item number)是确保数据正确性的预防参数，但该表将拒绝已有的数据。
+1) item number 预防参数,防止出错, 每次对比一下;
+2) 将 data 进行 rlp 编码, 存放到 encBuffer;
+3) 如果使用过 snappy, 则进行压缩, appendItem 写真实的文件;
+*/
 func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 	if item != batch.curItem {
 		return fmt.Errorf("%w: have %d want %d", errOutOrderInsertion, item, batch.curItem)
@@ -151,6 +175,10 @@ func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 	return batch.appendItem(encItem)
 }
 
+/*
+1) 数据都缓存到 dataBuffer 内, 当达到 maxFileSize (2GB), 持久化
+2) 生成一个新的 indexEntry 放到 indexBuffer
+*/
 func (batch *freezerTableBatch) appendItem(data []byte) error {
 	// Check if item fits into current data file.
 	itemSize := int64(len(data))
@@ -179,6 +207,7 @@ func (batch *freezerTableBatch) appendItem(data []byte) error {
 }
 
 // maybeCommit writes the buffered data if the buffer is full enough.
+// dataBuffer 每超过 freezerBatchBufferLimit (2MB) 则 写磁盘
 func (batch *freezerTableBatch) maybeCommit() error {
 	if len(batch.dataBuffer) > freezerBatchBufferLimit {
 		return batch.commit()
@@ -187,6 +216,10 @@ func (batch *freezerTableBatch) maybeCommit() error {
 }
 
 // commit writes the batched items to the backing freezerTable.
+/*
+1) dataBuffer
+2) indexBuffer
+*/
 func (batch *freezerTableBatch) commit() error {
 	// Write data.
 	_, err := batch.t.head.Write(batch.dataBuffer)

@@ -85,6 +85,11 @@ type Miner struct {
 	wg sync.WaitGroup
 }
 
+/*
+New
+1) 在 eth Service 初始化的时候，会创建一个 Miner 实例
+代码分为3个部分：创建 Miner 实例、注册 Agent 、等待区块同步完成
+*/
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(header *types.Header) bool) *Miner {
 	miner := &Miner{
 		mux:     mux,
@@ -104,6 +109,9 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 // It's entered once and as soon as `Done` or `Failed` has been broadcasted the events are unregistered and
 // the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
 // and halt your mining operation for as long as the DOS continues.
+/*
+在开始挖矿之前，首先需要等待和其他结点之间完成区块同步，这样才能在最新的状态挖矿。因此这里启动了一个 goroutine 调用 Miner.update() 函数
+*/
 func (miner *Miner) update() {
 	defer miner.wg.Done()
 

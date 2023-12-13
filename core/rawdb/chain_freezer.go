@@ -32,6 +32,7 @@ const (
 	// freezerRecheckInterval is the frequency to check the key-value database for
 	// chain progression that might permit new blocks to be frozen into immutable
 	// storage.
+	// freezerRecheckInterval 是检查 key-value database 的频率，以查看可能允许将新块冻结到不可变存储中的链路进度。
 	freezerRecheckInterval = time.Minute
 
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
@@ -42,7 +43,11 @@ const (
 // chainFreezer is a wrapper of freezer with additional chain freezing feature.
 // The background thread will keep moving ancient chain segments from key-value
 // database to flat files for saving space on live database.
+/*
+封装 Freezer, 额外增加 chain freezing 特性;
+*/
 type chainFreezer struct {
+	// 默认 9W blocks
 	threshold atomic.Uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	*Freezer
@@ -82,8 +87,19 @@ func (f *chainFreezer) Close() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
+/*
+freeze 后台线程, 周期性检查 blockchain, 将 ancient data 从 fast database into the freezer;
+此功能是故意从块导入 (block importing) 中分离出来的，以避免在块传播(block propagation) 时 产生额外的数据混洗延迟。 ?? 不太理解 ?
+1) 两个 db, nofreezedb 和 ancient store
+*/
 func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	var (
+		//
+		/*
+			含义 ?
+			如果当前 freeze 的 blocks 没有 3W(freezerBatchLimit), 则 backoff = true, 重新计时,
+			freezerRecheckInterval(1min) 后 再触发
+		*/
 		backoff   bool
 		triggered chan struct{} // Used in tests
 		nfdb      = &nofreezedb{KeyValueStore: db}
@@ -115,6 +131,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			}
 		}
 		// Retrieve the freezing threshold.
+		// head block hash, 以及 head 对应的 number
 		hash := ReadHeadBlockHash(nfdb)
 		if hash == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
@@ -148,6 +165,11 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 
 		// Seems we have data ready to be frozen, process in usable batches
+		/*
+			1) 从 9W(threshold) 块开始 做 freezing threshold
+			2) 每次最多可以 freezerBatchLimit (3W) 个 block 一起
+			3) freezeRange 获取一批 数据 ancients
+		*/
 		var (
 			start    = time.Now()
 			first, _ = f.Ancients()
@@ -169,6 +191,10 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 
 		// Wipe out all data from the active database
+		/*
+			1) 删除数据 BlockWithoutNumber
+			2) DeleteBlock
+		*/
 		batch := db.NewBatch()
 		for i := 0; i < len(ancients); i++ {
 			// Always keep the genesis block in active database
@@ -250,9 +276,14 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	}
 }
 
+/*
+ */
 func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number)
 
+	/*
+
+	 */
 	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {
 			// Retrieve all the components of the canonical block.
@@ -278,6 +309,10 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			}
 
 			// Write to the batch.
+			/*
+				1) hashes
+				2) headers bodies receipt difficulty 五种内容;
+			*/
 			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
 			}

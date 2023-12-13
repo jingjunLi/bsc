@@ -265,6 +265,15 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 }
 
 // prefetch schedules a batch of trie items to prefetch.
+/*
+1) 根据 owner 和 root 来计算 id,
+2) 根据 id 获取对应的 Subfetcher, 执行 Subfetcher.schedule
+
+StateDB::triePrefetcher
+调用的地方:
+1)stateObject::finalise
+2) (s *StateDB) Finalise
+*/
 func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
 	// If the prefetcher is an inactive one, bail out
 	if p.fetches != nil {
@@ -346,6 +355,9 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // single trie. It is spawned when a new root is encountered and lives until the
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
+/*
+负责 单个 trie 的 fetcher
+*/
 type subfetcher struct {
 	db    Database       // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
@@ -362,6 +374,7 @@ type subfetcher struct {
 	term chan struct{}  // Channel to signal interruption
 	copy chan chan Trie // Channel to request a copy of the current trie
 
+	// string(task) 记录 task 是否已经 prefetch 过
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
 	used [][]byte            // Tracks the entries used in the end
@@ -444,6 +457,7 @@ func (sf *subfetcher) scheduleParallel(keys [][]byte) {
 
 // peek tries to retrieve a deep copy of the fetcher's trie in whatever form it
 // is currently.
+// peek 对 fetcher's trie 进行深度的 copy
 func (sf *subfetcher) peek() Trie {
 	ch := make(chan Trie)
 	select {

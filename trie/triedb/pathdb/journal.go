@@ -113,6 +113,16 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 }
 
 // loadLayers loads a pre-existing state layer backed by a key-value store.
+/*
+1) 调用rawdb.ReadAccountTrieNode从持久状态里检索根节点
+2) 调用db.loadJournal(root)通过解析日志加载layers：
+    (1) loadJournal 会尝试从磁盘里解析layer日志：调用rawdb.ReadTrieJournal(db.diskdb)获取journal，调用rlp.NewStream将journal转换为stream
+    (2) 拿到stream后，首先解析stream第一个元素作为journal version，check version
+    (3) 第二步，解析磁盘层根hash，确保和磁盘层根hash一致；如果不一致就报错
+    (4) 从journal中加载disk layer
+    (5) 以diskLayer做为base，在其基础上加载diffLayer，将获取到的diffLayer做为loadLayers结果返回
+3) 如果db.loadJournal(root)出错，返回具有持久状态的单层，即调用newDiskLayer()做为loadLayers返回结果
+*/
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
 	_, root := rawdb.ReadAccountTrieNode(db.diskdb, nil)
@@ -135,6 +145,13 @@ func (db *Database) loadLayers() layer {
 
 // loadDiskLayer reads the binary blob from the layer journal, reconstructing
 // a new disk layer on it.
+/*
+该方法从layer journal中读取二进制blob，在其上重建一个新的磁盘层：
+1) 对入参r解析获取disk layer根hash
+2) 入参r解析disk layer的状态ID；调用rawdb.ReadPersistentStateID从db中检索持久层的ID，如果后者大于前者则返回错误。id之间的距离是聚集在disk layer的转换数量
+3) 从入参r解析数据为[]journalNodes类型，将其转换为map[common.Hash]map[string]*trienode.Node，在这一过程中可以根据Blob是否大于0标识出数据是否被删除
+4) 调用newDiskLayer生成一个新的base层作为方法的返回结果；newDiskLayer中id为通过入参r解析到的ID，newNodeBuffer函数中的入参layers为id-store，代表内部状态转换的数量
+*/
 func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	// Resolve disk layer root
 	var root common.Hash
@@ -176,6 +193,16 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 
 // loadDiffLayer reads the next sections of a layer journal, reconstructing a new
 // diff and verifying that it can be linked to the requested parent.
+/*
+该方法读取layer journal的下一层，重建一个新的diff，并校验新建的diff能够被连接到请求的parent即入参：
+
+1) 读取下一个diff日志项，判断err是否为io.EOF，是的话，返回入参parent
+2) 读取block number
+3) 从日志中读取内存trie nodes，类型为[]journalNodes，将其转换为map[common.Hash]map[string]*trienode.Node类型，与loadDiskLayer类似
+4) 从入参r中解析journalAccounts类型数据，将其放入accounts map[common.Address][]byte类型数据中
+5) 从入参r中解析[]journalStorage类型数据，将其放入storages和incomplete中
+6) 递归调用db.loadDiffLayer，入参的parent通过调用newDiffLayer生成（其入参是当前调用生成的数据，stateID+1）结束递归的地方就在步骤1里err为io.EOF，返回parent
+*/
 func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 	// Read the next diff journal entry
 	var root common.Hash

@@ -61,21 +61,47 @@ func (s Storage) Copy() Storage {
 // - First you need to obtain a state object.
 // - Account values as well as storages can be accessed and modified through the object.
 // - Finally, call commit to return the changes of storage trie and update account data.
-type stateObject struct {
-	db       *StateDB
-	address  common.Address      // address of ethereum account
-	addrHash common.Hash         // hash of ethereum address of the account
-	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
-	data     types.StateAccount  // Account data with all mutations applied in the scope of block
+/*
+使用模式如下：
+1) 首先你需要获得一个 state_object。
+2) 帐户值可以通过对象访问和修改。
+3) 最后，调用 commit 将修改后的存储 trie 写入数据库。
 
+1) 核心结构体 stateObject: stateObject 表示正在修改的以太坊帐户;
+可以看到 stateObject 中维护关于某个账户的所有信息，涉及账户地址、账户地址哈希、账户属性、底层数据库、存储树等内容。
+当你访问状态时，需要指定账户地址。比如获取账户合约，合约账户代码，均是通过账户地址，获得获得对应的账户的 stateObject。
+因此，当你访问某账户余额时，需要从世界状态树 Trie 中读取账户状态。
+2) 在 StateObject 中主要有两个结构，data 和 dirtyStorage。
+data 用于存储账号的基本信息如余额nonce等，dirtyStorage用于存储该账号地址下的合约的数据。
+*/
+type stateObject struct {
+	// 底层数据库, 所属的 StateDB
+	db *StateDB
+	//对应的账户地址, 账户地址的哈希值
+	address  common.Address // address of ethereum account
+	addrHash common.Hash    // hash of ethereum address of the account
+	// 账户属性
+	origin *types.StateAccount // Account original data without any change applied, nil means it was not existent
+	data   types.StateAccount  // Account data with all mutations applied in the scope of block
+
+	/*
+		1) trie: storage trie, 使用 trie 组织 stateObj 的数据
+		2) code: 合约字节码，在加载代码时设置
+	*/
 	// Write caches.
 	trie Trie // storage trie, which becomes non-nil on first access
 	code Code // contract bytecode, which gets set when code is loaded
 
 	sharedOriginStorage *sync.Map // Point to the entry of the stateObject in sharedPool
-	originStorage       Storage   // Storage cache of original entries to dedup rewrites
-	pendingStorage      Storage   // Storage entries that need to be flushed to disk, at the end of an entire block
-	dirtyStorage        Storage   // Storage entries that have been modified in the current transaction execution, reset for every transaction
+	// 将原始条目的存储高速缓存存储到 dedup 重写中，为每个事务重置
+	originStorage Storage // Storage cache of original entries to dedup rewrites
+	/*
+		在整个块 block 的末尾需要刷新到磁盘的存储条目
+		1) finalise 中将 dirtyStorage 赋值给 pendingStorage
+	*/
+	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
+	// 在当前事务执行中已修改的存储条目, Storage entries 指什么 ?
+	dirtyStorage Storage // Storage entries that have been modified in the current transaction execution, reset for every transaction
 
 	// Cache flags.
 	dirtyCode bool // true if the code was updated
@@ -146,6 +172,7 @@ func (s *stateObject) touch() {
 // getTrie returns the associated storage trie. The trie will be opened
 // if it's not loaded previously. An error will be returned if trie can't
 // be loaded.
+// getTrie 返回账户的 Storage Trie
 func (s *stateObject) getTrie() (Trie, error) {
 	if s.trie == nil {
 		// Try fetching from prefetcher first
@@ -282,6 +309,7 @@ func (s *stateObject) setState(key, value common.Hash) {
 
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
+// 将 dirtyStorage 赋值给 pendingStorage, 并且进行 prefetch
 func (s *stateObject) finalise(prefetch bool) {
 	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
@@ -301,6 +329,11 @@ func (s *stateObject) finalise(prefetch bool) {
 // updateTrie writes cached storage modifications into the object's storage trie.
 // It will return nil if the trie has not been loaded and no changes have been
 // made. An error will be returned if the trie can't be loaded/updated correctly.
+/*
+1) s.finalise() 将dirtyStorage中的所有数据移动到pendingStorage中
+2) 根据账户哈希和账户 root 打开账户存储树
+3) 将key与trie中的value关联，更新数据
+*/
 func (s *stateObject) updateTrie() (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
@@ -321,12 +354,14 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		origin  map[common.Hash][]byte
 		hasher  = crypto.NewKeccakState()
 	)
+	// 2) 根据账户哈希和账户 root 打开账户存储树
 	tr, err := s.getTrie()
 	if err != nil {
 		s.db.setError(err)
 		return nil, err
 	}
 	// Insert all the pending updates into the trie
+	// 遍历所有的 pendingStorage ??
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	dirtyStorage := make(map[common.Hash][]byte)
 	for key, value := range s.pendingStorage {
@@ -417,6 +452,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 
 // UpdateRoot sets the trie root to the current root hash of. An error
 // will be returned if trie root hash is not computed correctly.
+/*
+将trie根设置为的当前根哈希, 底层调用 updateTrie 然后再更新root
+*/
 func (s *stateObject) updateRoot() {
 	// If node runs in no trie mode, set root to empty.
 	defer func() {
@@ -445,6 +483,11 @@ func (s *stateObject) updateRoot() {
 }
 
 // commit returns the changes made in storage trie and updates the account data.
+/*
+updateTrie 将缓存的存储修改写入对象的存储 Trie。
+将所有节点写入到 trie 的内存数据库中
+1) 获取 dirty storage trie nodes, 更新 account data;
+*/
 func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	tr, err := s.updateTrie()
 	if err != nil {

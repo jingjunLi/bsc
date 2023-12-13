@@ -139,6 +139,7 @@ type AncientWriter interface {
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.
+// 对应的实现是 freezerBatch
 type AncientWriteOp interface {
 	// Append adds an RLP-encoded item.
 	Append(kind string, number uint64, item interface{}) error

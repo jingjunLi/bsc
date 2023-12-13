@@ -26,6 +26,9 @@ import (
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.
+/*
+首先侦听 TCP 端口，获得 listener 接口实例。然后创建了一个 http.Server 实例，并启动一个 goroutine 调用它的 Serve() 方法。
+*/
 func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (*http.Server, net.Addr, error) {
 	// start the HTTP listener
 	var (

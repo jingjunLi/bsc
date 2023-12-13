@@ -181,6 +181,9 @@ func (batch *syncMemBatch) hasCode(hash common.Hash) bool {
 // Sync is the main state trie synchronisation scheduler, which provides yet
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
+/*
+用途 ?
+*/
 type Sync struct {
 	scheme   string                       // Node scheme descriptor used in database.
 	database ethdb.KeyValueReader         // Persistent database to check for existing entries

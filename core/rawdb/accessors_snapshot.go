@@ -25,6 +25,26 @@ import (
 )
 
 // ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.
+/*
+操作的数据主要有:
+1) snapshotDisabledKey: initial sync 阶段 不维护 Snapshot
+2) SnapshotRootKey:
+3) AccountSnapshot
+accountSnapshotKey = SnapshotAccountPrefix + hash
+4) StorageSnapshot
+storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
+5) SnapshotJournal snapshotJournalKey
+6) SnapshotGenerator snapshotGeneratorKey
+7) SnapshotRecoveryNumber snapshotRecoveryKey
+8) SnapshotSyncStatus snapshotSyncStatusKey
+
+其中 account 和 storage 是 特定的前缀+ hash, 随机写入;
+
+操作类型主要有: Read Write, Delete
+----
+1) 传入的参数 db 是 ethdb.KeyValueReader, ethdb.KeyValueWriter, ethdb.Iteratee, 具体是什么 ?
+BlockChain.db
+*/
 func ReadSnapshotDisabled(db ethdb.KeyValueReader) bool {
 	disabled, _ := db.Has(snapshotDisabledKey)
 	return disabled

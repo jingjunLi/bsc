@@ -68,10 +68,23 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
+/*
+StartNode
+后半段的 goroutine 主要是为了捕获中断信号以停止结点运行的，所以这里实际就是调用了Node的Start()函数。这个函数比较长，我们分成几段来看：
+
+I. 创建P2P server
+II. 创建Service
+III. 启动P2P server
+IV. 启动Service
+V. 启动RPC server
+*/
 func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
+	/*
+		主要是为了捕获中断信号以停止结点运行的
+	*/
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)

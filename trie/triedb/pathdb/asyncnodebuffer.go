@@ -20,6 +20,9 @@ var _ trienodebuffer = &asyncnodebuffer{}
 
 // asyncnodebuffer implement trienodebuffer interface, and aysnc the nodecache
 // to disk.
+/*
+
+ */
 type asyncnodebuffer struct {
 	mux        sync.RWMutex
 	current    *nodecache

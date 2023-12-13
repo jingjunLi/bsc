@@ -356,6 +356,10 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 	return nil
 }
 
+/*
+1) 为什么需要 backup old db ?
+2) 创建了 chainDb, 也需要提供 multi db ?
+*/
 func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace string, readonly, interrupt bool) error {
 	// Open old db wrapper.
 	chainDb, err := p.node.OpenDatabaseWithFreezer(name, cache, handles, p.oldAncientPath, namespace, readonly, true, interrupt, false)

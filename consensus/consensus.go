@@ -63,6 +63,9 @@ type VotePool interface {
 
 // ChainReader defines a small collection of methods needed to access the local
 // blockchain during header and/or uncle verification.
+/*
+
+ */
 type ChainReader interface {
 	ChainHeaderReader
 
@@ -71,6 +74,12 @@ type ChainReader interface {
 }
 
 // Engine is an algorithm agnostic consensus engine.
+/*
+Engine 是一个算法无关的共识引擎
+Engine接口定义了共识引擎需要实现的所有函数，实际上按功能可以划分为2类：
+1) 区块验证类: 以 Verify 开头，当收到新区块时，需要先验证区块的有效性
+2) 区块盖章类: 包括 Prepare/Finalize/Seal 等，用于最终生成有效区块（比如添加工作量证明）
+*/
 type Engine interface {
 	// Author retrieves the Ethereum address of the account that minted the given
 	// block, which may be different from the header's coinbase if a consensus
@@ -85,6 +94,12 @@ type Engine interface {
 	// concurrently. The method returns a quit channel to abort the operations and
 	// a results channel to retrieve the async verifications (the order is that of
 	// the input slice).
+	/*
+		VerifyHeaders 批量并发的 VerifyHeader
+		1) BSC 的实现原理 gopool.Submit
+		// gopool.Submit 会将任务提交到 ants.Pool 中，ants.Pool 会维护一个 goroutine 池，用于执行任务
+		2) eth 是 go func() 只使用一个 goroutine, 串行执行
+	*/
 	VerifyHeaders(chain ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error)
 
 	// VerifyUncles verifies that the given block's uncles conform to the consensus

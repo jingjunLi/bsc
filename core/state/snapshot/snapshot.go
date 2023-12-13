@@ -177,6 +177,11 @@ type Config struct {
 // The goal of a state snapshot is twofold: to allow direct access to account and
 // storage data to avoid expensive multi-level trie lookups; and to allow sorted,
 // cheap iteration of the account/storage tries for sync aid.
+/*
+1) Ethereum state snapshot tree
+包含 一个 持久化 base layer(后端是 kv store),
+state snapshot 的用途是: 1) 直接访问 account 和 storage 数据, 避免多层 trie 查询; 2) 有序, 便宜的 account/storage trie 迭代, 用于同步辅助
+*/
 type Tree struct {
 	config   Config                   // Snapshots configurations
 	diskdb   ethdb.KeyValueStore      // Persistent database to store the snapshot

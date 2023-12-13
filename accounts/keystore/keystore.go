@@ -182,12 +182,14 @@ func (ks *KeyStore) refreshWallets() {
 
 // Subscribe implements accounts.Backend, creating an async subscription to
 // receive notifications on the addition or removal of keystore wallets.
+// 注册 ? Subscribe 实现 accounts.Backend, 创建异步的订阅来 接收 notifications,
 func (ks *KeyStore) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
 	// We need the mutex to reliably start/stop the update loop
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 
 	// Subscribe the caller and track the subscriber count
+	// 是先调了updateFeed的Subscribe()函数，然后再通过updateScope把结果做一层wrapper返回给调用方
 	sub := ks.updateScope.Track(ks.updateFeed.Subscribe(sink))
 
 	// Subscribers require an active notification loop, start it
@@ -274,6 +276,11 @@ func (ks *KeyStore) SignHash(a accounts.Account, hash []byte) ([]byte, error) {
 }
 
 // SignTx signs the given transaction with the requested account.
+/*
+这里会首先判断账户是否已经解锁，如果已经解锁的话就可以获取它的私钥。
+然后创建签名器，如果要符合EIP155规范的话，需要把chainID传进去，也就是我们的“--networkid”命令行参数。
+最后调用一个全局函数SignTx()完成签名，代码位于core/types/transaction_signing.go：
+*/
 func (ks *KeyStore) SignTx(a accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	// Look up the key to sign with and abort if it cannot be found
 	ks.mu.RLock()

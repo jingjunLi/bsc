@@ -413,6 +413,9 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 		sKeys, sVals = makeDataset(1_000_000, 32, 32, true)
 	)
 	// Run benchmarks sequentially
+	/*
+		100W 条 key 32, value 32 bytes 的数据集, 分别测试顺序写和随即写性能
+	*/
 	b.Run("Write", func(b *testing.B) {
 		benchWrite := func(b *testing.B, keys, vals [][]byte) {
 			b.ResetTimer()

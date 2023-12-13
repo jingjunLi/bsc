@@ -27,6 +27,12 @@ import (
 const freezerVersion = 1 // The initial version tag of freezer table metadata
 
 // freezerTableMeta wraps all the metadata of the freezer table.
+/*
+1) Version
+freezer table 版本描述符
+2) VirtualTail
+
+*/
 type freezerTableMeta struct {
 	// Version is the versioning descriptor of the freezer table.
 	Version uint16

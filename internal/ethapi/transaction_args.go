@@ -34,6 +34,10 @@ import (
 
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
+/*
+可以看到是和JSON字段相应的，包括了地址、gas、金额这些交易信息，nonce 是一个随账户交易次数自增的数字，一般会自动填充。
+交易还可以携带一些额外数据，存放在data或者input字段中，推荐用input，data是为了向后兼容。
+*/
 type TransactionArgs struct {
 	From                 *common.Address `json:"from"`
 	To                   *common.Address `json:"to"`
@@ -281,6 +285,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 
 // toTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
+/*
+可以看到，如果目标地址为空的话，表示这是一个创建智能合约的交易，调用NewContractCreation()。否则说明这是一个普通交易，
+调用NewTransaction()。不管调用哪个，最终都会生成一个Transaction实例
+1) DynamicFeeTx 2) AccessListTx 3) LegacyTx
+*/
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {

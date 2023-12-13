@@ -25,6 +25,10 @@ import (
 )
 
 // preimageStore is the store for caching preimages of node key.
+/*
+什么是 preimages ?
+Preimage 存储是指将合约创建时提供的代码的哈希（合约的预图像）存储在以太坊状态树上。这个哈希的存储通常是为了验证智能合约的创建，以确保在执行交易时提供的代码与合约创建时的代码相匹配。 ??
+*/
 type preimageStore struct {
 	lock          sync.RWMutex
 	disk          ethdb.KeyValueStore

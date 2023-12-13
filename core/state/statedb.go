@@ -76,15 +76,41 @@ func (n *proofList) Delete(key []byte) error {
 // trie, storage tries) will no longer be functional. A new state instance
 // must be created with new root and updated database for accessing post-
 // commit states.
+/*
+以太坊协议中的 StateDB 用于存储 Merkle trie 中的任何内容。StateDB 负责缓存和存储嵌套状态。 这是检索的通用查询接口：
+1) Contracts
+2) Accounts
+一旦状态被提交，stateDB 中缓存的 tries（包括账户trie、存储tries）将不再起作用。 必须使用新的根 和 更新的数据库创建新的状态实例，以访问提交后状态。
+从程序设计角度，StateDB 有多种用途：
+
+1. 维护账户状态到世界状态的映射。
+2. 支持修改、回滚、提交状态。
+3. 支持持久化状态到数据库中。
+4. 是状态进出默克尔树的媒介。
+
+实际上 StateDB 充当**状态（数据）**、**Trie(树)**、**LevelDB（存储）**的协调者。
+主要是 Contracts 和 Accounts.
+-----
+1) 上层哪里使用到 StateDB ?
+*/
 type StateDB struct {
+	/*
+		db 和 trie 是什么 ?
+	*/
 	db             Database
 	prefetcherLock sync.Mutex
 	prefetcher     *triePrefetcher
 	trie           Trie
 	noTrie         bool
 	hasher         crypto.KeccakState
-	snaps          *snapshot.Tree    // Nil if snapshot is not available
-	snap           snapshot.Snapshot // Nil if snapshot is not available
+	/*
+		snap 用途 ?
+		1) snapshot.Tree
+		snaps 是 BlockChain.snaps,
+		2) snapshot.Snapshot
+	*/
+	snaps *snapshot.Tree    // Nil if snapshot is not available
+	snap  snapshot.Snapshot // Nil if snapshot is not available
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -106,6 +132,14 @@ type StateDB struct {
 
 	// This map holds 'live' objects, which will get modified while processing
 	// a state transition.
+	/*
+		1) stateObjects 记录 在 state transition 过程中 被修改的 objects
+		2) stateObjectsPending 内存里面 sealed, 但是没有 下盘
+		3) stateObjectsDirty 当前 execution 中修改的 state objects
+		stateObjectsPending 和 stateObjectsDirty 其实是一个 set;
+		4)
+		先放到 dirty, 然后 pending 再 下盘 ?
+	*/
 	stateObjects         map[common.Address]*stateObject
 	stateObjectsPending  map[common.Address]struct{}            // State objects finalized but not yet written to the trie
 	stateObjectsDirty    map[common.Address]struct{}            // State objects modified in the current execution
@@ -132,6 +166,7 @@ type StateDB struct {
 	logSize uint
 
 	// Preimages occurred seen by VM in the scope of block.
+	// 存储的key是我们想存储的数据的key的hash，这样通过存储的数据想要反推每个数据对应的key就很难。
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
@@ -148,10 +183,11 @@ type StateDB struct {
 
 	// Measurements gathered during execution for debugging purposes
 	// MetricsMux should be used in more places, but will affect on performance, so following meteration is not accruate
-	MetricsMux           sync.Mutex
-	AccountReads         time.Duration
-	AccountHashes        time.Duration
-	AccountUpdates       time.Duration
+	MetricsMux     sync.Mutex
+	AccountReads   time.Duration
+	AccountHashes  time.Duration
+	AccountUpdates time.Duration
+	// TODO 这里 统计删除了 ？?
 	AccountCommits       time.Duration
 	StorageReads         time.Duration
 	StorageHashes        time.Duration
@@ -169,6 +205,10 @@ type StateDB struct {
 }
 
 // NewWithSharedPool creates a new state with sharedStorge on layer 1.5
+/*
+db 是 bc.stateCache
+snaps 是 bc.snaps
+*/
 func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
 	statedb, err := New(root, db, snaps)
 	if err != nil {
@@ -240,6 +280,11 @@ func (s *StateDB) TransferPrefetcher(prev *StateDB) {
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
+/*
+StartPrefetcher 初始化 一个 trie prefetcher, 从 state trie 中并行的下载;
+1) namespace "miner" 或者 "chain"
+区别 ?
+*/
 func (s *StateDB) StartPrefetcher(namespace string) {
 	if s.noTrie {
 		return
@@ -273,6 +318,13 @@ func (s *StateDB) StopPrefetcher() {
 	}
 	s.prefetcherLock.Unlock()
 }
+
+/*
+TriePrefetchInAdvance bsc 加的 ?
+2.do trie prefetch for MPT trie node cache
+it is for the big state trie tree, prefetch based on transaction's From/To address.
+trie prefetcher is thread safe now, ok to prefetch in a separate routine
+*/
 
 func (s *StateDB) TriePrefetchInAdvance(block *types.Block, signer types.Signer) {
 	// s is a temporary throw away StateDB, s.prefetcher won't be resetted to nil
@@ -1561,13 +1613,27 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 	return incomplete, nil
 }
 
-// Once the state is committed, tries cached in stateDB (including account
+// Commit Once the state is committed, tries cached in stateDB (including account
 // trie, storage tries) will no longer be functional. A new state instance
 // must be created with new root and updated database for accessing post-
 // commit states.
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
+/*
+Commit 将状态写入底层内存 trie 数据库。 一旦状态被提交，stateDB 中缓存的tries（包括账户trie、存储tries）将不再起作用。
+必须使用新的根和更新的数据库创建新的状态实例，以访问提交后状态。
+1. IntermediateRoot()
+2. Write updated account codes to db
+3. Commit all stateObject trie
+4. Commit trie
+5) 如果开启 Snapshot-> Tree::cap
+
+handleDestruction 作用 ?
+---
+StateDB::Commit 作用 ?
+
+*/
 func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFuncs ...func() error) (common.Hash, *types.DiffLayer, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
@@ -1575,6 +1641,10 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		return common.Hash{}, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
+	/*
+		(the state object trie, the storage tries and the preimage trie)??? AI
+		1. Finalise 等待的 changes 到 tries 内
+	*/
 	var (
 		diffLayer   *types.DiffLayer
 		verified    chan struct{}
@@ -1593,6 +1663,12 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 	}
 
 	commmitTrie := func() error {
+		/*
+			commitErr 主要流程:
+			1) tries 的修改 -> nodeSet(MergedNodeSet) -> Trie::Commit
+
+
+		*/
 		commitErr := func() error {
 			if s.pipeCommit {
 				<-snapUpdated
@@ -1738,6 +1814,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 	}
 
 	commitFuncs := []func() error{
+		// Write updated account codes to db
 		func() error {
 			codeWriter := s.db.DiskDB().NewBatch()
 			for addr := range s.stateObjectsDirty {
@@ -1769,6 +1846,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 			}
 			return nil
 		},
+		// Commit all stateObject trie, 更新 snapshot.Tree
 		func() error {
 			// If snapshotting is enabled, update the snapshot tree with this new version
 			if s.snap != nil {
@@ -1803,6 +1881,9 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 			return nil
 		},
 	}
+	/*
+	 commitFuncs 是一个函数数组，里面有两个函数，分别是：
+	*/
 	if s.pipeCommit {
 		go commmitTrie()
 	} else {

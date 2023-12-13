@@ -25,6 +25,8 @@ import (
 // Validator is an interface which defines the standard for block validation. It
 // is only responsible for validating block contents, as the header validation is
 // done by the specific consensus engines.
+/* 验证器提供了验证区块体和验证状态的功能。 定义标准的 block validation, 仅负责 验证 block contents,
+header validation 在 consensus engines 中完成 */
 type Validator interface {
 	// ValidateBody validates the given block's content.
 	ValidateBody(block *types.Block) error

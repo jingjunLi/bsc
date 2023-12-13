@@ -220,19 +220,38 @@ type BlockChainOption func(*BlockChain) (*BlockChain, error)
 // important to note that GetBlock can return any block and does not need to be
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
+/*
+BlockChain::db 与 BlockChain::triedb 的区别 ?
+*/
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db            ethdb.Database                   // Low level persistent database to store final content in
+	/*
+		这里保存了哪些数据 ? db 是什么 ?
+		stack.OpenAndMergeDatabase 创建的;
+		1) Ethereum::blockchain → core.NewBlockChain → trie.NewDatabase
+		freezerdb ->
+		用途:
+		1) 创建 stateCache: state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+		2) ReadHeadBlockHash: rawdb.ReadHeadBlockHash(bc.db) 直接读取 数据;
+	*/
+	db ethdb.Database // Low level persistent database to store final content in
+	/*
+		BlockChain::snaps 加速 trie 访问
+	*/
 	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
 	triegc        *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
 	gcproc        time.Duration                    // Accumulates canonical block processing for trie dumping
 	commitLock    sync.Mutex                       // CommitLock is used to protect above field from being modified concurrently
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
-	triedb        *trie.Database                   // The database handler for maintaining trie nodes.
-	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
+	/*
+		1) triedb 保存 trie nodes, 具体如何读写数据 ?
+		2) stateCache 保存 contract codes ??
+	*/
+	triedb     *trie.Database // The database handler for maintaining trie nodes.
+	stateCache state.Database // State database to reuse between imports (contains state cache)
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -242,6 +261,10 @@ type BlockChain struct {
 	txLookupLimit uint64
 	triesInMemory uint64
 
+	/*
+		hc: headerchain 区块头链，由 blockchain 额外维护的另一条链，由于 Header 和 Block 的储存空间有很大差别，但同时 Block 的 Hash 值就是 Header（RLP）的 Hash 值，
+		所以维护一个 headerchain 可以用于快速延长链，验证通过后再下载 blockchain，或者可以与 blockchain 进行相互验证；
+	*/
 	hc                  *HeaderChain
 	rmLogsFeed          event.Feed
 	chainFeed           event.Feed
@@ -258,10 +281,16 @@ type BlockChain struct {
 	// Readers don't need to take it, they can just read the database.
 	chainmu *syncx.ClosableMutex
 
+	/*
+		当前区块，blockchain 中并不是储存链所有的block，而是通过 currentBlock 向前回溯直到 genesisBlock，这样就构成了区块链;
+	*/
 	highestVerifiedHeader atomic.Pointer[types.Header]
 	currentBlock          atomic.Pointer[types.Header] // Current head of the chain
 	currentSnapBlock      atomic.Pointer[types.Header] // Current head of snap-sync
 
+	/*
+		bodyCache、bodyRLPCache、blockCache、futureBlocks：区块链中的缓存结构，用于加快区块链的读取和构建；
+	*/
 	bodyCache     *lru.Cache[common.Hash, *types.Body]
 	bodyRLPCache  *lru.Cache[common.Hash, rlp.RawValue]
 	receiptsCache *lru.Cache[common.Hash, []*types.Receipt]
@@ -269,6 +298,7 @@ type BlockChain struct {
 	txLookupCache *lru.Cache[common.Hash, *rawdb.LegacyTxLookupEntry]
 
 	// future blocks are blocks added for later processing
+	// 收到的区块时间大于当前头区块时间15s而小于30s的区块，可作为当前节点待处理的区块。
 	futureBlocks *lru.Cache[common.Hash, *types.Block]
 	// Cache for the blocks that failed to pass MPT root verification
 	badBlockCache *lru.Cache[common.Hash, time.Time]
@@ -287,7 +317,9 @@ type BlockChain struct {
 
 	engine     consensus.Engine
 	prefetcher Prefetcher
-	validator  Validator // Block and state validator interface
+	// 验证数据有效性的接口
+	validator Validator // Block and state validator interface
+	// 执行区块链交易的接口，收到一个新的区块时，要对区块中的所有交易执行一遍，一方面是验证，一方面是更新世界状态；
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
@@ -300,6 +332,24 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
+/*
+db eth/backend.go → New(stack *node.Node, config *ethconfig.Config)
+
+1) db
+eth.New 中初始化 Ethereum 后, 用 Ethereum::chainDb 初始化 BlockChain::db
+2)
+---
+配置cacheConfig，创建各种lru缓存
+初始化triegc
+初始化stateDb：state.NewDatabase(db)
+初始化区块和状态验证：NewBlockValidator()
+初始化状态处理器：NewStateProcessor()
+初始化区块头部链：NewHeaderChain()
+查找创世区块：bc.genesisBlock = bc.GetBlockByNumber(0)
+加载最新的状态数据：bc.loadLastState()
+检查区块哈希的当前状态，并确保链中没有任何坏块
+go bc.update() 定时处理future block
+*/
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine,
 	vmConfig vm.Config, shouldPreserve func(block *types.Header) bool, txLookupLimit *uint64,
 	options ...BlockChainOption) (*BlockChain, error) {
@@ -382,6 +432,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// If Geth is initialized with an external ancient store, re-initialize the
 	// missing chain indexes and chain flags. This procedure can survive crash
 	// and can be resumed in next restart since chain flags are updated in last step.
+	// ?
 	if bc.empty() {
 		rawdb.InitDatabaseFromFreezer(bc.db)
 	}
@@ -802,6 +853,9 @@ func (bc *BlockChain) tryRewindBadBlocks() {
 // requested time. If both `head` and `time` is 0, the chain is rewound to genesis.
 //
 // The method returns the block number where the requested root cap was found.
+/*
+
+ */
 func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Hash, repair bool) (uint64, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
@@ -930,6 +984,10 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		return headHeader, wipe // Only force wipe if full synced
 	}
 	// Rewind the header chain, deleting all block bodies until then
+	/*
+		为什么要删除 ? 倒回到 header chain, 删除在此之前的所有块体
+		1) 根据 Ancients()(the ancient item numbers in the ancient store) 判断是否是 ancient 还是 db 内删除
+	*/
 	delFn := func(db ethdb.KeyValueWriter, hash common.Hash, num uint64) {
 		// Ignore the error here since light client won't hit this path
 		frozen, _ := bc.db.Ancients()
@@ -1269,6 +1327,9 @@ const (
 
 // InsertReceiptChain attempts to complete an already existing header chain with
 // transaction and receipt data.
+/*
+尝试使用事务和收据数据完成已经存在的头链 ?? 什么意思
+*/
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts, ancientLimit uint64) (int, error) {
 	// We don't require the chainMu here since we want to maximize the
 	// concurrency of header insertion and receipt insertion.
@@ -1304,6 +1365,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 	// updateHead updates the head snap sync block if the inserted blocks are better
 	// and returns an indicator whether the inserted blocks are canonical.
+	// 1) updateHead 更新头部快照同步块，如果插入的块更好，并返回插入的块是否是规范的指示符。
 	updateHead := func(head *types.Block) bool {
 		if !bc.chainmu.TryLock() {
 			return false
@@ -1330,6 +1392,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	//
 	// this function only accepts canonical chain data. All side chain will be reverted
 	// eventually.
+	// writeAncient 将区块链和相应的收据链写入 ancient store。
 	writeAncient := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
 		first := blockChain[0]
 		last := blockChain[len(blockChain)-1]
@@ -1436,6 +1499,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 
 	// writeLive writes blockchain and corresponding receipt chain into active store.
+	// writeLive 将区块链和相应的收据链写入 active store。
 	writeLive := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
 		skipPresenceCheck := false
 		batch := bc.db.NewBatch()
@@ -1567,6 +1631,12 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
+/*
+StateDB::Commit
+1) blockBatch.Write()
+2) state.Commit -> StateDB::Commit
+3) bc.cacheDiffLayer
+*/
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
@@ -1581,6 +1651,21 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
+	/*
+		这里 NewBatch 是直接写到 leveldb/pebble 中的, 但是 trie 的写入是在 state.Commit 中
+		block 相关的元信息, 以及 block 的 body, receipts 都是写入到 leveldb/pebble 中的
+		具体的数据:
+		1) HeaderTD: headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
+		2) HeaderHash: headerPrefix + num (uint64 big endian) + hash -> hash
+		3) Header: headerPrefix + num (uint64 big endian) + hash + headerSuffix -> header
+		4) Body: bodyPrefix + num (uint64 big endian) + hash -> body
+		5) Receipts: receiptsPrefix + num (uint64 big endian) + hash -> receipts
+		6) TxLookupEntries: txLookupPrefix + num (uint64 big endian) + hash -> txLookupEntries
+		7) BlockHash: blockHashPrefix + hash -> num (uint64 big endian)
+		8) CanonicalHash: canonicalHashPrefix + num (uint64 big endian) -> hash
+		9) TxIndexTail: txIndexTailPrefix -> num (uint64 big endian)
+		10) AncientBlocks: ancientPrefix + num (uint64 big endian) + hash + ancientSuffix -> block
+	*/
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -1601,6 +1686,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 		// If node is running in path mode, skip explicit gc operation
 		// which is unnecessary in this mode.
+		/*
+			PathScheme 为什么不需要 ?
+			stateCache
+			1) TrieDB::Commit 定期 执行;
+			2) TrieDB::Reference
+		*/
 		if bc.triedb.Scheme() == rawdb.PathScheme {
 			return nil
 		}
@@ -1679,6 +1770,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return nil
 	}
 	// Commit all cached state changes into underlying memory database.
+	/*
+		这里的 state.Commit 会将 trie 的数据写入到 leveldb/pebble 中
+	*/
 	_, diffLayer, err := state.Commit(block.NumberU64(), bc.tryRewindBadBlocks, tryCommitTrieDB)
 	if err != nil {
 		return err
@@ -1789,6 +1883,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
 // wrong. After insertion is done, all accumulated events will be fired.
+// chain 必须是连续的
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
@@ -1828,6 +1923,27 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
+/*
+InsertChain 的执行过程具体如下。
+1）对待插入的区块进行一次健全检查：区块号是否连续；区块的父 Hash 是否指向前一个区块。
+注意：要求区块连续的这个条件可以简化插入流程，比如验证第一个区块时，发现它是已存储的区块，那么对于接下来的区块可以采取相同的措施，而不必挨个处理了。
+2）恢复所有区块中所有交易的签名者。
+3）通过 Engine 接口 VerifyHeaders 验证所有区块头。
+4）创建一个插入迭代器：insertIterator，迭代器包含了一个验证器 Validator。
+5）先取出第一个待导入的区块，通过验证器验证区块体数据是否有效，验证过程如下。
+---
+验证每一个区块的 header；
+验证每一个区块的 body；
+处理验证 header和 body所产生的错误；
+若是验证经过，对待插入区块的交易状态进行验证，不然退出；
+若是验证经过，调用 WriteBlockWithState 将第 n 个区块插入区块链，写入数据库，而后写入规范链，同时处理分叉问题。
+---
+1) Process
+bc.processor.Process StateProcessor::Process -> applyTransaction
+bc.validator.ValidateState
+2) writeState
+bc.writeBlockWithStat
+*/
 func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
@@ -1854,6 +1970,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 	}()
 	// Start the parallel header verifier
+	// 并发的 验证 headers
 	headers := make([]*types.Header, len(chain))
 	for i, block := range chain {
 		headers[i] = block.Header()
@@ -2078,6 +2195,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
 
 		// Write the block to the chain and get the status.
+		/*
+			1) AccountCommits
+			2) StorageCommits
+			3) SnapshotCommits
+			4)TrieDBCommits
+		*/
 		var (
 			wstart = time.Now()
 			status WriteStatus
@@ -2203,6 +2326,10 @@ func (bc *BlockChain) GetHighestVerifiedHeader() *types.Header {
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
 // insertSideChain is only used pre-merge.
+/*
+insertSideChain 插入遇到错误(a pruned ancestor) 的执行过程具体如下。
+
+*/
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	var (
 		externTd  *big.Int
@@ -2766,6 +2893,10 @@ func (bc *BlockChain) startDoubleSignMonitor() {
 
 // skipBlock returns 'true', if the block being imported can be skipped over, meaning
 // that the block does not need to be processed but can be considered already fully 'done'.
+/*
+1) 返回 true 表示 block 可以被跳过，意味着 block 不需要被处理，但是可以被认为已经完全完成。
+主要是处理 snaps,
+*/
 func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 	// We can only ever bypass processing if the only error returned by the validator
 	// is ErrKnownBlock, which means all checks passed, but we already have the block
@@ -2853,6 +2984,9 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 // The user can adjust the txlookuplimit value for each launch after sync,
 // Geth will automatically construct the missing indices or delete the extra
 // indices.
+/*
+maintainTxIndex 负责 tx 索引的构建和删除。 用户可以使用标志 txlookuplimit 来指定一个“recentness”块， 在此块之下，ancient tx 索引被删除。
+*/
 func (bc *BlockChain) maintainTxIndex() {
 	defer bc.wg.Done()
 
@@ -2963,6 +3097,11 @@ func EnablePersistDiff(limit uint64) BlockChainOption {
 	}
 }
 
+/*
+EnableBlockValidator 1) remoteVerifyManager
+区块验证由验证节点配合完成，
+验证节点通过验证区块的交易，计算出区块的状态根，然后将区块的状态根和区块头一起发送给全节点，全节点通过验证区块头的方式验证区块的状态根是否正确??
+*/
 func EnableBlockValidator(chainConfig *params.ChainConfig, engine consensus.Engine, mode VerifyMode, peers verifyPeers) BlockChainOption {
 	return func(bc *BlockChain) (*BlockChain, error) {
 		if mode.NeedRemoteVerify() {

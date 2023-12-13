@@ -53,6 +53,11 @@ type ethBackend interface {
 	TxPool() *txpool.TxPool
 }
 
+/*
+LesServer 与 LightEthereum 的关系 ? LightChain ?
+Light client;
+1) LightEthereum 包含 LightChain
+*/
 type LesServer struct {
 	lesCommons
 

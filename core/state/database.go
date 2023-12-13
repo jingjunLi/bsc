@@ -39,6 +39,15 @@ const (
 )
 
 // Database wraps access to tries and contract code.
+/*
+封装对 tries 和 contract code 的访问,
+Database interface 的具体实现: cachingDB, odrDatabase;
+当前有两种类型的 DB 实现了 Database 接口，
+1) 轻节点使用的 odrDatabase
+因为轻节点并不存储数据，需要通过向其他节点查询来获得数据，而 odrDatabase 就是这种数据读取方式的封装。
+2) 正常节点端使用的带有缓存的 cachingDB 。
+一个普通节点已内置 levelDB，为了提高读写性能，使用 cachingDB 对其进行一次封装。
+*/
 type Database interface {
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
@@ -66,6 +75,12 @@ type Database interface {
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
+/*
+Ethereum MPT trie 的实现:
+1) EmptyTrie
+2) SecureTrie(StateTrie)
+3) odrTrie
+*/
 type Trie interface {
 	// GetKey returns the sha3 preimage of a hashed key that was previously used
 	// to store a value.
@@ -158,6 +173,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 }
 
 // NewDatabaseWithNodeDB creates a state database with an already initialized node database.
+// NewDatabaseWithNodeDB 创建 state database, 使用已经初始化的 node database;
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 	noTries := triedb != nil && triedb.Config() != nil && triedb.Config().NoTries
 
@@ -170,12 +186,27 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 	}
 }
 
+/*
+cachingDB
+1) 实现了上面的 database interface
+---
+1) disk : 用于读取 ContractCode, 具体是什么 ?
+2) codeSizeCache: lru Cache, 缓存 hash -> size 的大小;
+3) codeCache: hash -> code 的映射
+4) triedb
+---
+对外提供接口:
+1) New 创建
+NewDatabaseWithConfig
+NewDatabaseWithNodeDB
+*/
 type cachingDB struct {
 	disk          ethdb.KeyValueStore
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	triedb        *trie.Database
-	noTries       bool
+	// 是什么 ?
+	triedb  *trie.Database
+	noTries bool
 }
 
 // OpenTrie opens the main account trie at a specific root hash.

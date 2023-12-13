@@ -199,6 +199,11 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	}
 }
 
+/*
+这里先判断有没有watcher正在运行，其实就是检查有没有初始化过。这个watch类似于Linux中的inotify，用于监控datadir/keystore目录中有没有文件发生变化，如果有的话会及时刷新cache。
+1) 如果没有watcher正在运行，就会调用scanAccount()函数手动扫描一遍获取当前账户列表。
+账户列表初始化完成以后，就调用NewManager()函数创建账号管理器了。
+*/
 func (ac *accountCache) maybeReload() {
 	ac.mu.Lock()
 

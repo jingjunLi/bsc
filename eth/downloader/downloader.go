@@ -444,6 +444,17 @@ func (d *Downloader) getMode() SyncMode {
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
+/*
+1) 查找祖先 findAncestor
+2) 开启单独goroutine分别运行以下几个函数：
+3) fetchHeaders
+4) processHeaders
+5) fetchbodies
+6) fetchReceipts
+7) processFastSyncContent
+8) processFullSyncContent
+
+*/
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *big.Int, beaconMode bool) (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {

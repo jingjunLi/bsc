@@ -51,6 +51,9 @@ var HashDefaults = &Config{
 
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
+/*
+定义一个公共的方法, access/update trie nodes in different  state scheme.
+*/
 type backend interface {
 	// Scheme returns the identifier of used storage scheme.
 	Scheme() string
@@ -82,6 +85,9 @@ type backend interface {
 // Database is the wrapper of the underlying backend which is shared by different
 // types of node backend as an entrypoint. It's responsible for all interactions
 // relevant with trie nodes and node preimages.
+/*
+Database 封装了底层的 backend, 负责与 trie nodes 和 node preimages 交互;
+*/
 type Database struct {
 	config    *Config        // Configuration for trie database
 	diskdb    ethdb.Database // Persistent database to store the snapshot
@@ -105,6 +111,9 @@ func prepare(diskdb ethdb.Database, config *Config) *Database {
 
 // NewDatabase initializes the trie database with default settings, note
 // the legacy hash-based scheme is used by default.
+/*
+默认配置实例化 trie database
+*/
 func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	// Sanitize the config and use the default one if it's not specified.
 	dbScheme := rawdb.ReadStateScheme(diskdb)
