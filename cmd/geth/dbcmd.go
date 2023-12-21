@@ -617,7 +617,7 @@ func dbTrieDelete(ctx *cli.Context) error {
 	return nil
 }
 
-// dbTrieSplit split the trie related data to seprated dir
+// dbTrieSplit split the trie related data to separated dir
 func dbTrieSplit(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
