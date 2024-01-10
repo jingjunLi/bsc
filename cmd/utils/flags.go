@@ -2351,7 +2351,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	case ctx.String(SyncModeFlag.Name) == "light":
 		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
-		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false)
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles/2, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false)
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
@@ -2365,7 +2365,7 @@ func SplitTrieDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
 	)
 
-	trieDB, err := stack.OpenDatabaseForTrie("chaindata", cache, handles,
+	trieDB, err := stack.OpenDatabaseForTrie("chaindata", cache, handles/2,
 		ctx.String(AncientFlag.Name), "eth/db/chaindata/", false, false, false, false)
 	if err != nil {
 		Fatalf("Could not open trie database: %v", err)
