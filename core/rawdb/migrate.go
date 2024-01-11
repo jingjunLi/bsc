@@ -1,7 +1,6 @@
 package rawdb
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync/atomic"
@@ -45,9 +44,6 @@ func (job *Job) UploadToKvRocks() error {
 
 		for delKey, _ := range job.Kvbuffer {
 			k := []byte(delKey)
-			if bytes.Equal(k, fastTrieProgressKey) || bytes.Equal(k, trieJournalKey) || bytes.Equal(k, persistentStateIDKey) {
-				continue
-			}
 			if err := pebbleDB.Delete(k); err != nil {
 				// try again
 				if delErr := pebbleDB.Delete(k); delErr != nil {

@@ -834,10 +834,14 @@ func isTrieKey(key, value []byte) bool {
 		return true
 	case bytes.HasPrefix(key, PreimagePrefix) && len(key) == (len(PreimagePrefix)+common.HashLength):
 		return true
+	case bytes.Equal(key, fastTrieProgressKey):
+		return true
+	case bytes.Equal(key, trieJournalKey):
+		return true
+	case bytes.Equal(key, persistentStateIDKey):
+		return true
 	default:
-		if bytes.Equal(key, fastTrieProgressKey) || bytes.Equal(key, trieJournalKey) || bytes.Equal(key, persistentStateIDKey) {
-			return true
-		}
+		return false
 	}
 	return false
 }
