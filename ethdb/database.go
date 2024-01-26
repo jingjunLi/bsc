@@ -185,6 +185,13 @@ type AncientStore interface {
 	io.Closer
 }
 
+/*
+DiffStore 实现接口的 class :
+1) remotedb.Database
+2) rawdb.freezerdb
+3) rawdb.nofreezedb
+4) rawdb.table
+*/
 type DiffStore interface {
 	DiffStore() KeyValueStore
 	SetDiffStore(diff KeyValueStore)

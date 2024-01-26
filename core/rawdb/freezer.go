@@ -71,6 +71,8 @@ type Freezer struct {
 	/*
 		1) frozen: 已经 frozen 到的 block number
 		2) tail: freezer 内第一个存储的 item
+		3) offset: 当前 freezer 的起始 block number
+		所以通过 frozen-offset 就可以得到当前 freezer 的长度;
 	*/
 	frozen atomic.Uint64 // Number of blocks already frozen
 	tail   atomic.Uint64 // Number of the first stored item in the freezer
@@ -410,6 +412,7 @@ func (f *Freezer) repair() error {
 			tail = hidden
 		}
 	}
+	log.Info("Repairing ancient database", "head", head, "tail", tail)
 	for _, table := range f.tables {
 		if err := table.truncateHead(head); err != nil {
 			return err

@@ -126,6 +126,9 @@ type Snapshot interface {
 
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account.
+	/*
+		Storage 直接返回 accountHash 对应的 storageHash, 因此 storage kv 存储的是
+	*/
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
 
 	// Parent returns the subsequent layer of a snapshot, or nil if the base was
@@ -135,6 +138,9 @@ type Snapshot interface {
 
 // snapshot is the internal version of the snapshot data layer that supports some
 // additional methods compared to the public API.
+/*
+snapshot 是支持一些额外方法的内部版本的快照数据层, 与公共 API 相比
+*/
 type snapshot interface {
 	Snapshot
 
@@ -142,6 +148,9 @@ type snapshot interface {
 	// the specified data items.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
+	/*
+		Update 创建一个 新的 layer,
+	*/
 	Update(blockRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
@@ -403,6 +412,9 @@ func (t *Tree) CapLimit() int {
 // which may or may not overflow and cascade to disk. Since this last layer's
 // survival is only known *after* capping, we need to omit it from the count if
 // we want to ensure that *at least* the requested number of diff layers remain.
+/*
+Cap 从 a head block hash 开始 遍历, 直至 到 layers 允许的地方;
+*/
 func (t *Tree) Cap(root common.Hash, layers int) error {
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
@@ -488,6 +500,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 // which may or may not overflow and cascade to disk. Since this last layer's
 // survival is only known *after* capping, we need to omit it from the count if
 // we want to ensure that *at least* the requested number of diff layers remain.
+/*
+the final diff layer
+*/
 func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	// Dive until we run out of layers or reach the persistent database
 	for i := 0; i < layers-1; i++ {
@@ -551,6 +566,12 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 //
 // The disk layer persistence should be operated in an atomic way. All updates should
 // be discarded if the whole transition if not finished.
+/*
+diffToDisk 将底部 diff 合并到底层的持久性磁盘层中。如果调用到非底部 diff 层, 该方法将会 panic
+1) destructSet
+2) accountData
+3) storageData
+*/
 func diffToDisk(bottom *diffLayer) *diskLayer {
 	var (
 		base  = bottom.parent.(*diskLayer)

@@ -32,12 +32,20 @@ var (
 	databaseVersionKey = []byte("DatabaseVersion")
 
 	// headHeaderKey tracks the latest known header's hash.
+	/*
+		最近的区块头的hash; 问题: 1) 区块头 与 完整区块 是否是一一对应的 ?
+	*/
+	//
 	headHeaderKey = []byte("LastHeader")
 
 	// headBlockKey tracks the latest known full block's hash.
+	// 最近的完整区块的hash
 	headBlockKey = []byte("LastBlock")
 
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
+	/*
+		1) fast sync 时, 最近的不完整区块的hash
+	*/
 	headFastBlockKey = []byte("LastFast")
 
 	// persistentStateIDKey tracks the id of latest stored state(for path-based only).
@@ -53,6 +61,7 @@ var (
 	snapshotDisabledKey = []byte("SnapshotDisabled")
 
 	// SnapshotRootKey tracks the hash of the last snapshot.
+	// last snapshot ? 问题: 1) snapshot 是什么 ? 2) 为什么需要snapshot ?
 	SnapshotRootKey = []byte("SnapshotRoot")
 
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
@@ -79,6 +88,10 @@ var (
 	// fastTxLookupLimitKey tracks the transaction lookup limit during fast sync.
 	fastTxLookupLimitKey = []byte("FastTransactionLookupLimit")
 
+	/*
+		1) offSetOfCurrentAncientFreezer
+		2) offSetOfLastAncientFreezer
+	*/
 	//offSet of new updated ancientDB.
 	offSetOfCurrentAncientFreezer = []byte("offSetOfCurrentAncientFreezer")
 
@@ -112,6 +125,14 @@ var (
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
+	/*
+		两个 MPT tree:
+		1) account trie value
+		2) storage trie value
+		---
+		1) storage trie value 的操作
+
+	*/
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value

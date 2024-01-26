@@ -2144,8 +2144,8 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // node is running as a light client.
 /*
 Ethereum client
-1) 如果 downloader 同步模式是 LightSync, 则 创建 LightEthereum, ApiBackend 注册;
-2) full node,
+1) 如果 downloader 同步模式是 LightSync, 则创建 LightEthereum, ApiBackend 注册;
+2) full node, 创建 Ethereum 实例
 2.1) 如果允许
 */
 func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
@@ -2157,6 +2157,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend, nil
 	}
+	// 创建 Ethereum 实例
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)

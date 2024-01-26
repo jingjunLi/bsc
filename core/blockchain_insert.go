@@ -39,6 +39,11 @@ const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
+/*
+	report 打印统计信息，如果已处理了一些块或自上次消息以来已经过了几秒钟。
+	t=2024-01-25T13:16:52+0000 lvl=info msg="Imported new chain segment"
+	number=765,957 hash=0x4360fc9bc1c30edc7cacc4ad2fac71e6073a1cd903d9e84182f61c9c56543613 miner=0x2f7bE8361C80A4c1e7e9aAF001d0877F1CFdE218 blocks=618  txs=1992  mgas=238.648  elapsed=6.175s    mgasps=38.645  age=3y4mo2w  triediffs="4.43 MiB"    triedirty="18.76 MiB"  trieimutabledirty="0.00 B"
+*/
 func (st *insertStats) report(chain []*types.Block, index int, trieDiffNodes, trieBufNodes, trieImmutableBufNodes common.StorageSize, setHead bool) {
 	// Fetch the timings for the batch
 	var (
@@ -46,6 +51,7 @@ func (st *insertStats) report(chain []*types.Block, index int, trieDiffNodes, tr
 		elapsed = now.Sub(st.startTime)
 	)
 	// If we're at the last block of the batch or report period reached, log
+	// 8s 打印一次, 或者 chain 的结尾 ?
 	if index == len(chain)-1 || elapsed >= statsReportLimit {
 		// Count the number of transactions in this segment
 		var txs int
@@ -77,6 +83,7 @@ func (st *insertStats) report(chain []*types.Block, index int, trieDiffNodes, tr
 		if st.ignored > 0 {
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}
+
 		if setHead {
 			log.Info("Imported new chain segment", context...)
 		} else {

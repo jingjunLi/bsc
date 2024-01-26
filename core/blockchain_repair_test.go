@@ -21,7 +21,10 @@
 package core
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
+	"os"
 	"path"
 	"testing"
 	"time"
@@ -1757,8 +1760,8 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string) {
 	// It's hard to follow the test case, visualize the input
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump(true))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
 	datadir := t.TempDir()
@@ -1801,6 +1804,21 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	// If sidechain blocks are needed, make a light chain and import it
 	var sideblocks types.Blocks
 	if tt.sidechainBlocks > 0 {
+		/*
+			&rewindTest{
+				canonicalBlocks:    8,
+				sidechainBlocks:    0,
+				freezeThreshold:    16,
+				commitBlock:        4,
+				pivotBlock:         nil,
+				expCanonicalBlocks: 8,
+				expSidechainBlocks: 0,
+				expFrozen:          0,
+				expHeadHeader:      8,
+				expHeadFastBlock:   8,
+				expHeadBlock:       4,
+			}
+		*/
 		sideblocks, _ = GenerateChain(gspec.Config, gspec.ToBlock(), engine, rawdb.NewMemoryDatabase(), tt.sidechainBlocks, func(i int, b *BlockGen) {
 			b.SetCoinbase(common.Address{0x01})
 		})
@@ -1808,6 +1826,11 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 			t.Fatalf("Failed to import side chain: %v", err)
 		}
 	}
+	/*
+		1) canonicalBlocks 8
+		2) commitBlock 4
+		insert block C1-C8; C1-C4 的 state 的 Commit 持久化; C5-C8 没有; 构造 Crash
+	*/
 	canonblocks, _ := GenerateChain(gspec.Config, gspec.ToBlock(), engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
@@ -1841,11 +1864,17 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		rawdb.WriteLastPivotNumber(db, *tt.pivotBlock)
 	}
 	// Pull the plug on the database, simulating a hard crash
+	/*
+		构造 故障
+	*/
 	chain.triedb.Close()
 	db.Close()
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
+	/*
+		保证 block 的 state 是可用的, 调用 setHeadBeyondRoot, ("Rewound to block with state") Rewind newHeadBlock
+	*/
 	db, err = rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,
 		AncientsDirectory: ancient,

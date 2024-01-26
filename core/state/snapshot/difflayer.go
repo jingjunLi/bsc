@@ -120,6 +120,11 @@ type diffLayer struct {
 	// happen that in the tx_1, account A is self-destructed while in the tx_2
 	// it's recreated. But we still need this marker to indicate the "old" A is
 	// deleted, all data in other set belongs to the "new" A.
+	/*
+		destructSet: 一个特殊的标记, 如果一个 account 被标记为删除, 那么它会被记录在这个集合中; 然而 account 仍然可以在其他集合中存在(e.g. storageData);
+		在 destructSet 中被标记删除, 也可以存在其他 set; 因为 diff layer 标记的是 block 内的所有修改, account a 可以在 tx 1 的时候被删除, 在 tx 2 的时候被创建;
+		2) accountList & accountData: account 数据, 存储两份, 用于 iteration 和 direct retrieval;
+	*/
 	destructSet map[common.Hash]struct{}               // Keyed markers for deleted (and potentially) recreated accounts
 	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrieval (nil means deleted)
@@ -129,6 +134,12 @@ type diffLayer struct {
 	verifiedCh chan struct{} // the difflayer is verified when verifiedCh is nil or closed
 	valid      bool          // mark the difflayer is valid or not.
 
+	/*
+		为什么要对 destructSet, accountData, storageData 进行遍历 ?
+		1) destructSet: 用于标记删除的 account
+		2) accountData: account 数据
+		3) storageData: storage 数据
+	*/
 	diffed *bloomfilter.Filter // Bloom filter tracking all the diffed items up to the disk layer
 
 	lock sync.RWMutex
@@ -245,6 +256,12 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 		dl.diffed, _ = bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
 	}
 	// Iterate over all the accounts and storage slots and index them
+	/*
+		为什么要对 destructSet, accountData, storageData 进行遍历 ?
+		1) destructSet: 用于标记删除的 account
+		2) accountData: account 数据
+		3) storageData: storage 数据
+	*/
 	for hash := range dl.destructSet {
 		dl.diffed.Add(destructBloomHasher(hash))
 	}
@@ -356,6 +373,9 @@ func (dl *diffLayer) Accounts() (map[common.Hash]*types.SlimAccount, error) {
 // hash in the snapshot slim data format.
 //
 // Note the returned account is not a copy, please don't modify it.
+/*
+1) diffed
+*/
 func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	// Check staleness before reaching further.
 	dl.lock.RLock()
@@ -366,7 +386,10 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
 	/*
-	 */
+		为什么会有两个 BloomHasher ?
+		accountBloomHasher
+		destructBloomHasher
+	*/
 	hit := dl.diffed.Contains(accountBloomHasher(hash))
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(hash))
@@ -379,6 +402,7 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 
 	// If the bloom filter misses, don't even bother with traversing the memory
 	// diff layers, reach straight into the bottom persistent disk layer
+	// 如果 bloom filter miss, 直接从 disk layer 中获取 account 数据;
 	if origin != nil {
 		snapshotBloomAccountMissMeter.Mark(1)
 		return origin.AccountRLP(hash)

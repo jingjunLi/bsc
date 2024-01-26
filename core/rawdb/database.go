@@ -92,6 +92,9 @@ func (frdb *freezerdb) SetDiffStore(diff ethdb.KeyValueStore) {
 // Freeze is a helper method used for external testing to trigger and block until
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
+/*
+辅助测试的函数, 触发 freeze cycle, 并且阻塞直到完成;
+*/
 func (frdb *freezerdb) Freeze(threshold uint64) error {
 	if frdb.AncientStore.(*chainFreezer).readonly {
 		return errReadOnly
@@ -258,6 +261,12 @@ func resolveChainFreezerDir(ancient string) string {
 /*
 基于给定的 kv store 创建更高 level 的 database, 使用 a freezer 将 immutable chain segments 移到冷存储中;
 1) ancient: root ancient 的路径 path, 主要是 chain freezer
+---
+freezerdb 为什么能复制给 ethdb.Database, freezerdb 在哪实现的所有的 ethdb.Database 方法 ?
+KeyValueStore +AncientStore = ethdb.Database, 也相当于间接实现了所有 ethdb.Database 的接口;
+---
+1) 开启 pruneAncientData -> newPrunedFreezer
+2) 关闭 pruneAncientData -> newChainFreezer
 */
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
 	var offset uint64

@@ -16,6 +16,11 @@ import (
 )
 
 // prunedfreezer not contain ancient data, only record 'frozen' , the next recycle block number form kvstore.
+/*
+1) 用途 : 用于删除数据，只保留最近的数据，删除旧数据。
+2) 主要原理: 通过一个frozen字段记录下一个要删除的blockNumber，然后通过读取blockNumber来删除数据。
+3) 适用场景: 适用于不需要保存所有数据，只需要保存最近数据的场景。
+*/
 type prunedfreezer struct {
 	db ethdb.KeyValueStore // Meta database
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
@@ -201,6 +206,9 @@ func (f *prunedfreezer) Sync() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
+/*
+
+ */
 func (f *prunedfreezer) freeze() {
 	nfdb := &nofreezedb{KeyValueStore: f.db}
 

@@ -270,6 +270,9 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 // Commit traverses downwards the layer tree from a specified layer with the
 // provided state root and all the layers below are flattened downwards. It
 // can be used alone and mostly for test purposes.
+/*
+Commit
+*/
 func (db *Database) Commit(root common.Hash, report bool) error {
 	// Hold the lock to prevent concurrent mutations.
 	db.lock.Lock()

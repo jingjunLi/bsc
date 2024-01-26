@@ -71,6 +71,9 @@ type journalStorage struct {
 }
 
 // loadJournal tries to parse the layer journal from the disk.
+/*
+TrieJournal 的读取, 如何做一个 iterator ?
+*/
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	journal := rawdb.ReadTrieJournal(db.diskdb)
 	if len(journal) == 0 {
@@ -151,6 +154,7 @@ func (db *Database) loadLayers() layer {
 2) 入参r解析disk layer的状态ID；调用rawdb.ReadPersistentStateID从db中检索持久层的ID，如果后者大于前者则返回错误。id之间的距离是聚集在disk layer的转换数量
 3) 从入参r解析数据为[]journalNodes类型，将其转换为map[common.Hash]map[string]*trienode.Node，在这一过程中可以根据Blob是否大于0标识出数据是否被删除
 4) 调用newDiskLayer生成一个新的base层作为方法的返回结果；newDiskLayer中id为通过入参r解析到的ID，newNodeBuffer函数中的入参layers为id-store，代表内部状态转换的数量
+
 */
 func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	// Resolve disk layer root
@@ -270,6 +274,11 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 
 // journal implements the layer interface, marshaling the un-flushed trie nodes
 // along with layer meta data into provided byte buffer.
+/*
+journal
+root + state id + bufferNodes
+2) dl.buffer.getAllNodes()
+*/
 func (dl *diskLayer) journal(w io.Writer) error {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
@@ -305,6 +314,16 @@ func (dl *diskLayer) journal(w io.Writer) error {
 
 // journal implements the layer interface, writing the memory layer contents
 // into a buffer to be stored in the database as the layer journal.
+/*
+1) diffLayer
+递归的寻找 parent 进行 journal
+root + block + trie nodes + journalAccounts + journalStorage
+root
+block
+dl.nodes
+dl.states.Accounts
+dl.states.Storages
+*/
 func (dl *diffLayer) journal(w io.Writer) error {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
@@ -364,12 +383,23 @@ func (dl *diffLayer) journal(w io.Writer) error {
 // This is meant to be used during shutdown to persist the layer without
 // flattening everything down (bad for reorgs). And this function will mark the
 // database as read-only to prevent all following mutation to disk.
+/*
+Journal 提交 整个 diff 到一个单独的 journal entry
+TrieJournal 的写入:
+128 层
+journalVersion + diskroot + diffLayer + diskLayer
+1) diffLayer: 递归的寻找 parent 进行 journal
+root + block + trie nodes + journalAccounts + journalStorage
+2) journal
+root + state id + bufferNodes
+*/
 func (db *Database) Journal(root common.Hash) error {
 	// Retrieve the head layer to journal from.
 	l := db.tree.get(root)
 	if l == nil {
 		return fmt.Errorf("triedb layer [%#x] missing", root)
 	}
+	// 1) 只有一个 disk layer 2) 具有很多 diffLayer & diskLayer
 	disk := db.tree.bottom()
 	if l, ok := l.(*diffLayer); ok {
 		log.Info("Persisting dirty state to disk", "head", l.block, "root", root, "layers", l.id-disk.id+disk.buffer.getLayers())
@@ -387,6 +417,8 @@ func (db *Database) Journal(root common.Hash) error {
 		return errSnapshotReadOnly
 	}
 	// Firstly write out the metadata of journal
+	/*
+	 */
 	journal := new(bytes.Buffer)
 	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return err

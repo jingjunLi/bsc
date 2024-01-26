@@ -39,7 +39,7 @@ type diffLayer struct {
 	// Immutables
 	root common.Hash // Root hash to which this layer diff belongs to
 	/*
-		id 用途 ?, the state id of the layer ?
+		id 用途 ? the state id of the layer ?
 	*/
 	id    uint64 // Corresponding state id
 	block uint64 // Associated block number

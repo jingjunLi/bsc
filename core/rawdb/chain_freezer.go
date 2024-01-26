@@ -91,6 +91,9 @@ func (f *chainFreezer) Close() error {
 freeze 后台线程, 周期性检查 blockchain, 将 ancient data 从 fast database into the freezer;
 此功能是故意从块导入 (block importing) 中分离出来的，以避免在块传播(block propagation) 时 产生额外的数据混洗延迟。 ?? 不太理解 ?
 1) 两个 db, nofreezedb 和 ancient store
+---
+需要用到的数据:
+1)
 */
 func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	var (
@@ -277,13 +280,14 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 }
 
 /*
- */
+1)
+*/
 func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number)
 
 	/*
-
-	 */
+		1) CanonicalHash
+	*/
 	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {
 			// Retrieve all the components of the canonical block.

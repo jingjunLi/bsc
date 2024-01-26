@@ -37,12 +37,12 @@ import (
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 /*
 1) 传入的 db 参数, ethdb.KeyValueReader ethdb.Reader ethdb.Iteratee 分别是什么 ?
+为什么要使用 这三个接口 ?
 
 数据类型:
-1) CanonicalHash
+1) CanonicalHash  "hashes" table 内读取;
 2) HeaderNumber
 3) HeadHeaderHash
-
 */
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
@@ -156,6 +156,9 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 }
 
 // ReadHeaderNumber returns the header number assigned to a hash.
+/*
+headerNumberPrefix
+*/
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
 	if len(data) != 8 {
@@ -166,6 +169,9 @@ func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 }
 
 // WriteHeaderNumber stores the hash->number mapping.
+/*
+HeaderNumber: hash -> number 映射
+*/
 func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	key := headerNumberKey(hash)
 	enc := encodeBlockNumber(number)
@@ -187,17 +193,24 @@ func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 	if len(data) == 0 {
 		return common.Hash{}
 	}
+	log.Info("ReadHeadHeaderHash", "hash", common.BytesToHash(data))
 	return common.BytesToHash(data)
 }
 
 // WriteHeadHeaderHash stores the hash of the current canonical head header.
 func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	log.Info("WriteHeadHeaderHash", "hash", hash)
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store last header's hash", "err", err)
 	}
 }
 
 // ReadHeadBlockHash retrieves the hash of the current canonical head block.
+/*
+head block hash, 以及 head 对应的 number, "LastBlock" -> Hash 映射
+headBlockKey = []byte("LastBlock")
+
+*/
 func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headBlockKey)
 	if len(data) == 0 {
@@ -349,9 +362,11 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
 		data, _ = reader.Ancient(ChainFreezerHeaderTable, number)
+		log.Debug("ReadHeaderRLP from ancient", "hash", hash, "number", number, "data", data)
 		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 			return nil
 		}
+		log.Debug("ReadHeaderRLP from leveldb", "hash", hash, "number", number, "data", data)
 		// If not, try reading from leveldb
 		data, _ = db.Get(headerKey(number, hash))
 		return nil
@@ -387,6 +402,11 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
 // Headers: headerPrefix + num (uint64 big endian) + hash -> header
+/*
+WriteHeader 存储 header, 以及 hash -> number 映射
+1) HeaderNumber: hash -> number 映射
+2) headerKey: headerKey -> header
+*/
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	var (
 		hash   = header.Hash()

@@ -62,6 +62,9 @@ func (s Storage) Copy() Storage {
 // - Account values as well as storages can be accessed and modified through the object.
 // - Finally, call commit to return the changes of storage trie and update account data.
 /*
+StateObject 表示 Ethereum account;
+以账户地址为键的账户状态对象，能够在内存中维护使用过的账户。
+
 使用模式如下：
 1) 首先你需要获得一个 state_object。
 2) 帐户值可以通过对象访问和修改。
@@ -251,6 +254,10 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		err   error
 		value common.Hash
 	)
+	/*
+		如果开启 snap,
+		key 表示什么 ?
+	*/
 	if s.db.snap != nil {
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
@@ -266,6 +273,9 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		}
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
+	/*
+		snapshot 不可用, 从 database 读取
+	*/
 	if s.db.snap == nil || err != nil {
 		start := time.Now()
 		tr, err := s.getTrie()
@@ -288,6 +298,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 }
 
 // SetState updates a value in account storage.
+// account storage ??
 func (s *stateObject) SetState(key, value common.Hash) {
 	// If the new value is the same as old, don't set
 	prev := s.GetState(key)
@@ -309,7 +320,9 @@ func (s *stateObject) setState(key, value common.Hash) {
 
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
-// 将 dirtyStorage 赋值给 pendingStorage, 并且进行 prefetch
+/*
+将 dirtyStorage 赋值给 pendingStorage, 并且进行 prefetch 操作
+*/
 func (s *stateObject) finalise(prefetch bool) {
 	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {

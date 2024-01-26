@@ -324,10 +324,18 @@ func pruneBlock(ctx *cli.Context) error {
 		blockAmountReserved uint64
 		blockpruner         *pruner.BlockPruner
 	)
-
+	/*
+		geth offline prune-block 可以用于清理 ancientdb 中的区块数据。
+		通过该命令可以指定在清理后预期保留的区块数量，这可以通过 block-amount-reserved 参数来指定。
+		此命令将会删除 ancientdb 中指定数量的旧区块数据，并将其备份到新的 ancient_backup 目录中。
+		操作流程是将原始 ancientdb 中指定数量的区块数据备份到 ancient_backup 中，然后删除原始 ancientdb 目录，并将 ancient_backup 重命名为原始目录以替换之， 最后将 statedb 和新的 ancientDb 合并在一起。
+		进行此操作的目的是因为当区块数据变得足够旧（超过阈值 90000）时，它们将被移动到 ancient 存储中， 随着时间的推移，磁盘使用量会变得非常大，主要是由 ancientDb 占用，
+		因此有必要进行区块数据清理，这个功能可以很好地处理这个问题。
+	*/
 	stack, config = makeConfigNode(ctx)
 	defer stack.Close()
 	blockAmountReserved = ctx.Uint64(utils.BlockAmountReserved.Name)
+	// chaindb
 	chaindb, err = accessDb(ctx, stack)
 	if err != nil {
 		return err
@@ -347,6 +355,11 @@ func pruneBlock(ctx *cli.Context) error {
 		}
 	}
 
+	/*
+	 oldAncientPath
+	 AncientFlag 是 旧的 ancient path,
+	 新的 是 oldAncientPath+“/chain_back”
+	*/
 	if !ctx.IsSet(utils.AncientFlag.Name) {
 		return errors.New("datadir.ancient must be set")
 	} else {
@@ -361,6 +374,13 @@ func pruneBlock(ctx *cli.Context) error {
 	if path == "" {
 		return errors.New("prune failed, did not specify the AncientPath")
 	}
+
+	/*
+		newVersionPath 啥意思 ?
+		1) 确保 oldAncientPath 是 "geth/chaindata/ancient/chain" 前缀
+		2) newVersionPath 的命名规则 "geth/chaindata/ancient/chain_back"
+		3) 创建 blockpruner 对象
+	*/
 	newVersionPath := false
 	files, err := os.ReadDir(oldAncientPath)
 	if err != nil {
@@ -379,12 +399,17 @@ func pruneBlock(ctx *cli.Context) error {
 
 	blockpruner = pruner.NewBlockPruner(chaindb, stack, oldAncientPath, newAncientPath, blockAmountReserved)
 
+	/*
+		1) 确保 oldAncientPath 没有在 prune, "PRUNEFLOCK" 文件锁
+	*/
 	lock, exist, err := fileutil.Flock(filepath.Join(oldAncientPath, "PRUNEFLOCK"))
 	if err != nil {
 		log.Error("file lock error", "err", err)
 		return err
 	}
 	if exist {
+		// 如果存在, 说明正在 prune, 等待 prune 完成
+		// RecoverInterruption ??
 		defer lock.Release()
 		log.Info("file lock existed, waiting for prune recovery and continue", "err", err)
 		if err := blockpruner.RecoverInterruption("chaindata", config.Eth.DatabaseCache, utils.MakeDatabaseHandles(0), "", false); err != nil {
@@ -398,6 +423,9 @@ func pruneBlock(ctx *cli.Context) error {
 	if _, err := os.Stat(newAncientPath); err == nil {
 		// No file lock found for old ancientDB but new ancientDB exsisted, indicating the geth was interrupted
 		// after old ancientDB removal, this happened after backup successfully, so just rename the new ancientDB
+		/*
+			如果 没有 file lock, 但是 newAncientPath 存在, 说明 geth 在 oldAncientPath 删除后中断, 这发生在备份成功后, 所以只需重命名 newAncientPath
+		*/
 		if err := blockpruner.AncientDbReplacer(); err != nil {
 			log.Error("Failed to rename new ancient directory")
 			return err
@@ -405,6 +433,9 @@ func pruneBlock(ctx *cli.Context) error {
 		log.Info("Block prune successfully")
 		return nil
 	}
+	/*
+		真正执行操作的地方:
+	*/
 	name := "chaindata"
 	if err := blockpruner.BlockPruneBackUp(name, config.Eth.DatabaseCache, utils.MakeDatabaseHandles(0), "", false, false); err != nil {
 		log.Error("Failed to back up block", "err", err)
@@ -654,6 +685,7 @@ func traverseState(ctx *cli.Context) error {
 			log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
+		log.Info("Traversing state", "account", acc, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 	if accIter.Err != nil {
 		log.Error("Failed to traverse state trie", "root", root, "err", accIter.Err)

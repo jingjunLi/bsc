@@ -21,8 +21,8 @@ var _ trienodebuffer = &asyncnodebuffer{}
 // asyncnodebuffer implement trienodebuffer interface, and aysnc the nodecache
 // to disk.
 /*
-
- */
+asyncnodebuffer
+*/
 type asyncnodebuffer struct {
 	mux        sync.RWMutex
 	current    *nodecache
@@ -165,6 +165,11 @@ func (a *asyncnodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, 
 	return nil
 }
 
+/*
+getAllNodes()
+current    *nodecache
+background *nodecache
+*/
 func (a *asyncnodebuffer) getAllNodes() map[common.Hash]map[string]*trienode.Node {
 	a.mux.Lock()
 	defer a.mux.Unlock()
@@ -321,6 +326,8 @@ func (nc *nodecache) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id ui
 	return nil
 }
 
+/*
+ */
 func (nc *nodecache) merge(nc1 *nodecache) (*nodecache, error) {
 	if nc == nil && nc1 == nil {
 		return nil, nil

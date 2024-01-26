@@ -2080,6 +2080,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 
 // verifyNoGaps checks that there are no gaps after the initial set of blocks in
 // the database and errors if found.
+// no gaps are found.
 func verifyNoGaps(t *testing.T, chain *BlockChain, canonical bool, inserted types.Blocks) {
 	t.Helper()
 
@@ -2132,6 +2133,7 @@ func verifyNoGaps(t *testing.T, chain *BlockChain, canonical bool, inserted type
 
 // verifyCutoff checks that there are no chain data available in the chain after
 // the specified limit, but that it is available before.
+// no chain data,  head 之前可用, head - inserted 不可用 ?
 func verifyCutoff(t *testing.T, chain *BlockChain, canonical bool, inserted types.Blocks, head int) {
 	t.Helper()
 

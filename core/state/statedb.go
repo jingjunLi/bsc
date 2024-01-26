@@ -139,10 +139,15 @@ type StateDB struct {
 		stateObjectsPending 和 stateObjectsDirty 其实是一个 set;
 		4)
 		先放到 dirty, 然后 pending 再 下盘 ?
+		--
+		stateObjectsDestruct 的操作
+		1) New 初始化
+		删除的情况: 1) 如果要创建一个 object, 这个 object 之前存在, 则需要标记删除; 2) Finalise 的时候 object selfDestructed 或者 指定删除 empty object
 	*/
-	stateObjects         map[common.Address]*stateObject
-	stateObjectsPending  map[common.Address]struct{}            // State objects finalized but not yet written to the trie
-	stateObjectsDirty    map[common.Address]struct{}            // State objects modified in the current execution
+	stateObjects        map[common.Address]*stateObject
+	stateObjectsPending map[common.Address]struct{} // State objects finalized but not yet written to the trie
+	stateObjectsDirty   map[common.Address]struct{} // State objects modified in the current execution
+	// account -> *types.StateAccount 账户属性的映射
 	stateObjectsDestruct map[common.Address]*types.StateAccount // State objects destructed in the block along with its previous value
 
 	storagePool          *StoragePool // sharedPool to store L1 originStorage of stateObjects
@@ -807,12 +812,19 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // nil for a deleted state object, it returns the actual object with the deleted
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
+/*
+a deleted state object 是 返回 nil;
+*/
 func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
 	}
 	// If no live objects are available, attempt to use snapshots
+	/*
+		通过 addr 从 snapshot 中获取 account
+	*/
+	// golang 默认 地址 为 nil ??
 	var data *types.StateAccount
 	if s.snap != nil {
 		start := time.Now()
@@ -840,6 +852,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	}
 
 	// If snapshot unavailable or reading from it failed, load from the database
+	// 如果 snapshot 不可用 或者 读取失败, 从数据库中加载 trie db
 	if data == nil {
 		if s.trie == nil {
 			tr, err := s.db.OpenTrie(s.originalRoot)
@@ -884,6 +897,9 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
+/*
+createObject 创建一个新的 state object
+*/
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
@@ -894,6 +910,9 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		// account and storage data should be cleared as well. Note, it must
 		// be done here, otherwise the destruction event of "original account"
 		// will be lost.
+		/*
+			如果要创建一个 object, 这个 object 之前存在, 则需要标记删除;
+		*/
 		_, prevdestruct := s.stateObjectsDestruct[prev.address]
 		if !prevdestruct {
 			s.stateObjectsDestruct[prev.address] = prev.origin
@@ -1149,6 +1168,7 @@ func (s *StateDB) WaitPipeVerification() error {
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
+/* */
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
@@ -1162,6 +1182,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// Thus, we can safely ignore it here
 			continue
 		}
+		/*
+			Finalise 的时候 object selfDestructed 或者 指定删除 empty object
+		*/
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
 			obj.deleted = true
 
@@ -1632,7 +1655,6 @@ Commit 将状态写入底层内存 trie 数据库。 一旦状态被提交，sta
 handleDestruction 作用 ?
 ---
 StateDB::Commit 作用 ?
-
 */
 func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFuncs ...func() error) (common.Hash, *types.DiffLayer, error) {
 	// Short circuit in case any database failure occurred earlier.
@@ -1666,8 +1688,6 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		/*
 			commitErr 主要流程:
 			1) tries 的修改 -> nodeSet(MergedNodeSet) -> Trie::Commit
-
-
 		*/
 		commitErr := func() error {
 			if s.pipeCommit {
@@ -1847,6 +1867,9 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 			return nil
 		},
 		// Commit all stateObject trie, 更新 snapshot.Tree
+		/*
+			1) 是否开启 snapshotting, 如果开启 则 调用 s.snaps.Update 将 Destructs Accounts Storages 保存到 snaps 中
+		*/
 		func() error {
 			// If snapshotting is enabled, update the snapshot tree with this new version
 			if s.snap != nil {
@@ -1860,6 +1883,10 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 				}
 				diffLayer.Destructs, diffLayer.Accounts, diffLayer.Storages = s.SnapToDiffLayer()
 				// Only update if there's a state transition (skip empty Clique blocks)
+				/*
+					snap.Root() != expectedRoot 如何理解 ?
+					a state transition ? 如何理解 ?
+				*/
 				if parent := s.snap.Root(); parent != s.expectedRoot {
 					err := s.snaps.Update(s.expectedRoot, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, verified)
 

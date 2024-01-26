@@ -102,6 +102,10 @@ func newPeerSet() *peerSet {
 // registerSnapExtension unblocks an already connected `eth` peer waiting for its
 // `snap` extension, or if no such peer exists, tracks the extension for the time
 // being until the `eth` main protocol starts looking for it.
+/*
+registerSnapExtension 阻塞已经连接的`eth`节点，等待其`snap`扩展，或者如果没有这样的节点存在，跟踪扩展，直到`eth`主协议开始寻找它。
+
+*/
 func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
 	// Reject the peer if it advertises `snap` without `eth` as `snap` is only a
 	// satellite protocol meaningful with the chain selection of `eth`

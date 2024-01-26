@@ -359,6 +359,12 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td *big.Int, ttd *b
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
+/*
+核心流程在最后 syncWithPeer 函数中，
+downloader 总是从 Downloader.Synchronise 开始执行区块同步任务，它首先使用 Downloader.findAncestor 找到与指定节点的共同的祖先块，并从那个块开始同步。
+在同步时，会同时启动多个 go routine 来同步不同的数据，比如 header、body、receipt 等，但除 header 之外，其它数据总要等到获取到相应的 header 后才开始同步，
+比如要同步高度为1万的区块，那么需要先同步高度为1万的 header，成功后再通知同步 body 和 receipts 的线程，以便让他们开始同步各自的数据。
+*/
 func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, mode SyncMode, beaconMode bool, beaconPing chan struct{}) error {
 	// The beacon header syncer is async. It will start this synchronization and
 	// will continue doing other tasks. However, if synchronization needs to be
@@ -453,7 +459,6 @@ func (d *Downloader) getMode() SyncMode {
 6) fetchReceipts
 7) processFastSyncContent
 8) processFullSyncContent
-
 */
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *big.Int, beaconMode bool) (err error) {
 	d.mux.Post(StartEvent{})
@@ -611,6 +616,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 
 // spawnSync runs d.process and all given fetcher functions to completion in
 // separate goroutines, returning the first error that appears.
+/*
+fetchers 每个 成员 func 是一个 goroutine,
+*/
 func (d *Downloader) spawnSync(fetchers []func() error) error {
 	errc := make(chan error, len(fetchers))
 	d.cancelWg.Add(len(fetchers))
@@ -682,6 +690,9 @@ func (d *Downloader) Terminate() {
 
 // fetchHead retrieves the head header and prior pivot block (if available) from
 // a remote peer.
+/*
+
+ */
 func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *types.Header, err error) {
 	p.log.Debug("Retrieving remote chain head")
 	mode := d.getMode()
@@ -730,6 +741,15 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 //
 // and also returns 'max', the last block which is expected to be returned by the remote peers,
 // given the (from,count,skip)
+/*
+calculateRequestSpan
+中实现的计算方法比较锁碎，我觉得读者可以不用过于关注。并且我感觉这个函数写得有问题，并不能实现它的目标。根据 Downloader.findAncestor 方法的注释中的说明，
+这种用固定间隔获取共同祖先的方式，应对的是可预见的多数情况：即我们当前节点在正确的链上，并且与其它节点的高度相差不大。我认为这种多数情况就应该是当前节点的最新区块
+（即上面代码中 localHeight 变量所对应的区块）就是共同祖先，所以将要获取的区块区间至少应该包含 localHeight 所代表高度。并且，根据 downloader_test.go 中
+TestRemoteHeaderRequestSpan 函数的实现，我认为作者本身也是想实现这一目标：如果两个节点链的高度差别不大，这个区间就可以包含 localHeight 所代表的高度在内。
+区间为 [ 1200, 1250 ] 的这一组测试数据也验证了这个问题。但当我自己填加 [20, 58] 这一组数据到测试代码中时，得到的 from 是从 21 开始的，并没有包含高度 20。
+但这组数据的区块高度差距为 38，比 [1200, 1250] 这一区间的高度差距为 50 还要小。
+*/
 func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, uint64) {
 	var (
 		from     int
@@ -779,6 +799,10 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 // on the correct chain, checking the top N links should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
+/*
+findAncestor 尝试定位本地链和远程节点区块链的共同祖先。
+1) remoteHeight  从 remoteHeader 获取;
+*/
 func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteHeader *types.Header) (uint64, error) {
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	var (
@@ -807,6 +831,7 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		// We're above the max reorg threshold, find the earliest fork point
 		floor = int64(localHeight - maxForkAncestry)
 	}
+	// findAncestor                             floor=70870 local=160,870 remote=29,020,049 mode=full
 	// If we're doing a light sync, ensure the floor doesn't go below the CHT, as
 	// all headers before that point will be missing.
 	if mode == LightSync {
@@ -827,6 +852,14 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		}
 	}
 
+	/*
+		查找共同祖先的方式有两种, 首先通过第一种, 如果失败, 再通过第二种;
+		1) 一种是通过获取一组某一高度区间内、固定间隔高度的区块，看是否能从这些区块中找到一个本地也拥有的区块； -> findAncestorSpanSearch
+		2) 另一种是从某一高度区间内，通过二分法查找共同区块。这两种方法都实现在 Downloader.findAncestor 中。我们分别来看一下这两种方法。 -> findAncestorBinarySearch
+
+		remoteHeight 是远程节点的最新区块高度，localHeight 是本地节点的最新区块高度，floor 是本地节点的最新区块高度减去 maxForkAncestry 后的值。
+		1)
+	*/
 	ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
 	if err == nil {
 		return ancestor, nil
@@ -846,6 +879,12 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 	return ancestor, nil
 }
 
+/*
+findAncestorSpanSearch 通过获取一组某一高度区间内、固定间隔高度的区块，看是否能从这些区块中找到一个本地也拥有的区块;
+findAncestor                             floor=70870 local=160,870 remote=29,020,049 mode=full
+每次从 remoteHeight 尝试 10-20 height,
+1) headers 可能是 10 个 ?
+*/
 func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (uint64, error) {
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
@@ -883,6 +922,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 		var known bool
 		switch mode {
 		case FullSync:
+			// 读取
 			known = d.blockchain.HasBlock(h, n)
 		case SnapSync:
 			known = d.blockchain.HasFastBlock(h, n)
@@ -895,7 +935,11 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 		}
 	}
 	// If the head fetch already found an ancestor, return
+	/*
+		表示 findAncestorSpanSearch 匹配失败;
+	*/
 	if hash != (common.Hash{}) {
+		// "Ancestor below allowance"               peer=c7ae85f4 number=70870   hash=0x0000000000000000000000000000000000000000000000000000000000000000 allowance=70870
 		if int64(number) <= floor {
 			p.log.Warn("Ancestor below allowance", "number", number, "hash", hash, "allowance", floor)
 			return 0, errInvalidAncestor
@@ -906,6 +950,11 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 	return 0, errNoAncestorFound
 }
 
+/*
+二分查找, 快速查找, 直至 跳出循环 或者找到位置;
+1) floor 根据 currentblock-9W 计算出来位置, 作为起始位置;
+2) end 为 remoteHeight;
+*/
 func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (uint64, error) {
 	hash := common.Hash{}
 
@@ -924,6 +973,9 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		if err != nil {
 			return 0, err
 		}
+		/*
+			"Multiple headers for single request"    peer=7ead50ab headers=0 表示二分查找失败, 所以 追块接不上去;
+		*/
 		// Make sure the peer actually gave something valid
 		if len(headers) != 1 {
 			p.log.Warn("Multiple headers for single request", "headers", len(headers))
@@ -942,6 +994,11 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		default:
 			known = d.lightchain.HasHeader(h, n)
 		}
+		/*
+			number=18,328,316 hash=0xede311c471b994ae1664d05c7b06e68a10d8579701ac5c1d50c4c5539caa7223 known=false mode=full start=70870
+			end=36,585,762 remote=36,585,762 floor=70870
+			1)
+		*/
 		if !known {
 			end = check
 			continue
@@ -959,6 +1016,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		hash = h
 	}
 	// Ensure valid ancestry and return
+	/**/
 	if int64(start) <= floor {
 		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
 		return 0, errInvalidAncestor
@@ -975,6 +1033,10 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 // other peers are only accepted if they map cleanly to the skeleton. If no one
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
+/*
+fetchHeaders 并发地从请求的区块高度中获取区块头，直到不再返回为止，可能会在此过程中进行限流。?
+
+*/
 func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) error {
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
@@ -1238,6 +1300,9 @@ func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
+/*
+processHeaders
+*/
 func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode bool) error {
 	// Keep a count of uncertain headers to roll back
 	var (
@@ -1280,6 +1345,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 			// Terminate header processing if we synced up
 			if task == nil || len(task.headers) == 0 {
 				// Notify everyone that headers are fully processed
+				// header全部下载完成，向bodyWakeCh和receiptWakeCh通知这一消息
 				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
 					select {
 					case ch <- false:
@@ -1400,6 +1466,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 			d.syncStatsLock.Unlock()
 
 			// Signal the content downloaders of the availability of new tasks
+			// 有新的header下载完成了，但还没有全部完成。向bodyWakeCh和receiptWakeCh通知这一消息
 			for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
 				select {
 				case ch <- true:

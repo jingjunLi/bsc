@@ -86,6 +86,14 @@ type Pruner struct {
 	triesInMemory uint64
 }
 
+/*
+	BlockPruner
+
+oldAncientPath
+newAncientPath
+
+1) db 是传进来的 chainDb, 并没有被使用
+*/
 type BlockPruner struct {
 	db                  ethdb.Database
 	oldAncientPath      string
@@ -359,6 +367,8 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 /*
 1) 为什么需要 backup old db ?
 2) 创建了 chainDb, 也需要提供 multi db ?
+---
+1) 创建 chainDb, 使用 oldAncientPath, 确定 chainDb 内 itemsOfAncient (items)
 */
 func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace string, readonly, interrupt bool) error {
 	// Open old db wrapper.
@@ -371,6 +381,7 @@ func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace str
 	log.Info("chainDB opened successfully")
 
 	// Get the number of items in old ancient db.
+	// 当前 ancient db 内 items 数量
 	itemsOfAncient, err := chainDb.ItemAmountInAncient()
 	log.Info("the number of items in ancientDB is ", "itemsOfAncient", itemsOfAncient)
 
@@ -381,16 +392,24 @@ func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace str
 	}
 
 	// If the items in freezer is less than the block amount that we want to reserve, it is not enough, should stop.
+	// BlockAmountReserved 要保留的 block 数量 > 当前 ancient db 内 items 数量, 无法进行 backup
 	if itemsOfAncient < p.BlockAmountReserved {
 		log.Error("the number of old blocks is not enough to reserve,", "ancient items", itemsOfAncient, "the amount specified", p.BlockAmountReserved)
 		return errors.New("the number of old blocks is not enough to reserve")
 	}
 
 	var oldOffSet uint64
+	/*
+
+	 */
 	if interrupt {
-		// The interrupt scecario within this function is specific for old and new ancientDB exsisted concurrently,
+		// The interrupt scenario within this function is specific for old and new ancientDB existed concurrently,
 		// should use last version of offset for oldAncientDB, because current offset is
 		// actually of the new ancientDB_Backup, but what we want is the offset of ancientDB being backup.
+		/*
+			1) LastAncientFreezer
+			2) CurrentAncientFreezer
+		*/
 		oldOffSet = rawdb.ReadOffSetOfLastAncientFreezer(chainDb)
 	} else {
 		// Using current version of ancientDB for oldOffSet because the db for backup is current version.
@@ -399,6 +418,7 @@ func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace str
 	log.Info("the oldOffSet is ", "oldOffSet", oldOffSet)
 
 	// Get the start BlockNumber for pruning.
+	// 获取 startBlockNumber
 	startBlockNumber := oldOffSet + itemsOfAncient - p.BlockAmountReserved
 	log.Info("new offset/new startBlockNumber is ", "new offset", startBlockNumber)
 
@@ -455,7 +475,8 @@ func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace str
 	return nil
 }
 
-// Backup the ancient data for the old ancient db, i.e. the most recent 128 blocks in ancient db.
+// BlockPruneBackUp Backup the ancient data for the old ancient db, i.e. the most recent 128 blocks in ancient db.
+// 进行 backup
 func (p *BlockPruner) BlockPruneBackUp(name string, cache, handles int, namespace string, readonly, interrupt bool) error {
 	start := time.Now()
 

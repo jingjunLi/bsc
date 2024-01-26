@@ -27,6 +27,9 @@ import (
 // fetchHeadersByHash is a blocking version of Peer.RequestHeadersByHash which
 // handles all the cancellation, interruption and timeout mechanisms of a data
 // retrieval to allow blocking API calls.
+/*
+fetchHeadersByHash 是 Peer.RequestHeadersByHash 的阻塞版本，它处理了所有取消、中断和超时机制，以允许阻塞 API 调用。
+*/
 func (d *Downloader) fetchHeadersByHash(p *peerConnection, hash common.Hash, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
 	// Create the response sink and send the network request
 	start := time.Now()

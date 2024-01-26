@@ -56,6 +56,12 @@ const (
 //
 // It is not thread safe either, the encapsulating chain structures should do
 // the necessary mutex locking/unlocking.
+/*
+HeaderChain 实现了基本的区块头链逻辑，该逻辑由 core.BlockChain 和 light.LightChain 共享。headerchain 本身不能使用，只能作为这两个结构的一部分。
+HeaderChain 负责维护头链，包括头查询和更新。
+HeaderChain 维护的组件包括：(1) 总难度 (2) 头 (3) 区块哈希 -> 数字映射 (4) 规范数字 -> 哈希映射 和 (5) 头标志。
+它也不是线程安全的，封装链结构应该做必要的互斥锁定/解锁。
+*/
 type HeaderChain struct {
 	config        *params.ChainConfig
 	chainDb       ethdb.Database
@@ -673,6 +679,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 			}
 		}
 		// Update head header then.
+		log.Info("Rewinding blockchain", "head", parent.Number.Uint64(), "hash", parent.Hash())
 		rawdb.WriteHeadHeaderHash(markerBatch, parentHash)
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to update chain markers", "error", err)

@@ -187,13 +187,17 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 }
 
 /*
+业务的用途, 为什么做这个封装 ??
+
+1)
+
 cachingDB
-1) 实现了上面的 database interface
+1) 实现了上面的 database interface;
 ---
 1) disk : 用于读取 ContractCode, 具体是什么 ?
 2) codeSizeCache: lru Cache, 缓存 hash -> size 的大小;
 3) codeCache: hash -> code 的映射
-4) triedb
+4) triedb 为什么会有 triedb ? 因为用到了 triedb 内的 preimages ?
 ---
 对外提供接口:
 1) New 创建

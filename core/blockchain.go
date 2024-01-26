@@ -294,6 +294,11 @@ type BlockChain struct {
 	bodyCache     *lru.Cache[common.Hash, *types.Body]
 	bodyRLPCache  *lru.Cache[common.Hash, rlp.RawValue]
 	receiptsCache *lru.Cache[common.Hash, []*types.Receipt]
+	/*
+		GetBlock
+		相当于 在 rawdb.ReadBody(bc.db, hash) 的基础上加了缓存, blockCacheLimit = 256 大小的缓存
+		blockCache: hash ->  block
+	*/
 	blockCache    *lru.Cache[common.Hash, *types.Block]
 	txLookupCache *lru.Cache[common.Hash, *rawdb.LegacyTxLookupEntry]
 
@@ -349,6 +354,12 @@ eth.New 中初始化 Ethereum 后, 用 Ethereum::chainDb 初始化 BlockChain::d
 加载最新的状态数据：bc.loadLastState()
 检查区块哈希的当前状态，并确保链中没有任何坏块
 go bc.update() 定时处理future block
+---
+调用方:
+
+1) 当 db 是 freezerdb 时没有问题, freezerdb 具有 ancientdir
+2) 当 db 是 nofreezedb
+3) rawdb.NewMemoryDatabase() 需要指定 配置 ?
 */
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine,
 	vmConfig vm.Config, shouldPreserve func(block *types.Header) bool, txLookupLimit *uint64,
@@ -446,6 +457,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
 		// rewound point is lower than disk layer.
+		/*
+			diskRoot 的含义 ?
+			在状态恢复之前，如果丢失了头状态，请找出快照的 disk layer 指针（如果启用了快照）。确保 rewound点 低于 disk layer 。
+		*/
 		var diskRoot common.Hash
 		if bc.cacheConfig.SnapshotLimit > 0 {
 			diskRoot = rawdb.ReadSnapshotRoot(bc.db)
@@ -457,8 +472,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			}
 		}
 		if diskRoot != (common.Hash{}) {
+			// 为什么走到 这里 ? diskRoot HasState false ?
 			log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash(), "diskRoot", diskRoot)
-
 			snapDisk, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, diskRoot, true)
 			if err != nil {
 				return nil, err
@@ -468,6 +483,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 				rawdb.WriteSnapshotRecoveryNumber(bc.db, snapDisk)
 			}
 		} else {
+			//
+			/*
+				走的这里 ?
+				Head state missing, repairing            number=8 hash=8e2516..349fcc
+			*/
 			log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash())
 			if _, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, common.Hash{}, true); err != nil {
 				return nil, err
@@ -716,6 +736,8 @@ func (bc *BlockChain) loadLastState() error {
 	}
 	// Make sure the entire head block is available
 	headBlock := bc.GetBlockByHash(head)
+	log.Info("Loading last known state", "head", headBlock.Number())
+
 	if headBlock == nil {
 		// Corrupt or empty database, init from scratch
 		log.Warn("Head block missing, resetting chain", "hash", head)
@@ -854,8 +876,13 @@ func (bc *BlockChain) tryRewindBadBlocks() {
 //
 // The method returns the block number where the requested root cap was found.
 /*
-
- */
+setHeadBeyondRoot 重置区块链到指定的区块高度，如果指定的区块高度大于当前区块高度，则不做任何操作；
+如果指定的区块高度小于当前区块高度，则从当前区块高度开始回滚到指定的区块高度；
+rewinds 当前区块高度到指定的区块高度；
+1) NewBlockChain
+2) SetHead
+3) tryRewindBadBlocks
+*/
 func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Hash, repair bool) (uint64, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
@@ -890,10 +917,16 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			log.Crit("Failed to commit genesis state", "err", err)
 		}
 	}
+	/*
+		在重置区块链时，确保我们不会最终得到一个无状态的头块。注意，深度相等是允许的，这样可以使用SetHead作为链修复机制，而不会删除任何数据。
+	*/
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
 		// chain reparation mechanism without deleting any data!
+		/*
+			在重置区块链时，确保我们不会最终得到一个无状态的头块。注意，深度相等是允许的，这样可以使用SetHead作为链修复机制，而不会删除任何数据。
+		*/
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
 			newHeadBlock := bc.GetBlock(header.Hash(), header.Number.Uint64())
 			if newHeadBlock == nil {
@@ -904,8 +937,12 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 				// Block exists, keep rewinding until we find one with state,
 				// keeping rewinding until we exceed the optional threshold
 				// root hash
+				// beyondRoot 如何理解 ?
 				beyondRoot := (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
 
+				/*
+					Rewound to block with state 为什么两次 ?
+				*/
 				for {
 					// If a root threshold was requested but not yet crossed, check
 					if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
@@ -943,6 +980,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 					newHeadBlock = bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1) // Keep rewinding
 				}
 			}
+			log.Info("Rewound blockchain to", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
@@ -977,10 +1015,15 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		// If setHead underflown the freezer threshold and the block processing
 		// intent afterwards is full block importing, delete the chain segment
 		// between the stateful-block and the sethead target.
+		/*
+			如果设置 SetHead 导致 frozen 阈值不足，并且随后的区块处理意图是完整的区块导入，则删除从有状态块到 SetHead 目标之间的链段。
+			sethead target 是什么 ?
+		*/
 		var wipe bool
 		if headNumber+1 < frozen {
 			wipe = pivot == nil || headNumber >= *pivot
 		}
+		log.Info("Set new head", "number", headNumber, "hash", headHeader.Hash(), "wipe", wipe, "frozen", frozen)
 		return headHeader, wipe // Only force wipe if full synced
 	}
 	// Rewind the header chain, deleting all block bodies until then
@@ -1010,8 +1053,13 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
+	/*
+		如果 SetHead 仅作为链修复方法调用，则尝试跳过触摸头部链，除非 freezer 已损坏
+		1) updateFn 返回 SetHead 的 target,
+	*/
 	if repair {
 		if target, force := updateFn(bc.db, bc.CurrentBlock()); force {
+			println("Repairing chain, force wipe", " CurrentBlock", bc.CurrentBlock().Number, "target", target.Number)
 			bc.hc.SetHead(target.Number.Uint64(), updateFn, delFn)
 		}
 	} else {
@@ -1160,6 +1208,14 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // or if they are on a different side chain.
 //
 // Note, this function assumes that the `mu` mutex is held!
+/*
+writeHeadBlock 将新的 head block 注入到当前的区块链中，这个方法假设这个区块是真正的 head block。
+真正写入的 数据:
+1) HeadHeaderHash
+HeadFastBlockHash
+
+都不是真正的 block data, 而是辅助的 数据结构 index ?
+*/
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
@@ -1680,6 +1736,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		wg.Done()
 	}()
 
+	/*
+		tryCommitTrieDB
+	*/
 	tryCommitTrieDB := func() error {
 		bc.commitLock.Lock()
 		defer bc.commitLock.Unlock()
@@ -1883,7 +1942,12 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
 // wrong. After insertion is done, all accumulated events will be fired.
-// chain 必须是连续的
+/*
+InsertChain 尝试将给定的一批区块插入到规范链中，否则创建一个分叉。 如果返回错误，它将返回失败块的索引号以及描述出错的错误。 插入完成后，将触发所有累积的事件。
+chain 必须是连续的
+1）对待插入的区块进行一次健全检查：区块号是否连续；区块的父 Hash 是否指向前一个区块。
+注意：要求区块连续的这个条件可以简化插入流程，比如验证第一个区块时，发现它是已存储的区块，那么对于接下来的区块可以采取相同的措施，而不必挨个处理了。
+*/
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
@@ -1924,13 +1988,13 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
 /*
-InsertChain 的执行过程具体如下。
-1）对待插入的区块进行一次健全检查：区块号是否连续；区块的父 Hash 是否指向前一个区块。
-注意：要求区块连续的这个条件可以简化插入流程，比如验证第一个区块时，发现它是已存储的区块，那么对于接下来的区块可以采取相同的措施，而不必挨个处理了。
-2）恢复所有区块中所有交易的签名者。
-3）通过 Engine 接口 VerifyHeaders 验证所有区块头。
-4）创建一个插入迭代器：insertIterator，迭代器包含了一个验证器 Validator。
-5）先取出第一个待导入的区块，通过验证器验证区块体数据是否有效，验证过程如下。
+insertChain 是 InsertChain 的内部实现，假设 1) chains (传进来的 blocks)是连续的，2) chain 互斥锁被持有。
+InsertChain 的执行过程具体如下:
+
+1）恢复所有区块中所有交易的签名者。
+2）通过 Engine 接口 VerifyHeaders 验证所有区块头。
+3）创建一个插入迭代器：insertIterator，迭代器包含了一个验证器 Validator。
+4）先取出第一个待导入的区块，通过验证器验证区块体数据是否有效，验证过程如下。
 ---
 验证每一个区块的 header；
 验证每一个区块的 body；
@@ -1943,6 +2007,8 @@ bc.processor.Process StateProcessor::Process -> applyTransaction
 bc.validator.ValidateState
 2) writeState
 bc.writeBlockWithStat
+---
+1) setHead
 */
 func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
@@ -1951,6 +2017,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 	}
 
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
+	// 1）恢复所有区块中所有交易的签名者。
 	signer := types.MakeSigner(bc.chainConfig, chain[0].Number(), chain[0].Time())
 	go SenderCacher.RecoverFromBlocks(signer, chain)
 
@@ -1970,6 +2037,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 	}()
 	// Start the parallel header verifier
+	// 2）通过 Engine 接口 VerifyHeaders 验证所有区块头。
 	// 并发的 验证 headers
 	headers := make([]*types.Header, len(chain))
 	for i, block := range chain {
@@ -1979,6 +2047,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
+	// 3）创建一个插入迭代器：insertIterator，迭代器包含了一个验证器 Validator。
 	it := newInsertIterator(chain, results, bc.validator)
 	block, err := it.next()
 
@@ -2021,6 +2090,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// When node runs a snap sync again, it can re-import a batch of known blocks via
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
+		/*
+
+		 */
 		for block != nil && bc.skipBlock(err, it) {
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {

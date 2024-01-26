@@ -36,6 +36,9 @@ var timeoutGracePeriod = 2 * time.Minute
 // typedQueue is an interface defining the adaptor needed to translate the type
 // specific downloader/queue schedulers into the type-agnostic general concurrent
 // fetcher algorithm calls.
+/*
+typedQueue 是一个接口，定义了将类型特定的 downloader/queue 调度器转换为类型不可知的通用并发获取器算法调用所需的适配器。
+*/
 type typedQueue interface {
 	// waker returns a notification channel that gets pinged in case more fetches
 	// have been queued up, so the fetcher might assign it to idle peers.
@@ -70,12 +73,18 @@ type typedQueue interface {
 	// deliver is responsible for taking a generic response packet from the
 	// concurrent fetcher, unpacking the type specific data and delivering
 	// it to the downloader's queue.
+	/*
+		deliver	负责从并发获取器获取通用响应数据包，解包类型特定数据并将其传递给下载器的队列。
+	*/
 	deliver(peer *peerConnection, packet *eth.Response) (int, error)
 }
 
 // concurrentFetch iteratively downloads scheduled block parts, taking available
 // peers, reserving a chunk of fetch requests for each and waiting for delivery
 // or timeouts.
+/*
+
+ */
 func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 	// Create a delivery channel to accept responses from all peers
 	responses := make(chan *eth.Response)

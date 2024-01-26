@@ -404,6 +404,11 @@ func (t *freezerTable) preopen() (err error) {
 }
 
 // truncateHead discards any recent data above the provided threshold number.
+/*
+1) repair()
+2) TruncateHead
+3) ModifyAncients
+*/
 func (t *freezerTable) truncateHead(items uint64) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()

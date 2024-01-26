@@ -36,7 +36,7 @@ import (
 // write. The content of the trienodebuffer must be checked before diving into
 // disk (since it basically is not-yet-written data).
 /*
-trienodebuffer 为了实现 nodebuffer，asyncnodebuffer 封装的 interface;
+trienodebuffer 为了实现 nodebuffer, asyncnodebuffer 封装的 interface;
 */
 type trienodebuffer interface {
 	// node retrieves the trie node with given node info.
@@ -71,12 +71,17 @@ type trienodebuffer interface {
 	getSize() (uint64, uint64)
 
 	// getAllNodes return all the trie nodes are cached in trienodebuffer.
+	// 这个是合到一起的 ?
 	getAllNodes() map[common.Hash]map[string]*trienode.Node
 
 	// getLayers return the size of cached difflayers.
 	getLayers() uint64
 }
 
+/*
+NewTrieNodeBuffer one current node buffer, the other one is sealed to flush ?
+2 node buffers 如何理解 ?
+*/
 func NewTrieNodeBuffer(sync bool, limit int, nodes map[common.Hash]map[string]*trienode.Node, layers uint64) trienodebuffer {
 	if sync {
 		log.Info("new sync node buffer", "limit", common.StorageSize(limit), "layers", layers)
@@ -234,11 +239,7 @@ func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes map
 /*
 commit 将最底层的 diff layer 放到 node buffer, 并且构造一个新的 diff layer; 并且将当前 disk layer 设置为 stale, 防止重复访问;
 buffer.flush
-
 核心的流程:
-
-
-
 */
 func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	dl.lock.Lock()

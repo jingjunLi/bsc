@@ -71,7 +71,8 @@ type Node struct {
 	startStopLock sync.Mutex  // Start/Stop are protected by an additional lock
 	state         int         // Tracks state of node lifecycle
 
-	lock       sync.Mutex
+	lock sync.Mutex
+	// 如何衡量, 是哪种实例 ?
 	lifecycles []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 	rpcAPIs    []rpc.API   // List of APIs currently provided by the node
 	// 4 种 RPC 通信方式 ? 4->5 ?

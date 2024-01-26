@@ -93,6 +93,11 @@ func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 }
 
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
+/*
+调用 accountSnapshotKey -> entry
+2) 读取 是在 diskLayer 中进行的, 读取的数据是持久化的数据, 读取的数据是 accountSnapshotKey
+2) 持久化的调用: diffToDisk
+*/
 func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(accountSnapshotKey(hash))
 	return data
@@ -134,6 +139,7 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 
 // IterateStorageSnapshots returns an iterator for walking the entire storage
 // space of a specific account.
+/*IterateStorageSnapshots 返回  */
 func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
 	return NewKeyLengthIterator(db.NewIterator(storageSnapshotsKey(accountHash), nil), len(SnapshotStoragePrefix)+2*common.HashLength)
 }
