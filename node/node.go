@@ -179,6 +179,10 @@ func New(conf *Config) (*Node, error) {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
 
+	if conf.EnableSeparateBlock {
+		node.config.enableSeparateBlock()
+	}
+
 	// Check HTTP/WS prefixes are valid.
 	if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
 		return nil, err
@@ -776,12 +780,20 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	return db, err
 }
 
-func (n *Node) OpenAndMergeDatabase(name string, cache, handles int, freezer, diff, namespace string, readonly, persistDiff, pruneAncientData bool) (ethdb.Database, error) {
+func (n *Node) OpenAndMergeDatabase(name string, cache, handles int, freezer, diff, block, namespace string, readonly, persistDiff, splitedBlock, pruneAncientData bool) (ethdb.Database, error) {
 	chainDataHandles := handles
 	if persistDiff {
 		chainDataHandles = handles * chainDataHandlesPercentage / 100
 	}
-	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, freezer, namespace, readonly, false, false, pruneAncientData)
+	var (
+		chainDB ethdb.Database
+		err     error
+	)
+	if splitedBlock {
+		chainDB, err = n.OpenDatabase(name, cache, chainDataHandles, namespace, readonly)
+	} else {
+		chainDB, err = n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, freezer, namespace, readonly, false, false, pruneAncientData)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -793,6 +805,14 @@ func (n *Node) OpenAndMergeDatabase(name string, cache, handles int, freezer, di
 		}
 		chainDB.SetDiffStore(diffStore)
 	}
+	//if splitedBlock {
+	//	blockStore, err := n.OpenDiffDatabase(name, handles-chainDataHandles, block, namespace, readonly)
+	//	if err != nil {
+	//		chainDB.Close()
+	//		return nil, err
+	//	}
+	//	chainDB.SetBlockStore(blockStore)
+	//}
 	return chainDB, nil
 }
 
@@ -856,6 +876,16 @@ func (n *Node) OpenDiffDatabase(name string, handles int, diff, namespace string
 	return db, err
 }
 
+// HasSeparateTrieDir check the state subdirectory of db, if subdirectory exists, return true
+func (n *Node) HasSeparateTrieDir() bool {
+	separateDir := filepath.Join(n.ResolvePath("chaindata"), "state")
+	fileInfo, err := os.Stat(separateDir)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return fileInfo.IsDir()
+}
+
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
@@ -875,6 +905,10 @@ func (n *Node) ResolveAncient(name string, ancient string) string {
 // closeTrackingDB wraps the Close method of a database. When the database is closed by the
 // service, the wrapper removes it from the node's database map. This ensures that Node
 // won't auto-close the database if it is closed by the service that opened it.
+/*
+Go 允许一个类型包含（或嵌入）另一个类型，嵌入类型的方法成为包含类型的一部分。这是在没有经典继承的情况下实现代码重用的一种方式。
+在 ethdb.Database ?
+*/
 type closeTrackingDB struct {
 	ethdb.Database
 	n *Node

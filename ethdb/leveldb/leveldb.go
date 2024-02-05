@@ -83,6 +83,101 @@ type Database struct {
 	log log.Logger // Contextual logger tracking the database path
 }
 
+func (db *Database) HasAncient(kind string, number uint64) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) Ancient(kind string, number uint64) ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) Ancients() (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) Tail() (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) AncientSize(kind string) (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) ItemAmountInAncient() (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) AncientOffSet() uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) ModifyAncients(f func(ethdb.AncientWriteOp) error) (int64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) TruncateHead(n uint64) (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) TruncateTail(n uint64) (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) Sync() error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) MigrateTable(s string, f func([]byte) ([]byte, error)) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) DiffStore() ethdb.KeyValueStore {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) SetDiffStore(diff ethdb.KeyValueStore) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) BlockStore() ethdb.KeyValueStore {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) SetBlockStore(diff ethdb.KeyValueStore) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db *Database) AncientDatadir() (string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {

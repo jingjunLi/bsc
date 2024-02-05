@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"sync"
 
@@ -133,7 +134,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Assemble the Ethereum object
 	chainDb, err := stack.OpenAndMergeDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles,
-		config.DatabaseFreezer, config.DatabaseDiff, "eth/db/chaindata/", false, config.PersistDiff, config.PruneAncientData)
+		config.DatabaseFreezer, config.DatabaseDiff, config.DatabaseBlock, "eth/db/chaindata/", false, config.PersistDiff, config.SplitedBlock, config.PruneAncientData)
 	if err != nil {
 		return nil, err
 	}
@@ -250,6 +251,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateHistory:        config.StateHistory,
 			StateScheme:         config.StateScheme,
 			PathSyncFlush:       config.PathSyncFlush,
+			SplitedBlock:        config.SplitedBlock,
 		}
 	)
 	bcOps := make([]core.BlockChainOption, 0)
@@ -265,6 +267,26 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	peers := newPeerSet()
 	bcOps = append(bcOps, core.EnableBlockValidator(chainConfig, eth.engine, config.TriesVerifyMode, peers))
+
+	// if the separated trie db has set, need to new blockchain with the separated trie database
+	if stack.Config().EnableSeparateBlock || stack.HasSeparateTrieDir() {
+		ancientDir := config.DatabaseFreezer
+		if ancientDir == "" {
+			ancientDir = "ancient"
+		}
+		// Allocate partial handles and cache to this separated database.
+		separateDir := filepath.Join(stack.ResolvePath("chaindata"), "state")
+		separatedDBConfig := &core.SeparateBlockConfig{
+			SeparateDBHandles: int(float64(config.DatabaseHandles) * 0.5),
+			SeparateDBCache:   int(float64(config.DatabaseCache) * 0.5),
+			SeparateDBEngine:  stack.Config().DBEngine,
+			TrieDataDir:       separateDir,
+			TrieNameSpace:     SeparateTrieNamespace,
+			SeparateDBAncient: ancientDir,
+		}
+		cacheConfig.SplitedBlock = separatedDBConfig
+	}
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TransactionHistory, bcOps...)
 	if err != nil {
 		return nil, err

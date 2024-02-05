@@ -184,6 +184,11 @@ type AncientStore interface {
 	io.Closer
 }
 
+type BlockStore interface {
+	BlockStore() KeyValueStore
+	SetBlockStore(diff KeyValueStore)
+}
+
 type DiffStore interface {
 	DiffStore() KeyValueStore
 	SetDiffStore(diff KeyValueStore)
@@ -195,6 +200,7 @@ type Database interface {
 	Reader
 	Writer
 	DiffStore
+	BlockStore
 	Batcher
 	Iteratee
 	Stater

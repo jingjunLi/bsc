@@ -359,7 +359,7 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadHeader retrieves the block header corresponding to the hash.
-func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
+func ReadHeader(db ethdb.Database, hash common.Hash, number uint64) *types.Header {
 	data := ReadHeaderRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
@@ -778,7 +778,7 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 //
 // Note, due to concurrent download of header and block body the header and thus
 // canonical hash can be stored in the database but the body data not (yet).
-func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
+func ReadBlock(db ethdb.Database, hash common.Hash, number uint64) *types.Block {
 	header := ReadHeader(db, hash, number)
 	if header == nil {
 		return nil
@@ -975,7 +975,7 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 }
 
 // ReadHeadHeader returns the current canonical head header.
-func ReadHeadHeader(db ethdb.Reader) *types.Header {
+func ReadHeadHeader(db ethdb.Database) *types.Header {
 	headHeaderHash := ReadHeadHeaderHash(db)
 	if headHeaderHash == (common.Hash{}) {
 		return nil
@@ -988,7 +988,7 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 }
 
 // ReadHeadBlock returns the current canonical head block.
-func ReadHeadBlock(db ethdb.Reader) *types.Block {
+func ReadHeadBlock(db ethdb.Database) *types.Block {
 	headBlockHash := ReadHeadBlockHash(db)
 	if headBlockHash == (common.Hash{}) {
 		return nil

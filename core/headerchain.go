@@ -59,6 +59,7 @@ const (
 type HeaderChain struct {
 	config        *params.ChainConfig
 	chainDb       ethdb.Database
+	blockDb       ethdb.Database
 	genesisHeader *types.Header
 
 	currentHeader     atomic.Value // Current head of the header chain (may be above the block chain!)
@@ -240,7 +241,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 		newTD       = new(big.Int).Set(ptd) // Total difficulty of inserted chain
 		inserted    []rawdb.NumberHash      // Ephemeral lookup of number/hash for the chain
 		parentKnown = true                  // Set to true to force hc.HasHeader check the first iteration
-		batch       = hc.chainDb.NewBatch()
+		batch       = hc.blockDb.NewBatch()
 	)
 	for i, header := range headers {
 		var hash common.Hash

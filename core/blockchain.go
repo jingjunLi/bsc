@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"sync"
@@ -150,21 +151,34 @@ const (
 // CacheConfig contains the configuration values for the trie database
 // and state snapshot these are resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
-	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
-	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
-	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
-	Preimages           bool          // Whether to store preimage of trie key to the disk
-	TriesInMemory       uint64        // How many tries keeps in memory
-	NoTries             bool          // Insecure settings. Do not have any tries in databases if enabled.
-	StateHistory        uint64        // Number of blocks from head whose state histories are reserved.
-	StateScheme         string        // Scheme used to store ethereum states and merkle tree nodes on top
-	PathSyncFlush       bool          // Whether sync flush the trienodebuffer of pathdb to disk.
+	TrieCleanLimit      int                 // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieCleanNoPrefetch bool                // Whether to disable heuristic state prefetching for followup blocks
+	TrieDirtyLimit      int                 // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieDirtyDisabled   bool                // Whether to disable trie write caching and GC altogether (archive node)
+	TrieTimeLimit       time.Duration       // Time limit after which to flush the current in-memory trie to disk
+	SnapshotLimit       int                 // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages           bool                // Whether to store preimage of trie key to the disk
+	TriesInMemory       uint64              // How many tries keeps in memory
+	NoTries             bool                // Insecure settings. Do not have any tries in databases if enabled.
+	StateHistory        uint64              // Number of blocks from head whose state histories are reserved.
+	StateScheme         string              // Scheme used to store ethereum states and merkle tree nodes on top
+	PathSyncFlush       bool                // Whether sync flush the trienodebuffer of pathdb to disk.
+	SplitedBlock        SeparateBlockConfig // Whether to split block data into different files
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+}
+
+// SeparateBlockConfig contains the configuration values of the separated single trie database
+type SeparateBlockConfig struct {
+	SplitedBlock      bool   // Whether to split block data into different files
+	SeparateDBHandles int    // The handler num used by the separated trie db
+	SeparateDBCache   int    // The cache size used by the separated trie db
+	SeparateDBEngine  string // The db engine (pebble or leveldb) used by the separated trie db
+	TrieDataDir       string // The directory of the separated trie db
+	TrieNameSpace     string // The namespace of the separated trie db
+	SeparateDBAncient string // The ancient directory of the separated trie db
+	PruneAncientData  bool
 }
 
 // triedbConfig derives the configures for trie database.
@@ -231,6 +245,7 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db            ethdb.Database                   // Low level persistent database to store final content in
+	blockdb       ethdb.Database                   // Low level persistent database to store block data in
 	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
 	triegc        *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
 	gcproc        time.Duration                    // Accumulates canonical block processing for trie dumping
@@ -319,7 +334,42 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 
 	diffLayerCache, _ := exlru.New(diffLayerCacheLimit)
 	diffLayerChanCache, _ := exlru.New(diffLayerCacheLimit)
+	if cacheConfig.SplitedBlock {
+		//blockdb, err = rawdb.Open(rawdb.OpenOptions{
+		//	Type:              n.config.DBEngine,
+		//	Directory:         n.ResolvePath(name),
+		//	AncientsDirectory: n.ResolveAncient(name, ancient),
+		//	Namespace:         namespace,
+		//	Cache:             cache,
+		//	Handles:           handles,
+		//	ReadOnly:          readonly,
+		//	DisableFreeze:     disableFreeze,
+		//	IsLastOffset:      isLastOffset,
+		//	PruneAncientData:  pruneAncientData,
+		//})
+		separatedTrieConfig := cacheConfig.SeparateTrieConfig
+		separatedTrieDir := separatedTrieConfig.TrieDataDir
+		log.Info("node run with separated trie database", "directory", separatedTrieDir)
+		// open the separated db to init the trie database which only store the trie data
+		separateDB, dbErr := rawdb.Open(rawdb.OpenOptions{
+			Type:              separatedTrieConfig.SeparateDBEngine,
+			Directory:         separatedTrieDir,
+			AncientsDirectory: filepath.Join(separatedTrieDir, separatedTrieConfig.SeparateDBAncient),
+			Namespace:         separatedTrieConfig.TrieNameSpace,
+			Cache:             separatedTrieConfig.SeparateDBCache,
+			Handles:           separatedTrieConfig.SeparateDBHandles,
+			ReadOnly:          false,
+			DisableFreeze:     false,
+			IsLastOffset:      false,
+			PruneAncientData:  separatedTrieConfig.PruneAncientData,
+		})
 
+		if dbErr != nil {
+			log.Error("Failed to separate trie database", "err", dbErr)
+			return nil, dbErr
+		}
+
+	}
 	// Open trie database with provided config
 	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
 	// Setup the genesis block, commit the provided genesis specification
@@ -1040,7 +1090,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	defer bc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
-	batch := bc.db.NewBatch()
+	batch := bc.db.BlockStore().NewBatch()
 	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
 	rawdb.WriteBlock(batch, genesis)
 	if err := batch.Write(); err != nil {
@@ -1545,7 +1595,7 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 		return errInsertionInterrupted
 	}
 
-	batch := bc.db.NewBatch()
+	batch := bc.blockdb.NewBatch()
 	rawdb.WriteTd(batch, block.Hash(), block.NumberU64(), td)
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
@@ -1586,7 +1636,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		blockBatch := bc.db.NewBatch()
+		blockBatch := bc.blockdb.NewBatch()
 		rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 		rawdb.WriteBlock(blockBatch, block)
 		rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)

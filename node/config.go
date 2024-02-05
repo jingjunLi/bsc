@@ -64,6 +64,9 @@ type Config struct {
 	// in memory.
 	DataDir string
 
+	// EnableSeparateBlock is a flag that whether to enable the separated single trie database
+	EnableSeparateBlock bool `toml:",omitempty"`
+
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
 
@@ -436,6 +439,10 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 func (c *Config) checkLegacyFiles() {
 	c.checkLegacyFile(c.ResolvePath(datadirStaticNodes))
 	c.checkLegacyFile(c.ResolvePath(datadirTrustedNodes))
+}
+
+func (c *Config) enableSeparateBlock() {
+	c.EnableSeparateBlock = true
 }
 
 // checkLegacyFile will only raise an error if a file at the given path exists.

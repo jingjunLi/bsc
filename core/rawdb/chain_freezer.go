@@ -82,7 +82,7 @@ func (f *chainFreezer) Close() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
-func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
+func (f *chainFreezer) freeze(db ethdb.Database) {
 	var (
 		backoff   bool
 		triggered chan struct{} // Used in tests
@@ -169,7 +169,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 
 		// Wipe out all data from the active database
-		batch := db.NewBatch()
+		batch := db.BlockStore().NewBatch()
 		for i := 0; i < len(ancients); i++ {
 			// Always keep the genesis block in active database
 			if first+uint64(i) != 0 {
@@ -209,7 +209,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 					log.Debug("Dangling parent from Freezer", "number", tip-1, "hash", hash)
 					drop[hash] = struct{}{}
 				}
-				children := ReadAllHashes(db, tip)
+				children := ReadAllHashes(db.BlockStore(), tip)
 				for i := 0; i < len(children); i++ {
 					// Dig up the child and ensure it's dangling
 					child := ReadHeader(nfdb, children[i], tip)

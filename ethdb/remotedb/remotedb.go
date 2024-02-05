@@ -86,6 +86,14 @@ func (db *Database) AncientSize(kind string) (uint64, error) {
 	panic("not supported")
 }
 
+func (db *Database) BlockStore() ethdb.KeyValueStore {
+	panic("not supported")
+}
+
+func (db *Database) SetBlockStore(block ethdb.KeyValueStore) {
+	panic("not supported")
+}
+
 func (db *Database) DiffStore() ethdb.KeyValueStore {
 	panic("not supported")
 }
