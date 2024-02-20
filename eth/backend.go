@@ -87,6 +87,7 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
+	blockDb ethdb.Database // Block data database
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -133,11 +134,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	// Assemble the Ethereum object
+	blockDb, err := stack.OpenAndMergeDatabase("blockdata", config.DatabaseCache, config.DatabaseHandles,
+		config.DatabaseFreezer, config.DatabaseDiff, config.DatabaseBlock, "eth/db/blockdata/", false, config.PersistDiff, config.SplitedBlock, config.PruneAncientData)
+	if err != nil {
+		return nil, err
+	}
 	chainDb, err := stack.OpenAndMergeDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles,
 		config.DatabaseFreezer, config.DatabaseDiff, config.DatabaseBlock, "eth/db/chaindata/", false, config.PersistDiff, config.SplitedBlock, config.PruneAncientData)
 	if err != nil {
 		return nil, err
 	}
+
 	config.StateScheme, err = rawdb.ParseStateScheme(config.StateScheme, chainDb)
 	if err != nil {
 		return nil, err
@@ -195,6 +202,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config:            config,
 		merger:            consensus.NewMerger(chainDb),
 		chainDb:           chainDb,
+		blockDb:           blockDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
 		closeBloomHandler: make(chan struct{}),
@@ -616,6 +624,7 @@ func (s *Ethereum) VotePool() *vote.VotePool           { return s.votePool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
+func (s *Ethereum) BlockDb() ethdb.Database            { return s.blockDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
 func (s *Ethereum) Synced() bool                       { return s.handler.acceptTxs.Load() }
@@ -690,6 +699,7 @@ func (s *Ethereum) Stop() error {
 	s.shutdownTracker.Stop()
 
 	s.chainDb.Close()
+	s.blockDb.Close()
 	s.eventMux.Stop()
 
 	return nil

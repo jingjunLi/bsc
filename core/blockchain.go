@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"sync"
@@ -245,7 +244,7 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db            ethdb.Database                   // Low level persistent database to store final content in
-	blockdb       ethdb.Database                   // Low level persistent database to store block data in
+	blockDb       ethdb.Database                   // Low level persistent database to store block data in
 	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
 	triegc        *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
 	gcproc        time.Duration                    // Accumulates canonical block processing for trie dumping
@@ -321,7 +320,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine,
+func NewBlockChain(db ethdb.Database, blockDb ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine,
 	vmConfig vm.Config, shouldPreserve func(block *types.Header) bool, txLookupLimit *uint64,
 	options ...BlockChainOption) (*BlockChain, error) {
 	if cacheConfig == nil {
@@ -334,48 +333,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 
 	diffLayerCache, _ := exlru.New(diffLayerCacheLimit)
 	diffLayerChanCache, _ := exlru.New(diffLayerCacheLimit)
-	if cacheConfig.SplitedBlock {
-		//blockdb, err = rawdb.Open(rawdb.OpenOptions{
-		//	Type:              n.config.DBEngine,
-		//	Directory:         n.ResolvePath(name),
-		//	AncientsDirectory: n.ResolveAncient(name, ancient),
-		//	Namespace:         namespace,
-		//	Cache:             cache,
-		//	Handles:           handles,
-		//	ReadOnly:          readonly,
-		//	DisableFreeze:     disableFreeze,
-		//	IsLastOffset:      isLastOffset,
-		//	PruneAncientData:  pruneAncientData,
-		//})
-		separatedTrieConfig := cacheConfig.SeparateTrieConfig
-		separatedTrieDir := separatedTrieConfig.TrieDataDir
-		log.Info("node run with separated trie database", "directory", separatedTrieDir)
-		// open the separated db to init the trie database which only store the trie data
-		separateDB, dbErr := rawdb.Open(rawdb.OpenOptions{
-			Type:              separatedTrieConfig.SeparateDBEngine,
-			Directory:         separatedTrieDir,
-			AncientsDirectory: filepath.Join(separatedTrieDir, separatedTrieConfig.SeparateDBAncient),
-			Namespace:         separatedTrieConfig.TrieNameSpace,
-			Cache:             separatedTrieConfig.SeparateDBCache,
-			Handles:           separatedTrieConfig.SeparateDBHandles,
-			ReadOnly:          false,
-			DisableFreeze:     false,
-			IsLastOffset:      false,
-			PruneAncientData:  separatedTrieConfig.PruneAncientData,
-		})
-
-		if dbErr != nil {
-			log.Error("Failed to separate trie database", "err", dbErr)
-			return nil, dbErr
-		}
-
-	}
 	// Open trie database with provided config
 	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
-	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
+	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, blockDb, triedb, genesis, overrides)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -396,6 +359,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		chainConfig:        chainConfig,
 		cacheConfig:        cacheConfig,
 		db:                 db,
+		blockDb:            blockDb,
 		triedb:             triedb,
 		triegc:             prque.New[int64, common.Hash](nil),
 		quit:               make(chan struct{}),
@@ -440,7 +404,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// missing chain indexes and chain flags. This procedure can survive crash
 	// and can be resumed in next restart since chain flags are updated in last step.
 	if bc.empty() {
-		rawdb.InitDatabaseFromFreezer(bc.db)
+		rawdb.InitDatabaseFromFreezer(bc.blockDb)
 	}
 	// Load blockchain states from disk
 	if err := bc.loadLastState(); err != nil {
@@ -481,8 +445,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 	}
 	// Ensure that a previous crash in SetHead doesn't leave extra ancients
-	if frozen, err := bc.db.ItemAmountInAncient(); err == nil && frozen > 0 {
-		frozen, err = bc.db.Ancients()
+	if frozen, err := bc.blockDb.ItemAmountInAncient(); err == nil && frozen > 0 {
+		frozen, err = bc.blockDb.Ancients()
 		if err != nil {
 			return nil, err
 		}
@@ -678,7 +642,7 @@ func (bc *BlockChain) cacheBlock(hash common.Hash, block *types.Block) {
 // into node seamlessly.
 func (bc *BlockChain) empty() bool {
 	genesis := bc.genesisBlock.Hash()
-	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.db), rawdb.ReadHeadHeaderHash(bc.db), rawdb.ReadHeadFastBlockHash(bc.db)} {
+	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.blockDb), rawdb.ReadHeadHeaderHash(bc.db), rawdb.ReadHeadFastBlockHash(bc.db)} {
 		if hash != genesis {
 			return false
 		}
@@ -714,7 +678,7 @@ func (bc *BlockChain) getFinalizedNumber(header *types.Header) uint64 {
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState() error {
 	// Restore the last known head block
-	head := rawdb.ReadHeadBlockHash(bc.db)
+	head := rawdb.ReadHeadBlockHash(bc.blockDb)
 	if head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		log.Warn("Empty database, resetting chain")
@@ -871,7 +835,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	// Retrieve the last pivot block to short circuit rollbacks beyond it and the
 	// current freezer limit to start nuking id underflown
 	pivot := rawdb.ReadLastPivotNumber(bc.db)
-	frozen, _ := bc.db.Ancients()
+	frozen, _ := bc.blockDb.Ancients()
 
 	// resetState resets the persistent state to genesis if it's not available.
 	resetState := func() {
@@ -893,7 +857,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			log.Crit("Failed to commit genesis state", "err", err)
 		}
 	}
-	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
+	updateFn := func(db ethdb.KeyValueWriter, blockDb ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
 		// chain reparation mechanism without deleting any data!
@@ -946,7 +910,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 					newHeadBlock = bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1) // Keep rewinding
 				}
 			}
-			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
+			rawdb.WriteHeadBlockHash(blockDb, newHeadBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
 			// In theory we should update all in-memory markers in the
@@ -989,11 +953,11 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	// Rewind the header chain, deleting all block bodies until then
 	delFn := func(db ethdb.KeyValueWriter, hash common.Hash, num uint64) {
 		// Ignore the error here since light client won't hit this path
-		frozen, _ := bc.db.Ancients()
+		frozen, _ := bc.blockDb.Ancients()
 		if num+1 <= frozen {
 			// Truncate all relative data(header, total difficulty, body, receipt
 			// and canonical hash) from ancient store.
-			if _, err := bc.db.TruncateHead(num); err != nil {
+			if _, err := bc.blockDb.TruncateHead(num); err != nil {
 				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
 			}
 			// Remove the hash <-> number mapping from the active store.
@@ -1010,7 +974,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
 	if repair {
-		if target, force := updateFn(bc.db, bc.CurrentBlock()); force {
+		if target, force := updateFn(bc.db, bc.blockDb, bc.CurrentBlock()); force {
 			bc.hc.SetHead(target.Number.Uint64(), updateFn, delFn)
 		}
 	} else {
@@ -1388,10 +1352,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Ensure genesis is in ancients.
 		if first.NumberU64() == 1 {
-			if frozen, _ := bc.db.Ancients(); frozen == 0 {
+			if frozen, _ := bc.blockDb.Ancients(); frozen == 0 {
 				b := bc.genesisBlock
 				td := bc.genesisBlock.Difficulty()
-				writeSize, err := rawdb.WriteAncientBlocks(bc.db, []*types.Block{b}, []types.Receipts{nil}, td)
+				writeSize, err := rawdb.WriteAncientBlocks(bc.blockDb, []*types.Block{b}, []types.Receipts{nil}, td)
 				size += writeSize
 				if err != nil {
 					log.Error("Error writing genesis to ancients", "err", err)
@@ -1409,7 +1373,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
-		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, td)
+		writeSize, err := rawdb.WriteAncientBlocks(bc.blockDb, blockChain, receiptChain, td)
 		size += writeSize
 		if err != nil {
 			log.Error("Error importing chain data to ancients", "err", err)
@@ -1440,7 +1404,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				size += int64(batch.ValueSize())
 				if err = batch.Write(); err != nil {
 					snapBlock := bc.CurrentSnapBlock().Number.Uint64()
-					if _, err := bc.db.TruncateHead(snapBlock + 1); err != nil {
+					if _, err := bc.blockDb.TruncateHead(snapBlock + 1); err != nil {
 						log.Error("Can't truncate ancient store after failed insert", "err", err)
 					}
 					return 0, err
@@ -1450,7 +1414,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		}
 
 		// Sync the ancient store explicitly to ensure all data has been flushed to disk.
-		if err := bc.db.Sync(); err != nil {
+		if err := bc.blockDb.Sync(); err != nil {
 			return 0, err
 		}
 		// Update the current snap block because all block data is now present in DB.
@@ -1458,7 +1422,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		if !updateHead(blockChain[len(blockChain)-1]) {
 			// We end up here if the header chain has reorg'ed, and the blocks/receipts
 			// don't match the canonical chain.
-			if _, err := bc.db.TruncateHead(previousSnapBlock + 1); err != nil {
+			if _, err := bc.blockDb.TruncateHead(previousSnapBlock + 1); err != nil {
 				log.Error("Can't truncate ancient store after failed insert", "err", err)
 			}
 			return 0, errSideChainReceipts
@@ -1595,7 +1559,7 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 		return errInsertionInterrupted
 	}
 
-	batch := bc.blockdb.NewBatch()
+	batch := bc.blockDb.NewBatch()
 	rawdb.WriteTd(batch, block.Hash(), block.NumberU64(), td)
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
@@ -1636,7 +1600,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		blockBatch := bc.blockdb.NewBatch()
+		blockBatch := bc.blockDb.NewBatch()
 		rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 		rawdb.WriteBlock(blockBatch, block)
 		rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)

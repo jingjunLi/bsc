@@ -42,18 +42,6 @@ type freezerdb struct {
 	ethdb.KeyValueStore
 	ethdb.AncientStore
 	diffStore ethdb.KeyValueStore
-	blockdb   ethdb.Database
-}
-
-func (frdb *freezerdb) BlockStore() ethdb.Database {
-	return frdb.blockdb
-}
-
-func (frdb *freezerdb) SetBlockStore(block ethdb.Database) {
-	if frdb.blockdb != nil {
-		frdb.blockdb.Close()
-	}
-	frdb.blockdb = block
 }
 
 // AncientDatadir returns the path of root ancient directory.
@@ -116,8 +104,7 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 // nofreezedb is a database wrapper that disables freezer data retrievals.
 type nofreezedb struct {
 	ethdb.KeyValueStore
-	blockStore ethdb.KeyValueStore
-	diffStore  ethdb.KeyValueStore
+	diffStore ethdb.KeyValueStore
 }
 
 // HasAncient returns an error as we don't have a backing chain freezer.
@@ -173,17 +160,6 @@ func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
 // Sync returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) Sync() error {
 	return errNotSupported
-}
-
-func (db *nofreezedb) BlockStore() ethdb.KeyValueStore {
-	return db.blockStore
-}
-
-func (db *nofreezedb) SetBlockStore(block ethdb.KeyValueStore) {
-	if db.blockStore != nil {
-		db.blockStore.Close()
-	}
-	db.blockStore = block
 }
 
 func (db *nofreezedb) DiffStore() ethdb.KeyValueStore {
@@ -541,10 +517,6 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 // the chain freezer can be opened.
 func Open(o OpenOptions) (ethdb.Database, error) {
 	kvdb, err := openKeyValueDatabase(o)
-	if err != nil {
-		return nil, err
-	}
-	blockdb, err := openKeyValueDatabase(o)
 	if err != nil {
 		return nil, err
 	}
