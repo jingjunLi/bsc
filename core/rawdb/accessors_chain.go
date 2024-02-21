@@ -432,7 +432,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 			return nil
 		}
 		// If not, try reading from leveldb
-		data, _ = db.Get(blockBodyKey(number, hash))
+		data, _ = db.BlockStoreReader().Get(blockBodyKey(number, hash))
 		return nil
 	})
 	return data
@@ -450,8 +450,8 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 		// Block is not in ancients, read from leveldb by hash and number.
 		// Note: ReadCanonicalHash cannot be used here because it also
 		// calls ReadAncients internally.
-		hash, _ := db.Get(headerHashKey(number))
-		data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hash)))
+		hash, _ := db.BlockStoreReader().Get(headerHashKey(number))
+		data, _ = db.BlockStoreReader().Get(blockBodyKey(number, common.BytesToHash(hash)))
 		return nil
 	})
 	return data
@@ -553,7 +553,7 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 			return nil
 		}
 		// If not, try reading from leveldb
-		data, _ = db.Get(headerTDKey(number, hash))
+		data, _ = db.BlockStoreReader().Get(headerTDKey(number, hash))
 		return nil
 	})
 	return data
@@ -613,7 +613,7 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 			return nil
 		}
 		// If not, try reading from leveldb
-		data, _ = db.Get(blockReceiptsKey(number, hash))
+		data, _ = db.BlockStoreReader().Get(blockReceiptsKey(number, hash))
 		return nil
 	})
 	return data

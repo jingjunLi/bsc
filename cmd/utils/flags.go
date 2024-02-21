@@ -125,6 +125,11 @@ var (
 		Usage:    "Data directory for difflayer segments (default = inside chaindata)",
 		Category: flags.FastNodeCategory,
 	}
+	BlockFlag = flags.DirectoryFlag{
+		Name:     "datadir.block",
+		Usage:    "Data directory for block data segments (default = inside chaindata)",
+		Category: flags.FastNodeCategory,
+	}
 	RemoteDBFlag = &cli.StringFlag{
 		Name:     "remotedb",
 		Usage:    "URL for remote database",
@@ -1838,6 +1843,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(DiffFlag.Name) {
 		cfg.DatabaseDiff = ctx.String(DiffFlag.Name)
 	}
+	if ctx.IsSet(BlockFlag.Name) {
+		cfg.DatabaseBlock = ctx.String(BlockFlag.Name)
+	}
 	if ctx.IsSet(PersistDiffFlag.Name) {
 		cfg.PersistDiff = ctx.Bool(PersistDiffFlag.Name)
 	}
@@ -2267,7 +2275,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	case ctx.String(SyncModeFlag.Name) == "light":
 		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
-		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false)
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false, nil)
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)

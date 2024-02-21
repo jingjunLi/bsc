@@ -782,11 +782,23 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	if config.PersistDiff {
 		chainDataHandles = config.DatabaseHandles * chainDataHandlesPercentage / 100
 	}
-	chainDB, err := n.OpenDatabaseWithFreezer(name, config.DatabaseCache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData)
+	var blockStore *leveldb.Database
+	var err error
+
+	if config.SeparateDB {
+		log.Info("SeparateDB is enabled, open block database, %s", config.DatabaseBlock)
+		blockStore, err = n.OpenBlockDatabase(name, config.DatabaseHandles-chainDataHandles, config.DatabaseBlock, namespace, readonly)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	chainDB, err := n.OpenDatabaseWithFreezer(name, config.DatabaseCache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, blockStore)
 	if err != nil {
 		return nil, err
 	}
 	if config.PersistDiff {
+		log.Info("PersistDiff is enabled, open PersistDiff database, %s", config.PersistDiff)
 		diffStore, err := n.OpenDiffDatabase(name, config.DatabaseHandles-chainDataHandles, config.DatabaseDiff, namespace, readonly)
 		if err != nil {
 			chainDB.Close()
@@ -795,14 +807,6 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		chainDB.SetDiffStore(diffStore)
 	}
 
-	if config.SeparateDB {
-		blockStore, err := n.OpenDiffDatabase(name, config.DatabaseHandles-chainDataHandles, config.DatabaseDiff, namespace, readonly)
-		if err != nil {
-			chainDB.Close()
-			return nil, err
-		}
-		chainDB.SetDiffStore(blockStore)
-	}
 	return chainDB, nil
 }
 
@@ -811,7 +815,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool, blockStore *leveldb.Database) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -833,6 +837,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 			DisableFreeze:     disableFreeze,
 			IsLastOffset:      isLastOffset,
 			PruneAncientData:  pruneAncientData,
+			BlockStore:        blockStore,
 		})
 	}
 
@@ -862,6 +867,30 @@ func (n *Node) OpenDiffDatabase(name string, handles int, diff, namespace string
 		diff = n.ResolvePath(diff)
 	}
 	db, err = leveldb.New(diff, 0, handles, namespace, readonly)
+
+	return db, err
+}
+
+func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace string, readonly bool) (*leveldb.Database, error) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
+	}
+
+	var db *leveldb.Database
+	var err error
+	if n.config.DataDir == "" {
+		panic("datadir is missing")
+	}
+	root := n.ResolvePath(name)
+	switch {
+	case block == "":
+		block = filepath.Join(root, "block")
+	case !filepath.IsAbs(block):
+		block = n.ResolvePath(block)
+	}
+	db, err = leveldb.New(block, 0, handles, namespace, readonly)
 
 	return db, err
 }

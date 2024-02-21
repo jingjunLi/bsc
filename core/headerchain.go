@@ -140,7 +140,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
 		return &cached
 	}
-	number := rawdb.ReadHeaderNumber(hc.chainDb, hash)
+	number := rawdb.ReadHeaderNumber(hc.chainDb.BlockStore(), hash)
 	if number != nil {
 		hc.numberCache.Add(hash, *number)
 	}

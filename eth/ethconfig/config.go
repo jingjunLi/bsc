@@ -138,6 +138,7 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 	DatabaseDiff       string
+	DatabaseBlock      string
 	PersistDiff        bool
 	DiffBlock          uint64
 	// PruneAncientData is an optional config and disabled by default, and usually you do not need it.

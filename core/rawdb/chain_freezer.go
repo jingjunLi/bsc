@@ -82,11 +82,11 @@ func (f *chainFreezer) Close() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
-func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
+func (f *chainFreezer) freeze(db ethdb.KeyValueStore, blockstore ethdb.KeyValueStore) {
 	var (
 		backoff   bool
 		triggered chan struct{} // Used in tests
-		nfdb      = &nofreezedb{KeyValueStore: db}
+		nfdb      = &nofreezedb{KeyValueStore: db, blockStore: blockstore}
 	)
 	timer := time.NewTimer(freezerRecheckInterval)
 	defer timer.Stop()
@@ -121,12 +121,12 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 			continue
 		}
-		number := ReadHeaderNumber(nfdb, hash)
+		number := ReadHeaderNumber(blockstore, hash)
 		threshold := f.threshold.Load()
 		frozen := f.frozen.Load()
 		switch {
 		case number == nil:
-			log.Error("Current full block number unavailable", "hash", hash)
+			log.Error("chainFreezer Current full block number unavailable", "hash", hash)
 			backoff = true
 			continue
 

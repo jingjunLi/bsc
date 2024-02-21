@@ -49,7 +49,7 @@ func (frdb *freezerdb) BlockStoreReader() ethdb.KeyValueReader {
 	if frdb.blockStore == nil {
 		return frdb
 	}
-	return frdb
+	return frdb.blockStore
 }
 
 func (frdb *freezerdb) BlockStoreWriter() ethdb.KeyValueWriter {
@@ -78,7 +78,7 @@ func (frdb *freezerdb) Close() error {
 		}
 	}
 	if frdb.blockStore != nil {
-		if err := frdb.diffStore.Close(); err != nil {
+		if err := frdb.blockStore.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -100,14 +100,18 @@ func (frdb *freezerdb) SetDiffStore(diff ethdb.KeyValueStore) {
 }
 
 func (frdb *freezerdb) BlockStore() ethdb.KeyValueStore {
-	return frdb.diffStore
+	if frdb.blockStore != nil {
+		return frdb.blockStore
+	} else {
+		return frdb
+	}
 }
 
-func (frdb *freezerdb) SetBlockStore(diff ethdb.KeyValueStore) {
+func (frdb *freezerdb) SetBlockStore(block ethdb.KeyValueStore) {
 	if frdb.blockStore != nil {
 		frdb.blockStore.Close()
 	}
-	frdb.blockStore = diff
+	frdb.blockStore = block
 }
 
 // Freeze is a helper method used for external testing to trigger and block until
@@ -302,7 +306,7 @@ func resolveChainFreezerDir(ancient string) string {
 // value data store with a freezer moving immutable chain segments into cold
 // storage. The passed ancient indicates the path of root ancient directory
 // where the chain freezer can be opened.
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
+func NewDatabaseWithFreezer(db, blockstore ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
 	var offset uint64
 	// The offset of ancientDB should be handled differently in different scenarios.
 	if isLastOffset {
@@ -325,6 +329,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 			ancientRoot:   ancient,
 			KeyValueStore: db,
 			AncientStore:  frdb,
+			blockStore:    blockstore,
 		}, nil
 	}
 
@@ -432,7 +437,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	if !disableFreeze && !frdb.readonly {
 		frdb.wg.Add(1)
 		go func() {
-			frdb.freeze(db)
+			frdb.freeze(db, blockstore)
 			frdb.wg.Done()
 		}()
 	}
@@ -440,6 +445,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		ancientRoot:   ancient,
 		KeyValueStore: db,
 		AncientStore:  frdb,
+		blockStore:    blockstore,
 	}, nil
 }
 
@@ -477,7 +483,7 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, ancient 
 	if err != nil {
 		return nil, err
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly, disableFreeze, isLastOffset, pruneAncientData)
+	frdb, err := NewDatabaseWithFreezer(kvdb, nil, ancient, namespace, readonly, disableFreeze, isLastOffset, pruneAncientData)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
@@ -530,6 +536,10 @@ type OpenOptions struct {
 	DisableFreeze    bool
 	IsLastOffset     bool
 	PruneAncientData bool
+
+	DisableBlockStore bool
+	DatabaseBlock     string
+	BlockStore        *leveldb.Database
 }
 
 // openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
@@ -583,7 +593,7 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	if len(o.AncientsDirectory) == 0 {
 		return kvdb, nil
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.DisableFreeze, o.IsLastOffset, o.PruneAncientData)
+	frdb, err := NewDatabaseWithFreezer(kvdb, o.BlockStore, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.DisableFreeze, o.IsLastOffset, o.PruneAncientData)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
