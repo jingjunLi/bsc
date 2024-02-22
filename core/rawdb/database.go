@@ -385,7 +385,7 @@ func NewDatabaseWithFreezer(db, blockstore ethdb.KeyValueStore, ancient string, 
 			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup if the database has a more recent head.
-				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
+				if head := *ReadHeaderNumber(blockstore, ReadHeadHeaderHash(db)); head > frozen-1 {
 					// Find the smallest block stored in the key-value store
 					// in range of [frozen, head]
 					var number uint64
@@ -587,7 +587,14 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	if len(o.AncientsDirectory) == 0 {
 		return kvdb, nil
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, o.BlockStore, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.DisableFreeze, o.IsLastOffset, o.PruneAncientData)
+
+	var blockstore ethdb.KeyValueStore
+	if o.BlockStore != nil {
+		blockstore = o.BlockStore
+	} else {
+		blockstore = kvdb
+	}
+	frdb, err := NewDatabaseWithFreezer(kvdb, blockstore, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.DisableFreeze, o.IsLastOffset, o.PruneAncientData)
 	if err != nil {
 		kvdb.Close()
 		return nil, err

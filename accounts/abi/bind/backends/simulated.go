@@ -893,7 +893,7 @@ func (fb *filterBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts
 }
 
 func (fb *filterBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	number := rawdb.ReadHeaderNumber(fb.db, hash)
+	number := rawdb.ReadHeaderNumber(fb.db.BlockStore(), hash)
 	if number == nil {
 		return nil, nil
 	}
