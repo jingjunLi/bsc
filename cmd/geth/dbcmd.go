@@ -160,8 +160,8 @@ a data corruption.`,
 			utils.DataDirFlag,
 			utils.TrieDirFlag,
 		},
-		Usage: "Migrate data in the database," +
-			"./geth db split-trie --datadir ./node --triedir ./node2",
+		Usage: "Migrate block data in the database," +
+			"./geth db split-block --datadir ./node --blockdir ./node2",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
 
@@ -666,10 +666,10 @@ func dbBlockSplit(ctx *cli.Context) error {
 		return fmt.Errorf("trie dir must be set")
 	}
 
-	seprateDB := utils.SplitTrieDatabase(ctx, stack, false, false)
-	defer seprateDB.Close()
+	separateDB := utils.SplitTrieDatabase(ctx, stack, false, false)
+	defer separateDB.Close()
 
-	err := rawdb.SplitDatabaseV2(db, seprateDB)
+	err := rawdb.SplitDatabaseV2(db, separateDB)
 	if err != nil {
 		return err
 	}

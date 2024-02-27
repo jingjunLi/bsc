@@ -888,6 +888,30 @@ func (n *Node) OpenDiffDatabase(name string, handles int, diff, namespace string
 	return db, err
 }
 
+func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace string, readonly bool) (*leveldb.Database, error) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
+	}
+
+	var db *leveldb.Database
+	var err error
+	if n.config.DataDir == "" {
+		panic("datadir is missing")
+	}
+	root := n.ResolvePath(name)
+	switch {
+	case block == "":
+		block = filepath.Join(root, "block")
+	case !filepath.IsAbs(block):
+		block = n.ResolvePath(block)
+	}
+	db, err = leveldb.New(block, 0, handles, namespace, readonly)
+
+	return db, err
+}
+
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
