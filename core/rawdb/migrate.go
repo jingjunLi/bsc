@@ -12,6 +12,8 @@ import (
 var (
 	pebbleDB        ethdb.Database
 	triedbInstance  ethdb.Database
+	blockStore      ethdb.KeyValueStore
+	migrateType     int64
 	createErr       error
 	DoneTaskNum     uint64
 	SuccTaskNum     uint64
@@ -20,16 +22,34 @@ var (
 	AncientTaskFail int64
 )
 
+const (
+	tiredbType = iota
+	blockType
+)
+
 var ctx = context.Background()
 
 func InitDb(db ethdb.Database, trieDB ethdb.Database) {
 	pebbleDB = db
 	triedbInstance = trieDB
+	migrateType = tiredbType
+}
+
+func InitBlockStore(db ethdb.Database, block ethdb.KeyValueStore) {
+	pebbleDB = db
+	blockStore = block
+	migrateType = blockType
 }
 
 func (job *Job) UploadToKvRocks() error {
 	if len(job.Kvbuffer) > 0 {
-		kvBatch := triedbInstance.NewBatch()
+		var kvBatch ethdb.Batch
+		if migrateType == tiredbType {
+			kvBatch = triedbInstance.NewBatch()
+		} else {
+			kvBatch = blockStore.NewBatch()
+		}
+
 		for key, value := range job.Kvbuffer {
 			batchErr := kvBatch.Put([]byte(key), value)
 			if batchErr != nil {
