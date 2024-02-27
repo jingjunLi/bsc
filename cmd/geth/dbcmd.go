@@ -77,6 +77,7 @@ Remove blockchain and state databases`,
 			dbTrieGetCmd,
 			dbTrieDeleteCmd,
 			dbTrieSplitCmd,
+			dbBlockSplitCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -148,6 +149,20 @@ a data corruption.`,
 		},
 		Usage: "Migrate data in the database," +
 			"./geth db split-trie --datadir ./node --triedir ./node2",
+		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+
+	dbBlockSplitCmd = &cli.Command{
+		Action:    dbBlockSplit,
+		Name:      "split-block",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.BlockDirFlag,
+			utils.StateSchemeFlag,
+		},
+		Usage: "Migrate block data in the database," +
+			"./geth db split-block --datadir ./node --blockdir ./node2",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
 
@@ -633,6 +648,25 @@ func dbTrieSplit(ctx *cli.Context) error {
 	defer seprateDB.Close()
 
 	err := rawdb.SplitDatabase(db, seprateDB)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// dbTrieSplit split the trie related data to separated dir
+func dbBlockSplit(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false, false)
+	defer db.Close()
+
+	blockStore := utils.SplitBlockDatabase(ctx, stack, false, false)
+	defer blockStore.Close()
+
+	err := rawdb.SplitBlockDatabaseV2(db, blockStore)
 	if err != nil {
 		return err
 	}

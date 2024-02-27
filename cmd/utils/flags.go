@@ -101,6 +101,11 @@ var (
 		Usage:    "Data directory for the trie data base",
 		Category: flags.EthCategory,
 	}
+	BlockDirFlag = &flags.DirectoryFlag{
+		Name:     "blockdir",
+		Usage:    "Data directory for the block data base",
+		Category: flags.EthCategory,
+	}
 	DirectBroadcastFlag = &cli.BoolFlag{
 		Name:     "directbroadcast",
 		Usage:    "Enable directly broadcast mined block to all peers",
@@ -2371,6 +2376,21 @@ func SplitTrieDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 		Fatalf("Could not open trie database: %v", err)
 	}
 	return trieDB
+}
+
+func SplitBlockDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
+	var (
+		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
+		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
+		err     error
+	)
+
+	// chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, freezer, namespace, readonly, false, false, pruneAncientData)
+	blockDB, err := stack.OpenDatabaseWithFreezer("chaindata/block", cache, handles/2, "", "eth/db/chaindata/", false, false, false, false)
+	if err != nil {
+		Fatalf("Could not open trie database: %v", err)
+	}
+	return blockDB
 }
 
 // tryMakeReadOnlyDatabase try to open the chain database in read-only mode,

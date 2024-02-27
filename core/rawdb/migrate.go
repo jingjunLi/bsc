@@ -10,8 +10,10 @@ import (
 )
 
 var (
-	pebbleDB        ethdb.Database
+	originDB        ethdb.Database
 	triedbInstance  ethdb.Database
+	blockStore      ethdb.KeyValueStore
+	migrateType     int64
 	createErr       error
 	DoneTaskNum     uint64
 	SuccTaskNum     uint64
@@ -20,16 +22,34 @@ var (
 	AncientTaskFail int64
 )
 
+const (
+	tiredbType = iota
+	blockType
+)
+
 var ctx = context.Background()
 
 func InitDb(db ethdb.Database, trieDB ethdb.Database) {
-	pebbleDB = db
+	originDB = db
 	triedbInstance = trieDB
+	migrateType = tiredbType
 }
 
-func (job *Job) UploadToKvRocks() error {
+func InitBlockStore(db ethdb.Database, block ethdb.KeyValueStore) {
+	originDB = db
+	blockStore = block
+	migrateType = blockType
+}
+
+func (job *Job) MigrateKv() error {
 	if len(job.Kvbuffer) > 0 {
-		kvBatch := triedbInstance.NewBatch()
+		var kvBatch ethdb.Batch
+		if migrateType == tiredbType {
+			kvBatch = triedbInstance.NewBatch()
+		} else {
+			kvBatch = blockStore.NewBatch()
+		}
+
 		for key, value := range job.Kvbuffer {
 			batchErr := kvBatch.Put([]byte(key), value)
 			if batchErr != nil {
@@ -44,9 +64,9 @@ func (job *Job) UploadToKvRocks() error {
 
 		for delKey, _ := range job.Kvbuffer {
 			k := []byte(delKey)
-			if err := pebbleDB.Delete(k); err != nil {
+			if err := originDB.Delete(k); err != nil {
 				// try again
-				if delErr := pebbleDB.Delete(k); delErr != nil {
+				if delErr := originDB.Delete(k); delErr != nil {
 					fmt.Println("delete kv rocks error", err.Error())
 					return delErr
 				}
@@ -93,7 +113,7 @@ func (w *Worker) Start() {
 			select {
 			case job := <-w.JobChannel:
 				// send batch to kvrocks
-				if err := job.UploadToKvRocks(); err != nil {
+				if err := job.MigrateKv(); err != nil {
 					fmt.Println("send kv rocks error", err.Error())
 					if job.isAncient {
 						MarkAncientTaskFail()
