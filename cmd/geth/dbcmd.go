@@ -158,7 +158,7 @@ a data corruption.`,
 		ArgsUsage: "",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
-			utils.TrieDirFlag,
+			utils.BlockDirFlag,
 		},
 		Usage: "Migrate block data in the database," +
 			"./geth db split-block --datadir ./node --blockdir ./node2",
@@ -666,10 +666,10 @@ func dbBlockSplit(ctx *cli.Context) error {
 		return fmt.Errorf("trie dir must be set")
 	}
 
-	separateDB := utils.SplitTrieDatabase(ctx, stack, false, false)
-	defer separateDB.Close()
+	blockStore := utils.SplitBlockDatabase(ctx, stack, false, false)
+	defer blockStore.Close()
 
-	err := rawdb.SplitDatabaseV2(db, separateDB)
+	err := rawdb.SplitBlockDatabaseV2(db, blockStore)
 	if err != nil {
 		return err
 	}

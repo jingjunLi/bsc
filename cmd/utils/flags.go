@@ -101,6 +101,11 @@ var (
 		Usage:    "Data directory for the trie data base",
 		Category: flags.EthCategory,
 	}
+	BlockDirFlag = &flags.DirectoryFlag{
+		Name:     "blockdir",
+		Usage:    "Data directory for the block data base",
+		Category: flags.EthCategory,
+	}
 	DirectBroadcastFlag = &cli.BoolFlag{
 		Name:     "directbroadcast",
 		Usage:    "Enable directly broadcast mined block to all peers",
@@ -2373,7 +2378,7 @@ func SplitTrieDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	return trieDB
 }
 
-func SplitBlockDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
+func SplitBlockDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.KeyValueStore {
 	var (
 		//cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
