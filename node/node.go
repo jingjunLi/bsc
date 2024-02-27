@@ -779,11 +779,15 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 
 func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool, config *ethconfig.Config) (ethdb.Database, error) {
 	chainDataHandles := config.DatabaseHandles
+	var (
+		blockStore *leveldb.Database
+		err        error
+		cache      int
+	)
+
 	if config.PersistDiff {
 		chainDataHandles = config.DatabaseHandles * chainDataHandlesPercentage / 100
 	}
-	var blockStore *leveldb.Database
-	var err error
 
 	if config.SeparateDB {
 		log.Info("SeparateDB is enabled, open block database, %s", config.DatabaseBlock)
@@ -793,25 +797,24 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		}
 	}
 
-	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, freezer, namespace, readonly, false, false, pruneAncientData, false)
-	if err != nil {
-		return nil, err
-	}
 	var statediskdb ethdb.Database
-	var err error
 	// Open the separated state database if the state directory exists
 	if n.HasSeparateTrieDir() {
 		// Allocate half of the  handles and cache to this separate state data database
-		statediskdb, err = n.OpenDatabaseWithFreezer(name, cache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, pruneAncientData, true)
+		statediskdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, config.PruneAncientData, true, nil)
 		if err != nil {
 			return nil, err
 		}
 
 		// Reduce the handles and cache to this separate database because it is not a complete database with no trie data storing in it.
-		cache = int(float64(cache) * 0.6)
+		cache = int(float64(config.DatabaseCache) * 0.6)
 		chainDataHandles = int(float64(chainDataHandles) * 0.6)
 	}
 
+	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, false, blockStore)
+	if err != nil {
+		return nil, err
+	}
 	if statediskdb != nil {
 		chainDB.SetStateStore(statediskdb)
 	}
