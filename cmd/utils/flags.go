@@ -101,6 +101,12 @@ var (
 			"Users can copy this state directory to another directory or disk, and then create a symbolic link to the state directory under the chaindata",
 		Category: flags.EthCategory,
 	}
+	SeparateBlockFlag = &cli.BoolFlag{
+		Name: "separateblock",
+		Usage: "Enable a separated block database, it will be created within a subdirectory called state, " +
+			"Users can copy this state directory to another directory or disk, and then create a symbolic link to the state directory under the chaindata",
+		Category: flags.EthCategory,
+	}
 	DirectBroadcastFlag = &cli.BoolFlag{
 		Name:     "directbroadcast",
 		Usage:    "Enable directly broadcast mined block to all peers",
@@ -1120,6 +1126,7 @@ var (
 		DBEngineFlag,
 		HttpHeaderFlag,
 		SeparateTrieFlag,
+		SeparateBlockFlag,
 	}
 )
 
