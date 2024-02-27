@@ -43,6 +43,7 @@ type freezerdb struct {
 	ethdb.AncientStore
 	diffStore  ethdb.KeyValueStore
 	blockStore ethdb.KeyValueStore
+	stateStore ethdb.Database
 }
 
 func (frdb *freezerdb) BlockStoreReader() ethdb.KeyValueReader {
@@ -77,6 +78,11 @@ func (frdb *freezerdb) Close() error {
 			errs = append(errs, err)
 		}
 	}
+	if frdb.stateStore != nil {
+		if err := frdb.stateStore.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if frdb.blockStore != nil {
 		if err := frdb.blockStore.Close(); err != nil {
 			errs = append(errs, err)
@@ -97,6 +103,17 @@ func (frdb *freezerdb) SetDiffStore(diff ethdb.KeyValueStore) {
 		frdb.diffStore.Close()
 	}
 	frdb.diffStore = diff
+}
+
+func (frdb *freezerdb) StateStore() ethdb.Database {
+	return frdb.stateStore
+}
+
+func (frdb *freezerdb) SetStateStore(state ethdb.Database) {
+	if frdb.stateStore != nil {
+		frdb.stateStore.Close()
+	}
+	frdb.stateStore = state
 }
 
 func (frdb *freezerdb) BlockStore() ethdb.KeyValueStore {
@@ -133,6 +150,7 @@ type nofreezedb struct {
 	ethdb.KeyValueStore
 	diffStore  ethdb.KeyValueStore
 	blockStore ethdb.KeyValueStore
+	stateStore ethdb.Database
 }
 
 func (db *nofreezedb) BlockStoreWriter() ethdb.KeyValueWriter {
@@ -221,6 +239,14 @@ func (db *nofreezedb) DiffStore() ethdb.KeyValueStore {
 
 func (db *nofreezedb) SetDiffStore(diff ethdb.KeyValueStore) {
 	db.diffStore = diff
+}
+
+func (db *nofreezedb) StateStore() ethdb.Database {
+	return db.stateStore
+}
+
+func (db *nofreezedb) SetStateStore(state ethdb.Database) {
+	db.stateStore = state
 }
 
 func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
@@ -690,6 +716,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	it := db.NewIterator(keyPrefix, keyStart)
 	defer it.Release()
 
+	var trieIter ethdb.Iterator
+	if db.StateStore() != nil {
+		trieIter = db.StateStore().NewIterator(keyPrefix, nil)
+		defer trieIter.Release()
+	}
 	var (
 		count  int64
 		start  = time.Now()
@@ -740,14 +771,14 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bodies.Add(size)
 		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 			receipts.Add(size)
+		case IsLegacyTrieNode(key, it.Value()):
+			legacyTries.Add(size)
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
 			tds.Add(size)
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
 			numHashPairings.Add(size)
 		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
 			hashNumPairings.Add(size)
-		case IsLegacyTrieNode(key, it.Value()):
-			legacyTries.Add(size)
 		case bytes.HasPrefix(key, stateIDPrefix) && len(key) == len(stateIDPrefix)+common.HashLength:
 			stateLookups.Add(size)
 		case IsAccountTrieNode(key):
@@ -809,6 +840,46 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			logged = time.Now()
 		}
 	}
+	// inspect separate trie db
+	if trieIter != nil {
+		count = 0
+		logged = time.Now()
+		for trieIter.Next() {
+			var (
+				key   = trieIter.Key()
+				value = trieIter.Value()
+				size  = common.StorageSize(len(key) + len(value))
+			)
+
+			switch {
+			case IsLegacyTrieNode(key, value):
+				legacyTries.Add(size)
+			case bytes.HasPrefix(key, stateIDPrefix) && len(key) == len(stateIDPrefix)+common.HashLength:
+				stateLookups.Add(size)
+			case IsAccountTrieNode(key):
+				accountTries.Add(size)
+			case IsStorageTrieNode(key):
+				storageTries.Add(size)
+			default:
+				var accounted bool
+				for _, meta := range [][]byte{
+					fastTrieProgressKey, persistentStateIDKey, trieJournalKey} {
+					if bytes.Equal(key, meta) {
+						metadata.Add(size)
+						break
+					}
+				}
+				if !accounted {
+					unaccounted.Add(size)
+				}
+			}
+			count++
+			if count%1000 == 0 && time.Since(logged) > 8*time.Second {
+				log.Info("Inspecting separate state database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+		}
+	}
 	// Display the database statistic of key-value store.
 	stats := [][]string{
 		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
@@ -848,6 +919,28 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			})
 		}
 		total += ancient.size()
+	}
+
+	// inspect ancient state in separate trie db if exist
+	if trieIter != nil {
+		stateAncients, err := inspectFreezers(db.StateStore())
+		if err != nil {
+			return err
+		}
+		for _, ancient := range stateAncients {
+			for _, table := range ancient.sizes {
+				if ancient.name == "chain" {
+					break
+				}
+				stats = append(stats, []string{
+					fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
+					strings.Title(table.name),
+					table.size.String(),
+					fmt.Sprintf("%d", ancient.count()),
+				})
+			}
+			total += ancient.size()
+		}
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})

@@ -107,7 +107,16 @@ func prepare(diskdb ethdb.Database, config *Config) *Database {
 // the legacy hash-based scheme is used by default.
 func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	// Sanitize the config and use the default one if it's not specified.
-	dbScheme := rawdb.ReadStateScheme(diskdb)
+	var dbScheme string
+	var triediskdb ethdb.Database
+	if diskdb != nil && diskdb.StateStore() != nil {
+		dbScheme = rawdb.ReadStateSchemeByStateDB(diskdb, diskdb.StateStore())
+		triediskdb = diskdb.StateStore()
+	} else {
+		dbScheme = rawdb.ReadStateScheme(diskdb)
+		triediskdb = diskdb
+	}
+
 	if config == nil {
 		if dbScheme == rawdb.PathScheme {
 			config = &Config{
@@ -126,11 +135,11 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	}
 	var preimages *preimageStore
 	if config.Preimages {
-		preimages = newPreimageStore(diskdb)
+		preimages = newPreimageStore(triediskdb)
 	}
 	db := &Database{
 		config:    config,
-		diskdb:    diskdb,
+		diskdb:    triediskdb,
 		preimages: preimages,
 	}
 	/*
@@ -139,25 +148,25 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	 * 3. Last, use the default scheme, namely hash scheme
 	 */
 	if config.HashDB != nil {
-		if rawdb.ReadStateScheme(diskdb) == rawdb.PathScheme {
+		if rawdb.ReadStateScheme(triediskdb) == rawdb.PathScheme {
 			log.Warn("incompatible state scheme", "old", rawdb.PathScheme, "new", rawdb.HashScheme)
 		}
-		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
+		db.backend = hashdb.New(triediskdb, config.HashDB, mptResolver{})
 	} else if config.PathDB != nil {
-		if rawdb.ReadStateScheme(diskdb) == rawdb.HashScheme {
+		if rawdb.ReadStateScheme(triediskdb) == rawdb.HashScheme {
 			log.Warn("incompatible state scheme", "old", rawdb.HashScheme, "new", rawdb.PathScheme)
 		}
-		db.backend = pathdb.New(diskdb, config.PathDB)
+		db.backend = pathdb.New(triediskdb, config.PathDB)
 	} else if strings.Compare(dbScheme, rawdb.PathScheme) == 0 {
 		if config.PathDB == nil {
 			config.PathDB = pathdb.Defaults
 		}
-		db.backend = pathdb.New(diskdb, config.PathDB)
+		db.backend = pathdb.New(triediskdb, config.PathDB)
 	} else {
 		if config.HashDB == nil {
 			config.HashDB = hashdb.Defaults
 		}
-		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
+		db.backend = hashdb.New(triediskdb, config.HashDB, mptResolver{})
 	}
 	return db
 }

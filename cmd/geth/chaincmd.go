@@ -239,11 +239,20 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false, nil)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false, false, nil)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
 		defer chaindb.Close()
+
+		// if the trie data dir has been set, new trie db with a new state database
+		if ctx.IsSet(utils.SeparateTrieFlag.Name) {
+			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, true)
+			if dbErr != nil {
+				utils.Fatalf("Failed to open separate trie database: %v", dbErr)
+			}
+			chaindb.SetStateStore(statediskdb)
+		}
 
 		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false)
 		defer triedb.Close()
@@ -696,6 +705,8 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
+
 	triedb := utils.MakeTrieDatabase(ctx, db, true, true) // always enable preimage lookup
 	defer triedb.Close()
 
