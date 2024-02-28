@@ -159,6 +159,7 @@ a data corruption.`,
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.BlockDirFlag,
+			utils.StateSchemeFlag,
 		},
 		Usage: "Migrate block data in the database," +
 			"./geth db split-block --datadir ./node --blockdir ./node2",
@@ -662,9 +663,9 @@ func dbBlockSplit(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, false, false)
 	defer db.Close()
 
-	if stack.Config().TrieDir == "" {
-		return fmt.Errorf("trie dir must be set")
-	}
+	//if stack.Config().BlockDir == "" {
+	//	return fmt.Errorf("block dir must be set")
+	//}
 
 	blockStore := utils.SplitBlockDatabase(ctx, stack, false, false)
 	defer blockStore.Close()

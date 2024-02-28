@@ -67,6 +67,9 @@ type Config struct {
 	// TrieDir is the file system folder the node should use for storing trie data.
 	TrieDir string
 
+	// BlockDir is the file system folder the node should use for storing block data.
+	BlockDir string
+
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
 
