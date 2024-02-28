@@ -27,19 +27,19 @@ type table struct {
 	prefix string
 }
 
-func (t *table) BlockStoreReader() ethdb.KeyValueReader {
+func (t *table) BlockStoreReader() ethdb.Reader {
 	return t
 }
 
-func (t *table) BlockStoreWriter() ethdb.KeyValueWriter {
+func (t *table) BlockStoreWriter() ethdb.Writer {
 	return t
 }
 
-func (t *table) BlockStore() ethdb.KeyValueStore {
+func (t *table) BlockStore() ethdb.Database {
 	return t
 }
 
-func (t *table) SetBlockStore(block ethdb.KeyValueStore) {
+func (t *table) SetBlockStore(block ethdb.Database) {
 	panic("not implement")
 }
 

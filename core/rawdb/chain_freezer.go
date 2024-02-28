@@ -73,12 +73,12 @@ func (f *chainFreezer) Close() error {
 }
 
 // readFinalized loads the finalized block from database.
-func (f *chainFreezer) readFinalized(db ethdb.KeyValueReader, blockstore ethdb.KeyValueStore) (uint64, common.Hash, error) {
+func (f *chainFreezer) readFinalized(db ethdb.KeyValueReader) (uint64, common.Hash, error) {
 	hash := ReadFinalizedBlockHash(db)
 	if hash == (common.Hash{}) {
 		return 0, common.Hash{}, errors.New("finalized block is not available")
 	}
-	number := ReadHeaderNumber(blockstore, hash)
+	number := ReadHeaderNumber(db, hash)
 	if number == nil {
 		return 0, common.Hash{}, errors.New("finalized block number is not available")
 	}
@@ -90,11 +90,11 @@ func (f *chainFreezer) readFinalized(db ethdb.KeyValueReader, blockstore ethdb.K
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
-func (f *chainFreezer) freeze(db ethdb.KeyValueStore, blockstore ethdb.KeyValueStore) {
+func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	var (
 		backoff   bool
 		triggered chan struct{} // Used in tests
-		nfdb      = &nofreezedb{KeyValueStore: db, blockStore: blockstore}
+		nfdb      = &nofreezedb{KeyValueStore: db}
 	)
 	timer := time.NewTimer(freezerRecheckInterval)
 	defer timer.Stop()
@@ -122,7 +122,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore, blockstore ethdb.KeyValueS
 				return
 			}
 		}
-		finalNumber, finalHash, err := f.readFinalized(nfdb, blockstore)
+		finalNumber, finalHash, err := f.readFinalized(nfdb.BlockStoreReader())
 		if err != nil {
 			backoff = true // chain is not finalized yet
 			log.Debug("Finalized block is not available yet")

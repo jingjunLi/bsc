@@ -32,19 +32,19 @@ type Database struct {
 	remote *rpc.Client
 }
 
-func (db *Database) BlockStoreReader() ethdb.KeyValueReader {
+func (db *Database) BlockStoreReader() ethdb.Reader {
 	return db
 }
 
-func (db *Database) BlockStoreWriter() ethdb.KeyValueWriter {
+func (db *Database) BlockStoreWriter() ethdb.Writer {
 	return db
 }
 
-func (db *Database) BlockStore() ethdb.KeyValueStore {
+func (db *Database) BlockStore() ethdb.Database {
 	return db
 }
 
-func (db *Database) SetBlockStore(block ethdb.KeyValueStore) {
+func (db *Database) SetBlockStore(block ethdb.Database) {
 	panic("not supported")
 }
 

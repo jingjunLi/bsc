@@ -389,7 +389,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
-	head := rawdb.ReadHeadHeader(db)
+	head := rawdb.ReadHeadHeader(db.BlockStore())
 	if head == nil {
 		return newcfg, stored, errors.New("missing head header")
 	}
@@ -533,10 +533,10 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	rawdb.WriteTd(db.BlockStore(), block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db.BlockStore(), block)
 	rawdb.WriteReceipts(db.BlockStore(), block.Hash(), block.NumberU64(), nil)
-	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+	rawdb.WriteCanonicalHash(db.BlockStore(), block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
-	rawdb.WriteHeadHeaderHash(db, block.Hash())
+	rawdb.WriteHeadHeaderHash(db.BlockStore(), block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
 	return block, nil
 }

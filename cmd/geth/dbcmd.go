@@ -350,7 +350,7 @@ func inspectTrie(ctx *cli.Context) error {
 	var headerBlockHash common.Hash
 	if ctx.NArg() >= 1 {
 		if ctx.Args().Get(0) == "latest" {
-			headerHash := rawdb.ReadHeadHeaderHash(db)
+			headerHash := rawdb.ReadHeadHeaderHash(db.BlockStore())
 			blockNumber = *(rawdb.ReadHeaderNumber(db.BlockStore(), headerHash))
 		} else if ctx.Args().Get(0) == "snapshot" {
 			trieRootHash = rawdb.ReadSnapshotRoot(db)
@@ -1103,7 +1103,7 @@ func hbss2pbss(ctx *cli.Context) error {
 		log.Info("hbss2pbss triedb", "scheme", triedb.Scheme())
 		defer triedb.Close()
 
-		headerHash := rawdb.ReadHeadHeaderHash(db)
+		headerHash := rawdb.ReadHeadHeaderHash(db.BlockStore())
 		blockNumber := rawdb.ReadHeaderNumber(db.BlockStore(), headerHash)
 		if blockNumber == nil {
 			log.Error("read header number failed.")

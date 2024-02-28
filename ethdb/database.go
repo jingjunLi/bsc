@@ -156,16 +156,16 @@ type AncientStater interface {
 }
 
 type BlockStore interface {
-	BlockStore() KeyValueStore
-	SetBlockStore(block KeyValueStore)
+	BlockStore() Database
+	SetBlockStore(block Database)
 }
 
 type BlockStoreReader interface {
-	BlockStoreReader() KeyValueReader
+	BlockStoreReader() Reader
 }
 
 type BlockStoreWriter interface {
-	BlockStoreWriter() KeyValueWriter
+	BlockStoreWriter() Writer
 }
 
 // Reader contains the methods required to read data from both key-value as well as

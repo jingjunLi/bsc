@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -240,19 +239,19 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	var (
-		blockStore *pebble.Database
+		blockStore ethdb.Database
 	)
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		// if the trie data dir has been set, new trie db with a new state database
 		if ctx.IsSet(utils.SeparateBlockFlag.Name) {
-			blockStore, err = stack.OpenBlockDatabase(name, 0, "", "", false)
+			blockStore, err = stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, false, true, nil)
 			if err != nil {
 				utils.Fatalf("Failed to open separate block database: %v", err)
 			}
 		}
 
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false, false, blockStore)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false, false, false, blockStore)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -260,7 +259,7 @@ func initGenesis(ctx *cli.Context) error {
 
 		// if the trie data dir has been set, new trie db with a new state database
 		if ctx.IsSet(utils.SeparateTrieFlag.Name) {
-			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, true, nil)
+			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, true, false, nil)
 			if dbErr != nil {
 				utils.Fatalf("Failed to open separate trie database: %v", dbErr)
 			}

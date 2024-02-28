@@ -20,7 +20,6 @@ import (
 	crand "crypto/rand"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"hash/crc32"
 	"net/http"
 	"os"
@@ -37,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -781,18 +781,18 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool, config *ethconfig.Config) (ethdb.Database, error) {
 	chainDataHandles := config.DatabaseHandles
 	var (
-		blockStore *pebble.Database
-		err        error
-		cache      int
+		err   error
+		cache int
 	)
 
 	if config.PersistDiff {
 		chainDataHandles = config.DatabaseHandles * chainDataHandlesPercentage / 100
 	}
 
+	var blockdb ethdb.Database
 	if config.SeparateDB {
 		log.Info("SeparateDB is enabled, open block database, %s", config.DatabaseBlock)
-		blockStore, err = n.OpenBlockDatabase(name, config.DatabaseHandles-chainDataHandles, config.DatabaseBlock, namespace, readonly)
+		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/10, chainDataHandles/10, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -802,7 +802,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	// Open the separated state database if the state directory exists
 	if n.HasSeparateTrieDir() {
 		// Allocate half of the  handles and cache to this separate state data database
-		statediskdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, config.PruneAncientData, true, nil)
+		statediskdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, config.PruneAncientData, true, false, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -812,7 +812,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		chainDataHandles = int(float64(chainDataHandles) * 0.6)
 	}
 
-	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, false, blockStore)
+	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, false, false, blockdb)
 	if err != nil {
 		return nil, err
 	}
@@ -838,7 +838,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, isSeparateStateDB bool, blockStore *pebble.Database) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, isSeparateStateDB, isSeparateBlockDB bool, blockStore ethdb.Database) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -856,10 +856,14 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 		if isSeparateStateDB {
 			dirName = filepath.Join(n.ResolvePath(name), "state")
 			ancientDirName = filepath.Join(dirName, "ancient")
+		} else if isSeparateBlockDB {
+			dirName = filepath.Join(n.ResolvePath(name), "block")
+			ancientDirName = filepath.Join(dirName, "ancient")
 		} else {
 			dirName = n.ResolvePath(name)
 			ancientDirName = n.ResolveAncient(name, ancient)
 		}
+		log.Info("OpenDatabaseWithFreezer", "dirName", dirName, "ancientDirName", ancientDirName, "namespace", namespace, "readonly", readonly, "disableFreeze", disableFreeze, "isLastOffset", isLastOffset, "pruneAncientData", pruneAncientData, "isSeparateStateDB", isSeparateStateDB, "isSeparateBlockDB", isSeparateBlockDB, "blockStore", blockStore, "cache", cache, "handles", handles, "ancient", ancient)
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:              n.config.DBEngine,
 			Directory:         dirName,

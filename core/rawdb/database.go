@@ -42,18 +42,18 @@ type freezerdb struct {
 	ethdb.KeyValueStore
 	ethdb.AncientStore
 	diffStore  ethdb.KeyValueStore
-	blockStore ethdb.KeyValueStore
+	blockStore ethdb.Database
 	stateStore ethdb.Database
 }
 
-func (frdb *freezerdb) BlockStoreReader() ethdb.KeyValueReader {
+func (frdb *freezerdb) BlockStoreReader() ethdb.Reader {
 	if frdb.blockStore == nil {
 		return frdb
 	}
 	return frdb.blockStore
 }
 
-func (frdb *freezerdb) BlockStoreWriter() ethdb.KeyValueWriter {
+func (frdb *freezerdb) BlockStoreWriter() ethdb.Writer {
 	//TODO implement me
 	panic("implement me")
 }
@@ -116,7 +116,7 @@ func (frdb *freezerdb) SetStateStore(state ethdb.Database) {
 	frdb.stateStore = state
 }
 
-func (frdb *freezerdb) BlockStore() ethdb.KeyValueStore {
+func (frdb *freezerdb) BlockStore() ethdb.Database {
 	if frdb.blockStore != nil {
 		return frdb.blockStore
 	} else {
@@ -124,7 +124,7 @@ func (frdb *freezerdb) BlockStore() ethdb.KeyValueStore {
 	}
 }
 
-func (frdb *freezerdb) SetBlockStore(block ethdb.KeyValueStore) {
+func (frdb *freezerdb) SetBlockStore(block ethdb.Database) {
 	if frdb.blockStore != nil {
 		frdb.blockStore.Close()
 	}
@@ -149,29 +149,29 @@ func (frdb *freezerdb) Freeze() error {
 type nofreezedb struct {
 	ethdb.KeyValueStore
 	diffStore  ethdb.KeyValueStore
-	blockStore ethdb.KeyValueStore
+	blockStore ethdb.Database
 	stateStore ethdb.Database
 }
 
-func (db *nofreezedb) BlockStoreWriter() ethdb.KeyValueWriter {
+func (db *nofreezedb) BlockStoreWriter() ethdb.Writer {
 	if db.blockStore != nil {
 		return db.blockStore
 	}
 	return db
 }
 
-func (db *nofreezedb) BlockStore() ethdb.KeyValueStore {
+func (db *nofreezedb) BlockStore() ethdb.Database {
 	if db.blockStore != nil {
 		return db.blockStore
 	}
 	return db
 }
 
-func (db *nofreezedb) SetBlockStore(block ethdb.KeyValueStore) {
+func (db *nofreezedb) SetBlockStore(block ethdb.Database) {
 	db.blockStore = block
 }
 
-func (db *nofreezedb) BlockStoreReader() ethdb.KeyValueReader {
+func (db *nofreezedb) BlockStoreReader() ethdb.Reader {
 	if db.blockStore != nil {
 		return db.blockStore
 	}
@@ -326,7 +326,7 @@ func resolveChainFreezerDir(ancient string) string {
 // value data store with a freezer moving immutable chain segments into cold
 // storage. The passed ancient indicates the path of root ancient directory
 // where the chain freezer can be opened.
-func NewDatabaseWithFreezer(db, blockstore ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, blockstore ethdb.Database, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
 	var offset uint64
 	// The offset of ancientDB should be handled differently in different scenarios.
 	if isLastOffset {
@@ -411,7 +411,7 @@ func NewDatabaseWithFreezer(db, blockstore ethdb.KeyValueStore, ancient string, 
 			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup if the database has a more recent head.
-				if head := *ReadHeaderNumber(blockstore, ReadHeadHeaderHash(db)); head > frozen-1 {
+				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
 					// Find the smallest block stored in the key-value store
 					// in range of [frozen, head]
 					var number uint64
@@ -449,6 +449,7 @@ func NewDatabaseWithFreezer(db, blockstore ethdb.KeyValueStore, ancient string, 
 			// freezer.
 		}
 	}
+
 	// no prune ancient start success
 	if !readonly {
 		WriteAncientType(db, EntireFreezerType)
@@ -457,7 +458,7 @@ func NewDatabaseWithFreezer(db, blockstore ethdb.KeyValueStore, ancient string, 
 	if !disableFreeze && !frdb.readonly {
 		frdb.wg.Add(1)
 		go func() {
-			frdb.freeze(db, blockstore)
+			frdb.freeze(db)
 			frdb.wg.Done()
 		}()
 	}
@@ -559,7 +560,7 @@ type OpenOptions struct {
 
 	DisableBlockStore bool
 	DatabaseBlock     string
-	BlockStore        *pebble.Database
+	BlockStore        ethdb.Database
 }
 
 // openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
@@ -614,12 +615,13 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 		return kvdb, nil
 	}
 
-	var blockstore ethdb.KeyValueStore
+	var blockstore ethdb.Database
 	if o.BlockStore != nil {
 		blockstore = o.BlockStore
-	} else {
-		blockstore = kvdb
 	}
+	//} else {
+	//	blockstore = kvdb
+	//}
 	frdb, err := NewDatabaseWithFreezer(kvdb, blockstore, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.DisableFreeze, o.IsLastOffset, o.PruneAncientData)
 	if err != nil {
 		kvdb.Close()

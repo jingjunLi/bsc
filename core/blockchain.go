@@ -629,7 +629,7 @@ func (bc *BlockChain) cacheBlock(hash common.Hash, block *types.Block) {
 // into node seamlessly.
 func (bc *BlockChain) empty() bool {
 	genesis := bc.genesisBlock.Hash()
-	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.db), rawdb.ReadHeadHeaderHash(bc.db), rawdb.ReadHeadFastBlockHash(bc.db)} {
+	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.db), rawdb.ReadHeadHeaderHash(bc.db.BlockStore()), rawdb.ReadHeadFastBlockHash(bc.db)} {
 		if hash != genesis {
 			return false
 		}
@@ -687,7 +687,7 @@ func (bc *BlockChain) loadLastState() error {
 
 	// Restore the last known head header
 	headHeader := headBlock.Header()
-	if head := rawdb.ReadHeadHeaderHash(bc.db); head != (common.Hash{}) {
+	if head := rawdb.ReadHeadHeaderHash(bc.db.BlockStore()); head != (common.Hash{}) {
 		if header := bc.GetHeaderByHash(head); header != nil {
 			headHeader = header
 		}
@@ -802,10 +802,10 @@ func (bc *BlockChain) tryRewindBadBlocks() {
 func (bc *BlockChain) SetFinalized(header *types.Header) {
 	bc.currentFinalBlock.Store(header)
 	if header != nil {
-		rawdb.WriteFinalizedBlockHash(bc.db, header.Hash())
+		rawdb.WriteFinalizedBlockHash(bc.db.BlockStore(), header.Hash())
 		finalizedBlockGauge.Update(int64(header.Number.Uint64()))
 	} else {
-		rawdb.WriteFinalizedBlockHash(bc.db, common.Hash{})
+		rawdb.WriteFinalizedBlockHash(bc.db.BlockStore(), common.Hash{})
 		finalizedBlockGauge.Update(0)
 	}
 }
@@ -1119,10 +1119,11 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
+	rawdb.WriteCanonicalHash(bc.db.BlockStore(), block.Hash(), block.NumberU64())
+	rawdb.WriteHeadHeaderHash(bc.db.BlockStore(), block.Hash())
+
 	batch := bc.db.NewBatch()
-	rawdb.WriteHeadHeaderHash(batch, block.Hash())
 	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
-	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 

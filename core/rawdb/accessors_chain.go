@@ -37,11 +37,11 @@ import (
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	db.BlockStoreReader().ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		data, _ = reader.Ancient(ChainFreezerHashTable, number)
 		if len(data) == 0 {
 			// Get it by hash from leveldb
-			data, _ = db.Get(headerHashKey(number))
+			data, _ = db.BlockStoreReader().Get(headerHashKey(number))
 		}
 		return nil
 	})
@@ -348,14 +348,17 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	log.Debug("ReadHeaderRLP begin", "hash", hash, "number", number)
+	db.BlockStoreReader().ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		// First try to look up the data in ancient database. Extra hash
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
 		data, _ = reader.Ancient(ChainFreezerHeaderTable, number)
+		log.Debug("ReadHeaderRLP from ancient", "hash", hash, "number", number, "data", data)
 		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 			return nil
 		}
+		log.Debug("ReadHeaderRLP from leveldb", "hash", hash, "number", number, "data", data)
 		// If not, try reading from leveldb
 		data, _ = db.BlockStoreReader().Get(headerKey(number, hash))
 		return nil
@@ -441,7 +444,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	db.BlockStoreReader().ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		// Check if the data is in ancients
 		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(ChainFreezerBodiesTable, number)
@@ -458,7 +461,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 // block at number, in RLP encoding.
 func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	db.BlockStoreReader().ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		data, _ = reader.Ancient(ChainFreezerBodiesTable, number)
 		if len(data) > 0 {
 			return nil
@@ -562,7 +565,7 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
 func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	db.BlockStoreReader().ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		// Check if the data is in ancients
 		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(ChainFreezerDifficultyTable, number)
@@ -622,7 +625,7 @@ func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
 func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	db.BlockStoreReader().ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		// Check if the data is in ancients
 		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(ChainFreezerReceiptTable, number)
@@ -993,13 +996,16 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 // ReadHeadHeader returns the current canonical head header.
 func ReadHeadHeader(db ethdb.Reader) *types.Header {
 	headHeaderHash := ReadHeadHeaderHash(db)
+	log.Info("ReadHeadHeader", "headHeaderHash", headHeaderHash)
 	if headHeaderHash == (common.Hash{}) {
 		return nil
 	}
+	log.Info("ReadHeadHeader xxx", "headHeaderHash", headHeaderHash)
 	headHeaderNumber := ReadHeaderNumber(db.BlockStoreReader(), headHeaderHash)
 	if headHeaderNumber == nil {
 		return nil
 	}
+	log.Info("ReadHeadHeader 333", "headHeaderHash", headHeaderHash, "headHeaderNumber", *headHeaderNumber)
 	return ReadHeader(db, headHeaderHash, *headHeaderNumber)
 }
 

@@ -171,7 +171,6 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	}
 	mode, ourTD := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
-	log.Info("Starting sync", "mode", mode, "peer", peer, "td", op.td, "ourtd", ourTD, "head", op.head, "ourhead", cs.handler.chain.CurrentBlock().Hash())
 	if op.td.Cmp(ourTD) <= 0 {
 		// We seem to be in sync according to the legacy rules. In the merge
 		// world, it can also mean we're stuck on the merge block, waiting for

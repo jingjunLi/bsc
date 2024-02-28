@@ -170,7 +170,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 	var (
 		first = headers[0]
 		last  = headers[len(headers)-1]
-		batch = hc.chainDb.NewBatch()
+		batch = hc.chainDb.BlockStore().NewBatch()
 	)
 	if first.ParentHash != hc.currentHeaderHash {
 		// Delete any canonical number assignments above the new head
@@ -190,7 +190,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 			headHash   = header.Hash()
 		)
 		for rawdb.ReadCanonicalHash(hc.chainDb, headNumber) != headHash {
-			rawdb.WriteCanonicalHash(batch, headHash, headNumber)
+			rawdb.WriteCanonicalHash(hc.chainDb.BlockStore(), headHash, headNumber)
 			if headNumber == 0 {
 				break // It shouldn't be reached
 			}
@@ -669,7 +669,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 			}
 		}
 		// Update head header then.
-		rawdb.WriteHeadHeaderHash(markerBatch, parentHash)
+		rawdb.WriteHeadHeaderHash(hc.chainDb.BlockStore(), parentHash)
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to update chain markers", "error", err)
 		}
