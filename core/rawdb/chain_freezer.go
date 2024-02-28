@@ -73,12 +73,12 @@ func (f *chainFreezer) Close() error {
 }
 
 // readFinalized loads the finalized block from database.
-func (f *chainFreezer) readFinalized(db ethdb.KeyValueReader) (uint64, common.Hash, error) {
+func (f *chainFreezer) readFinalized(db ethdb.KeyValueReader, blockstore ethdb.KeyValueStore) (uint64, common.Hash, error) {
 	hash := ReadFinalizedBlockHash(db)
 	if hash == (common.Hash{}) {
 		return 0, common.Hash{}, errors.New("finalized block is not available")
 	}
-	number := ReadHeaderNumber(db, hash)
+	number := ReadHeaderNumber(blockstore, hash)
 	if number == nil {
 		return 0, common.Hash{}, errors.New("finalized block number is not available")
 	}
@@ -122,7 +122,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore, blockstore ethdb.KeyValueS
 				return
 			}
 		}
-		finalNumber, finalHash, err := f.readFinalized(nfdb)
+		finalNumber, finalHash, err := f.readFinalized(nfdb, blockstore)
 		if err != nil {
 			backoff = true // chain is not finalized yet
 			log.Debug("Finalized block is not available yet")
