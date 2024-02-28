@@ -20,6 +20,7 @@ import (
 	crand "crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"hash/crc32"
 	"net/http"
 	"os"
@@ -780,7 +781,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool, config *ethconfig.Config) (ethdb.Database, error) {
 	chainDataHandles := config.DatabaseHandles
 	var (
-		blockStore *leveldb.Database
+		blockStore *pebble.Database
 		err        error
 		cache      int
 	)
@@ -837,7 +838,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, isSeparateStateDB bool, blockStore *leveldb.Database) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, isSeparateStateDB bool, blockStore *pebble.Database) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -914,14 +915,14 @@ func (n *Node) OpenDiffDatabase(name string, handles int, diff, namespace string
 	return db, err
 }
 
-func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace string, readonly bool) (*leveldb.Database, error) {
+func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace string, readonly bool) (*pebble.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 
-	var db *leveldb.Database
+	var db *pebble.Database
 	var err error
 	if n.config.DataDir == "" {
 		panic("datadir is missing")
@@ -933,7 +934,7 @@ func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace stri
 	case !filepath.IsAbs(block):
 		block = n.ResolvePath(block)
 	}
-	db, err = leveldb.New(block, 0, handles, namespace, readonly)
+	db, err = pebble.New(block, 0, handles, namespace, readonly)
 
 	return db, err
 }

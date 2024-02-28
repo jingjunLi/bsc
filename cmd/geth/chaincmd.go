@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"io"
 	"net"
 	"os"
@@ -43,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -240,7 +240,7 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	var (
-		blockStore *leveldb.Database
+		blockStore *pebble.Database
 	)
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {

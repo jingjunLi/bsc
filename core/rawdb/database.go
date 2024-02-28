@@ -559,7 +559,7 @@ type OpenOptions struct {
 
 	DisableBlockStore bool
 	DatabaseBlock     string
-	BlockStore        *leveldb.Database
+	BlockStore        *pebble.Database
 }
 
 // openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
