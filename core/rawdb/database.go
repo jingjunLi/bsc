@@ -848,11 +848,8 @@ func isTrieKey(key, value []byte) bool {
 
 func isBlockKey(key, value []byte) bool {
 	switch {
-	// hash->number
-	case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+8+common.HashLength):
-		return true
-		// HeaderRLP
-	case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+common.HashLength):
+	// HeaderRLP
+	case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
 		return true
 	// BodyKey
 	case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
@@ -861,7 +858,10 @@ func isBlockKey(key, value []byte) bool {
 	case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 		return true
 	// TdRLP
-	case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength+len(headerTDSuffix)):
+	case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+		return true
+	// hash->number
+	case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
 		return true
 	default:
 		return false
