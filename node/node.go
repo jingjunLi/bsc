@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -888,14 +889,14 @@ func (n *Node) OpenDiffDatabase(name string, handles int, diff, namespace string
 	return db, err
 }
 
-func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace string, readonly bool) (*leveldb.Database, error) {
+func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace string, readonly bool) (*pebble.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 
-	var db *leveldb.Database
+	var db *pebble.Database
 	var err error
 	if n.config.DataDir == "" {
 		panic("datadir is missing")
@@ -907,7 +908,7 @@ func (n *Node) OpenBlockDatabase(name string, handles int, block, namespace stri
 	case !filepath.IsAbs(block):
 		block = n.ResolvePath(block)
 	}
-	db, err = leveldb.New(block, 0, handles, namespace, readonly)
+	db, err = pebble.New(block, 0, handles, namespace, readonly)
 
 	return db, err
 }
