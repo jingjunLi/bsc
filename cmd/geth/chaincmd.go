@@ -243,7 +243,6 @@ func initGenesis(ctx *cli.Context) error {
 	)
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		// if the trie data dir has been set, new trie db with a new state database
 		if ctx.IsSet(utils.SeparateBlockFlag.Name) {
 			blockStore, err = stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, false, true, nil)
 			if err != nil {
