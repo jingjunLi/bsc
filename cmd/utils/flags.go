@@ -137,11 +137,6 @@ var (
 		Usage:    "Data directory for difflayer segments (default = inside chaindata)",
 		Category: flags.FastNodeCategory,
 	}
-	BlockFlag = flags.DirectoryFlag{
-		Name:     "datadir.block",
-		Usage:    "Data directory for block data segments (default = inside chaindata)",
-		Category: flags.FastNodeCategory,
-	}
 	RemoteDBFlag = &cli.StringFlag{
 		Name:     "remotedb",
 		Usage:    "URL for remote database",
@@ -1857,9 +1852,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(DiffFlag.Name) {
 		cfg.DatabaseDiff = ctx.String(DiffFlag.Name)
 	}
-	if ctx.IsSet(BlockFlag.Name) {
-		cfg.DatabaseBlock = ctx.String(BlockFlag.Name)
-	}
 	if ctx.IsSet(PersistDiffFlag.Name) {
 		cfg.PersistDiff = ctx.Bool(PersistDiffFlag.Name)
 	}
@@ -2289,7 +2281,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	case ctx.String(SyncModeFlag.Name) == "light":
 		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
-		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false, false, false, nil)
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false, false, false)
 		// set the separate state database
 		if stack.HasSeparateTrieDir() && err == nil {
 			statediskdb := MakeStateDataBase(ctx, stack, readonly, false)
@@ -2306,7 +2298,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 func MakeStateDataBase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
 	cache := ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 	handles := MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name)) / 2
-	statediskdb, err := stack.OpenDatabaseWithFreezer("chaindata", cache, handles, "", "", readonly, disableFreeze, false, false, true, false, nil)
+	statediskdb, err := stack.OpenDatabaseWithFreezer("chaindata", cache, handles, "", "", readonly, disableFreeze, false, false, true, false)
 	if err != nil {
 		Fatalf("Failed to open separate trie database: %v", err)
 	}

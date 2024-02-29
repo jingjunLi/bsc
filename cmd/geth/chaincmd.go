@@ -238,27 +238,24 @@ func initGenesis(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	var (
-		blockStore ethdb.Database
-	)
-
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		if ctx.IsSet(utils.SeparateBlockFlag.Name) {
-			blockStore, err = stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, false, true, nil)
-			if err != nil {
-				utils.Fatalf("Failed to open separate block database: %v", err)
-			}
-		}
-
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false, false, false, blockStore)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false, false, false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
 		defer chaindb.Close()
 
+		if ctx.IsSet(utils.SeparateBlockFlag.Name) {
+			blockdb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, false, true)
+			if err != nil {
+				utils.Fatalf("Failed to open separate block database: %v", err)
+			}
+			chaindb.SetBlockStore(blockdb)
+		}
+
 		// if the trie data dir has been set, new trie db with a new state database
 		if ctx.IsSet(utils.SeparateTrieFlag.Name) {
-			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, true, false, nil)
+			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, true, false)
 			if dbErr != nil {
 				utils.Fatalf("Failed to open separate trie database: %v", dbErr)
 			}

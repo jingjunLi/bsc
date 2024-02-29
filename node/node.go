@@ -791,8 +791,8 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 
 	var blockdb ethdb.Database
 	if config.SeparateDB {
-		log.Info("SeparateDB is enabled, open block database, %s", config.DatabaseBlock)
-		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/10, chainDataHandles/10, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true, nil)
+		log.Info("SeparateDB is enabled, open block database")
+		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/10, chainDataHandles/10, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true)
 		if err != nil {
 			return nil, err
 		}
@@ -802,7 +802,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	// Open the separated state database if the state directory exists
 	if n.HasSeparateTrieDir() {
 		// Allocate half of the  handles and cache to this separate state data database
-		statediskdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, config.PruneAncientData, true, false, nil)
+		statediskdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, config.PruneAncientData, true, false)
 		if err != nil {
 			return nil, err
 		}
@@ -812,12 +812,15 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		chainDataHandles = int(float64(chainDataHandles) * 0.6)
 	}
 
-	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, false, false, blockdb)
+	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, false, false)
 	if err != nil {
 		return nil, err
 	}
 	if statediskdb != nil {
 		chainDB.SetStateStore(statediskdb)
+	}
+	if blockdb != nil {
+		chainDB.SetBlockStore(blockdb)
 	}
 
 	if config.PersistDiff {
@@ -838,7 +841,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, isSeparateStateDB, isSeparateBlockDB bool, blockStore ethdb.Database) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, isSeparateStateDB, isSeparateBlockDB bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -863,7 +866,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 			dirName = n.ResolvePath(name)
 			ancientDirName = n.ResolveAncient(name, ancient)
 		}
-		log.Info("OpenDatabaseWithFreezer", "dirName", dirName, "ancientDirName", ancientDirName, "namespace", namespace, "readonly", readonly, "disableFreeze", disableFreeze, "isLastOffset", isLastOffset, "pruneAncientData", pruneAncientData, "isSeparateStateDB", isSeparateStateDB, "isSeparateBlockDB", isSeparateBlockDB, "blockStore", blockStore, "cache", cache, "handles", handles, "ancient", ancient)
+		log.Info("OpenDatabaseWithFreezer", "dirName", dirName, "ancientDirName", ancientDirName, "namespace", namespace, "readonly", readonly, "disableFreeze", disableFreeze, "isLastOffset", isLastOffset, "pruneAncientData", pruneAncientData, "isSeparateStateDB", isSeparateStateDB, "isSeparateBlockDB", isSeparateBlockDB, "cache", cache, "handles", handles, "ancient", ancient)
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:              n.config.DBEngine,
 			Directory:         dirName,
@@ -875,7 +878,6 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 			DisableFreeze:     disableFreeze,
 			IsLastOffset:      isLastOffset,
 			PruneAncientData:  pruneAncientData,
-			BlockStore:        blockStore,
 		})
 	}
 
