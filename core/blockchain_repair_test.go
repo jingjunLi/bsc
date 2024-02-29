@@ -21,7 +21,10 @@
 package core
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
+	"os"
 	"path"
 	"testing"
 	"time"
@@ -1757,6 +1760,8 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string) {
 	// It's hard to follow the test case, visualize the input
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
 	datadir := t.TempDir()
