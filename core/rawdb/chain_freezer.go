@@ -184,12 +184,6 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			log.Debug("Ancient blocks frozen already", "number", number, "frozen", frozen)
 			continue
 		}
-		//// Short circuit if finalized blocks are already frozen.
-		//if frozen != 0 && frozen-1 >= finalNumber {
-		//	backoff = true
-		//	log.Debug("Ancient blocks frozen already", "number", finalNumber, "hash", finalHash, "frozen", frozen)
-		//	continue
-		//}
 		// Seems we have data ready to be frozen, process in usable batches
 		var (
 			start = time.Now()
