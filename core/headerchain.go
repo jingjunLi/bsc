@@ -190,7 +190,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 			headHash   = header.Hash()
 		)
 		for rawdb.ReadCanonicalHash(hc.chainDb, headNumber) != headHash {
-			rawdb.WriteCanonicalHash(hc.chainDb.BlockStore(), headHash, headNumber)
+			rawdb.WriteCanonicalHash(batch, headHash, headNumber)
 			if headNumber == 0 {
 				break // It shouldn't be reached
 			}
