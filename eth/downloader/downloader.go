@@ -879,6 +879,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 		default:
 			known = d.lightchain.HasHeader(h, n)
 		}
+		log.Info("findAncestorSpanSearch", "number", n, "hash", h, "known", known, "mode", mode, "i", i, "from", from, "max", max, "local", localHeight, "remote", remoteHeight, "floor", floor)
 		if known {
 			number, hash = n, h
 			break

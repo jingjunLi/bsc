@@ -488,7 +488,7 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db, number, hash) {
 		return true
 	}
-	if has, err := db.Has(blockBodyKey(number, hash)); !has || err != nil {
+	if has, err := db.BlockStoreReader().Has(blockBodyKey(number, hash)); !has || err != nil {
 		return false
 	}
 	return true
