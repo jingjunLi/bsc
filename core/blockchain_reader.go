@@ -155,7 +155,7 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
-	log.Info("HasHeader 1", "hash", hash, "number", number)
+	//log.Info("HasHeader 1", "hash", hash, "number", number)
 	if !bc.HasHeader(hash, number) {
 		return false
 	}

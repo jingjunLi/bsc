@@ -899,6 +899,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 
 func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (uint64, error) {
 	hash := common.Hash{}
+	log.Info("findAncestorBinarySearch", "remote", remoteHeight, "floor", floor)
 
 	// Ancestor not found, we need to binary search over our chain
 	start, end := uint64(0), remoteHeight
@@ -933,6 +934,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		default:
 			known = d.lightchain.HasHeader(h, n)
 		}
+		log.Info("findAncestorBinarySearch 222", "number", n, "hash", h, "known", known, "mode", mode, "start", start, "end", end, "remote", remoteHeight, "floor", floor)
 		if !known {
 			end = check
 			continue
@@ -951,7 +953,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 	}
 	// Ensure valid ancestry and return
 	if int64(start) <= floor {
-		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
+		p.log.Warn("Ancestor below allowance 222", "number", start, "hash", hash, "allowance", floor)
 		return 0, errInvalidAncestor
 	}
 	p.log.Debug("Found common ancestor", "number", start, "hash", hash)
