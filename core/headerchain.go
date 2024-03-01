@@ -240,7 +240,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 		newTD       = new(big.Int).Set(ptd) // Total difficulty of inserted chain
 		inserted    []rawdb.NumberHash      // Ephemeral lookup of number/hash for the chain
 		parentKnown = true                  // Set to true to force hc.HasHeader check the first iteration
-		batch       = hc.chainDb.BlockStore().NewBatch()
+		blockBatch  = hc.chainDb.BlockStore().NewBatch()
 	)
 	for i, header := range headers {
 		var hash common.Hash
@@ -260,10 +260,10 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 		alreadyKnown := parentKnown && hc.HasHeader(hash, number)
 		if !alreadyKnown {
 			// Irrelevant of the canonical status, write the TD and header to the database.
-			rawdb.WriteTd(batch, hash, number, newTD)
+			rawdb.WriteTd(blockBatch, hash, number, newTD)
 			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
 
-			rawdb.WriteHeader(batch, header)
+			rawdb.WriteHeader(blockBatch, header)
 			inserted = append(inserted, rawdb.NumberHash{Number: number, Hash: hash})
 			hc.headerCache.Add(hash, header)
 			hc.numberCache.Add(hash, number)
@@ -276,7 +276,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 		return 0, errors.New("aborted")
 	}
 	// Commit to disk!
-	if err := batch.Write(); err != nil {
+	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write headers", "error", err)
 	}
 	return len(inserted), nil
@@ -634,7 +634,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 	}
 	var (
 		parentHash common.Hash
-		batch      = hc.chainDb.NewBatch()
+		blockBatch = hc.chainDb.BlockStore().NewBatch()
 		origin     = true
 	)
 	done := func(header *types.Header) bool {
@@ -700,16 +700,16 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 			}
 			for _, hash := range hashes {
 				if delFn != nil {
-					delFn(batch, hash, num)
+					delFn(blockBatch, hash, num)
 				}
-				rawdb.DeleteHeader(batch, hash, num)
-				rawdb.DeleteTd(batch, hash, num)
+				rawdb.DeleteHeader(blockBatch, hash, num)
+				rawdb.DeleteTd(blockBatch, hash, num)
 			}
-			rawdb.DeleteCanonicalHash(batch, num)
+			rawdb.DeleteCanonicalHash(blockBatch, num)
 		}
 	}
 	// Flush all accumulated deletions.
-	if err := batch.Write(); err != nil {
+	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to rewind block", "error", err)
 	}
 	// Clear out any stale content from the caches

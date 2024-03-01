@@ -348,17 +348,14 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	log.Debug("ReadHeaderRLP begin", "hash", hash, "number", number)
 	db.BlockStoreReader().ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		// First try to look up the data in ancient database. Extra hash
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
 		data, _ = reader.Ancient(ChainFreezerHeaderTable, number)
-		log.Debug("ReadHeaderRLP from ancient", "hash", hash, "number", number, "data", data)
 		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 			return nil
 		}
-		log.Debug("ReadHeaderRLP from leveldb", "hash", hash, "number", number, "data", data)
 		// If not, try reading from leveldb
 		data, _ = db.BlockStoreReader().Get(headerKey(number, hash))
 		return nil
@@ -616,7 +613,7 @@ func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db.BlockStoreReader(), number, hash) {
 		return true
 	}
-	if has, err := db.Has(blockReceiptsKey(number, hash)); !has || err != nil {
+	if has, err := db.BlockStoreReader().Has(blockReceiptsKey(number, hash)); !has || err != nil {
 		return false
 	}
 	return true
@@ -995,18 +992,15 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 
 // ReadHeadHeader returns the current canonical head header.
 func ReadHeadHeader(db ethdb.Reader) *types.Header {
-	headHeaderHash := ReadHeadHeaderHash(db)
-	log.Info("ReadHeadHeader", "headHeaderHash", headHeaderHash)
+	headHeaderHash := ReadHeadHeaderHash(db.BlockStoreReader())
 	if headHeaderHash == (common.Hash{}) {
 		return nil
 	}
-	log.Info("ReadHeadHeader xxx", "headHeaderHash", headHeaderHash)
 	headHeaderNumber := ReadHeaderNumber(db.BlockStoreReader(), headHeaderHash)
 	if headHeaderNumber == nil {
 		return nil
 	}
-	log.Info("ReadHeadHeader 333", "headHeaderHash", headHeaderHash, "headHeaderNumber", *headHeaderNumber)
-	return ReadHeader(db, headHeaderHash, *headHeaderNumber)
+	return ReadHeader(db.BlockStoreReader(), headHeaderHash, *headHeaderNumber)
 }
 
 // ReadHeadBlock returns the current canonical head block.

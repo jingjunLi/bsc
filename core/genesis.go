@@ -389,7 +389,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
-	head := rawdb.ReadHeadHeader(db.BlockStore())
+	head := rawdb.ReadHeadHeader(db)
 	if head == nil {
 		return newcfg, stored, errors.New("missing head header")
 	}
