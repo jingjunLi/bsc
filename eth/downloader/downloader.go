@@ -796,6 +796,7 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		// We're above the max reorg threshold, find the earliest fork point
 		floor = int64(localHeight - maxForkAncestry)
 	}
+	log.Info("findAncestor", "floor", floor, "local", localHeight, "remote", remoteHeight, "mode", mode)
 	// If we're doing a light sync, ensure the floor doesn't go below the CHT, as
 	// all headers before that point will be missing.
 	if mode == LightSync {
