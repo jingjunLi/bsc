@@ -796,7 +796,6 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		// We're above the max reorg threshold, find the earliest fork point
 		floor = int64(localHeight - maxForkAncestry)
 	}
-	log.Info("findAncestor", "floor", floor, "local", localHeight, "remote", remoteHeight, "mode", mode)
 	// If we're doing a light sync, ensure the floor doesn't go below the CHT, as
 	// all headers before that point will be missing.
 	if mode == LightSync {
@@ -879,7 +878,6 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 		default:
 			known = d.lightchain.HasHeader(h, n)
 		}
-		log.Info("findAncestorSpanSearch", "number", n, "hash", h, "known", known, "mode", mode, "i", i, "from", from, "max", max, "local", localHeight, "remote", remoteHeight, "floor", floor)
 		if known {
 			number, hash = n, h
 			break
@@ -899,7 +897,6 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 
 func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (uint64, error) {
 	hash := common.Hash{}
-	log.Info("findAncestorBinarySearch", "remote", remoteHeight, "floor", floor)
 
 	// Ancestor not found, we need to binary search over our chain
 	start, end := uint64(0), remoteHeight
@@ -934,7 +931,6 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		default:
 			known = d.lightchain.HasHeader(h, n)
 		}
-		log.Info("findAncestorBinarySearch 222", "number", n, "hash", h, "known", known, "mode", mode, "start", start, "end", end, "remote", remoteHeight, "floor", floor)
 		if !known {
 			end = check
 			continue
@@ -953,7 +949,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 	}
 	// Ensure valid ancestry and return
 	if int64(start) <= floor {
-		p.log.Warn("Ancestor below allowance 222", "number", start, "hash", hash, "allowance", floor)
+		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
 		return 0, errInvalidAncestor
 	}
 	p.log.Debug("Found common ancestor", "number", start, "hash", hash)
