@@ -121,19 +121,6 @@ func (f *chainFreezer) freezeThreshold(db ethdb.KeyValueReader) (uint64, error) 
 	return headLimit, nil
 }
 
-// readFinalized loads the finalized block from database.
-func (f *chainFreezer) readFinalized(db ethdb.KeyValueReader) (uint64, common.Hash, error) {
-	hash := ReadFinalizedBlockHash(db)
-	if hash == (common.Hash{}) {
-		return 0, common.Hash{}, errors.New("finalized block is not available")
-	}
-	number := ReadHeaderNumber(db, hash)
-	if number == nil {
-		return 0, common.Hash{}, errors.New("finalized block number is not available")
-	}
-	return *number, hash, nil
-}
-
 // freeze is a background thread that periodically checks the blockchain for any
 // import progress and moves ancient data from the fast database into the freezer.
 //
