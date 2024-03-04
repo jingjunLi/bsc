@@ -792,7 +792,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	var blockdb ethdb.Database
 	if config.SeparateDB {
 		log.Info("SeparateDB is enabled, open block database")
-		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/10, chainDataHandles/10, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true)
+		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache*3/10, chainDataHandles*3/10, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true)
 		if err != nil {
 			return nil, err
 		}
