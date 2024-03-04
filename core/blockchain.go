@@ -87,10 +87,11 @@ var (
 
 	triedbCommitTimer = metrics.NewRegisteredTimer("chain/triedb/commits", nil)
 
-	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
-	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
-	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
-	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
+	blockInsertTimer      = metrics.NewRegisteredTimer("chain/inserts", nil)
+	blockValidationTimer  = metrics.NewRegisteredTimer("chain/validation", nil)
+	blockExecutionTimer   = metrics.NewRegisteredTimer("chain/execution", nil)
+	blockWriteTimer       = metrics.NewRegisteredTimer("chain/write", nil)
+	blockHeaderWriteTimer = metrics.NewRegisteredTimer("chain/headerWrite", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -1614,6 +1615,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
+		start := time.Now()
 		blockBatch := bc.db.BlockStore().NewBatch()
 		rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 		rawdb.WriteBlock(blockBatch, block)
@@ -1623,6 +1625,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			log.Crit("Failed to write block into disk", "err", err)
 		}
 		wg.Done()
+		blockHeaderWriteTimer.UpdateSince(start)
 	}()
 
 	tryCommitTrieDB := func() error {
