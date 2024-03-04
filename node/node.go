@@ -780,9 +780,9 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 
 func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool, config *ethconfig.Config) (ethdb.Database, error) {
 	chainDataHandles := config.DatabaseHandles
+	cache := config.DatabaseCache
 	var (
-		err   error
-		cache int
+		err error
 	)
 
 	if config.PersistDiff {
