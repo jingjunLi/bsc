@@ -824,14 +824,13 @@ func (bc *BlockChain) tryRewindBadBlocks() {
 }
 
 // SetFinalized sets the finalized block.
+// This function differs slightly from Ethereum; we fine-tune it through the outer-layer setting finalizedBlockGauge.
 func (bc *BlockChain) SetFinalized(header *types.Header) {
 	bc.currentFinalBlock.Store(header)
 	if header != nil {
 		rawdb.WriteFinalizedBlockHash(bc.db.BlockStore(), header.Hash())
-		finalizedBlockGauge.Update(int64(header.Number.Uint64()))
 	} else {
 		rawdb.WriteFinalizedBlockHash(bc.db.BlockStore(), common.Hash{})
-		finalizedBlockGauge.Update(0)
 	}
 }
 
@@ -921,7 +920,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
 			justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(newHeadBlock.Header())))
 			finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(newHeadBlock.Header())))
-			bc.SetFinalized(newHeadBlock.Header())
 
 			// The head state is missing, which is only possible in the path-based
 			// scheme. This situation occurs when the chain head is rewound below
@@ -1006,6 +1004,11 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
+
+	if finalized := bc.CurrentFinalBlock(); finalized != nil && head < finalized.Number.Uint64() {
+		log.Error("SetHead invalidated finalized block")
+		bc.SetFinalized(nil)
+	}
 
 	return rootNumber, bc.loadLastState()
 }
@@ -1152,7 +1155,6 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	bc.currentBlock.Store(block.Header())
 	headBlockGauge.Update(int64(block.NumberU64()))
 	justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(block.Header())))
-	bc.SetFinalized(block.Header())
 }
 
 // stopWithoutSaving stops the blockchain service. If any imports are currently in progress
@@ -1757,12 +1759,16 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		// canonical blocks. Avoid firing too many ChainHeadEvents,
 		// we will fire an accumulated ChainHeadEvent and disable fire
 		// event here.
+		var finalizedHeader *types.Header
+		if posa, ok := bc.Engine().(consensus.PoSA); ok {
+			if finalizedHeader = posa.GetFinalizedHeader(bc, block.Header()); finalizedHeader != nil {
+				bc.SetFinalized(finalizedHeader)
+			}
+		}
 		if emitHeadEvent {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
-			if posa, ok := bc.Engine().(consensus.PoSA); ok {
-				if finalizedHeader := posa.GetFinalizedHeader(bc, block.Header()); finalizedHeader != nil {
-					bc.finalizedHeaderFeed.Send(FinalizedHeaderEvent{finalizedHeader})
-				}
+			if finalizedHeader != nil {
+				bc.finalizedHeaderFeed.Send(FinalizedHeaderEvent{finalizedHeader})
 			}
 		}
 	} else {
