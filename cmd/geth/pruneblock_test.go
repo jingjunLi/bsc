@@ -181,6 +181,7 @@ func BlockchainCreator(t *testing.T, chaindbPath, AncientPath string, blockRemai
 		Freeze() error
 		Ancients() (uint64, error)
 	}
+	blockchain.SetFinalized(blocks[len(blocks)-1].Header())
 	db.(freezer).Freeze()
 
 	frozen, err := db.Ancients()
