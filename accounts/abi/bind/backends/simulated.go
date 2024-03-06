@@ -18,102 +18,37 @@ package backends
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"math/big"
-	"sync"
-	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
 )
 
-// This nil assignment ensures at compile time that SimulatedBackend implements bind.ContractBackend.
-var _ bind.ContractBackend = (*SimulatedBackend)(nil)
-
-var (
-	errBlockNumberUnsupported  = errors.New("simulatedBackend cannot access blocks other than the latest block")
-	errBlockDoesNotExist       = errors.New("block does not exist in blockchain")
-	errTransactionDoesNotExist = errors.New("transaction does not exist")
-)
-
-// SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
-// the background. Its main purpose is to allow for easy testing of contract bindings.
-// Simulated backend implements the following interfaces:
-// ChainReader, ChainStateReader, ContractBackend, ContractCaller, ContractFilterer, ContractTransactor,
-// DeployBackend, GasEstimator, GasPricer, LogFilterer, PendingContractCaller, TransactionReader, and TransactionSender
+// SimulatedBackend is a simulated blockchain.
+// Deprecated: use package github.com/ethereum/go-ethereum/ethclient/simulated instead.
 type SimulatedBackend struct {
-	database   ethdb.Database   // In memory database to store our testing data
-	blockchain *core.BlockChain // Ethereum blockchain to handle the consensus
-
-	mu              sync.Mutex
-	pendingBlock    *types.Block   // Currently pending block that will be imported on request
-	pendingState    *state.StateDB // Currently pending state that will be the active on request
-	pendingReceipts types.Receipts // Currently receipts for the pending block
-
-	events       *filters.EventSystem  // for filtering log events live
-	filterSystem *filters.FilterSystem // for filtering database logs
-
-	config *params.ChainConfig
+	*simulated.Backend
+	simulated.Client
 }
 
-// NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
-// and uses a simulated blockchain for testing purposes.
-// A simulated backend always uses chainID 1337.
-func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	genesis := core.Genesis{
-		Config:   params.AllEthashProtocolChanges,
-		GasLimit: gasLimit,
-		Alloc:    alloc,
-	}
-	blockchain, _ := core.NewBlockChain(database, nil, &genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-
-	backend := &SimulatedBackend{
-		database:   database,
-		blockchain: blockchain,
-		config:     genesis.Config,
-	}
-
-	filterBackend := &filterBackend{database, blockchain, backend}
-	backend.filterSystem = filters.NewFilterSystem(filterBackend, filters.Config{})
-	backend.events = filters.NewEventSystem(backend.filterSystem)
-
-	header := backend.blockchain.CurrentBlock()
-	block := backend.blockchain.GetBlock(header.Hash(), header.Number.Uint64())
-
-	backend.rollback(block)
-	return backend
+// Fork sets the head to a new block, which is based on the provided parentHash.
+func (b *SimulatedBackend) Fork(ctx context.Context, parentHash common.Hash) error {
+	return b.Backend.Fork(parentHash)
 }
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
+//
 // A simulated backend always uses chainID 1337.
+//
+// Deprecated: please use simulated.Backend from package
+// github.com/ethereum/go-ethereum/ethclient/simulated instead.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
-}
-
-// Close terminates the underlying blockchain's update loop.
-func (b *SimulatedBackend) Close() error {
-	b.blockchain.Stop()
-	return nil
+	b := simulated.NewBackend(alloc, simulated.WithBlockGasLimit(gasLimit))
+	return &SimulatedBackend{
+		Backend: b,
+		Client:  b.Client(),
+	}
 }
 
 // Commit imports all the pending transactions as a single block and starts a
