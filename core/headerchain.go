@@ -172,9 +172,9 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 	// pile them onto the existing chain. Otherwise, do the necessary
 	// reorgs.
 	var (
-		first = headers[0]
-		last  = headers[len(headers)-1]
-		batch = hc.chainDb.BlockStore().NewBatch()
+		first      = headers[0]
+		last       = headers[len(headers)-1]
+		blockBatch = hc.chainDb.BlockStore().NewBatch()
 	)
 	if first.ParentHash != hc.currentHeaderHash {
 		// Delete any canonical number assignments above the new head
@@ -183,7 +183,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 			if hash == (common.Hash{}) {
 				break
 			}
-			rawdb.DeleteCanonicalHash(batch, i)
+			rawdb.DeleteCanonicalHash(blockBatch, i)
 		}
 		// Overwrite any stale canonical number assignments, going
 		// backwards from the first header in this import until the
@@ -194,7 +194,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 			headHash   = header.Hash()
 		)
 		for rawdb.ReadCanonicalHash(hc.chainDb, headNumber) != headHash {
-			rawdb.WriteCanonicalHash(batch, headHash, headNumber)
+			rawdb.WriteCanonicalHash(blockBatch, headHash, headNumber)
 			if headNumber == 0 {
 				break // It shouldn't be reached
 			}
@@ -209,16 +209,16 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 	for i := 0; i < len(headers)-1; i++ {
 		hash := headers[i+1].ParentHash // Save some extra hashing
 		num := headers[i].Number.Uint64()
-		rawdb.WriteCanonicalHash(batch, hash, num)
-		rawdb.WriteHeadHeaderHash(batch, hash)
+		rawdb.WriteCanonicalHash(blockBatch, hash, num)
+		rawdb.WriteHeadHeaderHash(blockBatch, hash)
 	}
 	// Write the last header
 	hash := headers[len(headers)-1].Hash()
 	num := headers[len(headers)-1].Number.Uint64()
-	rawdb.WriteCanonicalHash(batch, hash, num)
-	rawdb.WriteHeadHeaderHash(batch, hash)
+	rawdb.WriteCanonicalHash(blockBatch, hash, num)
+	rawdb.WriteHeadHeaderHash(blockBatch, hash)
 
-	if err := batch.Write(); err != nil {
+	if err := blockBatch.Write(); err != nil {
 		return err
 	}
 	// Last step update all in-memory head header markers

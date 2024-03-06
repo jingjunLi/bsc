@@ -899,6 +899,16 @@ func (n *Node) HasSeparateTrieDir() bool {
 	return fileInfo.IsDir()
 }
 
+// HasSeparateBlockDir check the block subdirectory of db, if subdirectory exists, return true
+func (n *Node) HasSeparateBlockDir() bool {
+	separateDir := filepath.Join(n.ResolvePath("chaindata"), "block")
+	fileInfo, err := os.Stat(separateDir)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return fileInfo.IsDir()
+}
+
 func (n *Node) OpenDiffDatabase(name string, handles int, diff, namespace string, readonly bool) (*leveldb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()

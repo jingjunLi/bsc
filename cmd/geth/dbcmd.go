@@ -570,6 +570,10 @@ func dbStats(ctx *cli.Context) error {
 		fmt.Println("show stats of state store")
 		showLeveldbStats(db.StateStore())
 	}
+	if db.BlockStore() != db {
+		fmt.Println("show stats of block store")
+		showLeveldbStats(db.BlockStore())
+	}
 
 	return nil
 }
@@ -590,6 +594,11 @@ func dbCompact(ctx *cli.Context) error {
 		showLeveldbStats(statediskdb)
 	}
 
+	if db.BlockStore() != db {
+		fmt.Println("show stats of block store")
+		showLeveldbStats(db.BlockStore())
+	}
+
 	log.Info("Triggering compaction")
 	if err := db.Compact(nil, nil); err != nil {
 		log.Error("Compact err", "error", err)
@@ -602,12 +611,22 @@ func dbCompact(ctx *cli.Context) error {
 			return err
 		}
 	}
+	if db.BlockStore() != db {
+		if err := db.BlockStore().Compact(nil, nil); err != nil {
+			log.Error("Compact err", "error", err)
+			return err
+		}
+	}
 
 	log.Info("Stats after compaction")
 	showLeveldbStats(db)
 	if statediskdb != nil {
 		fmt.Println("show stats of state store")
 		showLeveldbStats(statediskdb)
+	}
+	if db.BlockStore() != db {
+		fmt.Println("show stats of block store")
+		showLeveldbStats(db.BlockStore())
 	}
 	return nil
 }
@@ -640,6 +659,13 @@ func dbGet(ctx *cli.Context) error {
 				return nil
 			}
 		}
+		if db.BlockStore() != db {
+			if blockdata, dberr := db.BlockStore().Get(key); dberr != nil {
+				fmt.Printf("key %#x: %#x\n", key, blockdata)
+				return nil
+			}
+		}
+
 		log.Info("Get operation failed", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}

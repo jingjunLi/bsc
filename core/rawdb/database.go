@@ -695,9 +695,14 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	defer it.Release()
 
 	var trieIter ethdb.Iterator
+	var blockIter ethdb.Iterator
 	if db.StateStore() != nil {
 		trieIter = db.StateStore().NewIterator(keyPrefix, nil)
 		defer trieIter.Release()
+	}
+	if db.BlockStore() != db {
+		blockIter = db.BlockStore().NewIterator(keyPrefix, nil)
+		defer blockIter.Release()
 	}
 	var (
 		count  int64
@@ -810,6 +815,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			}
 			if !accounted {
 				unaccounted.Add(size)
+				log.Info("unaccounted 000", "key", string(key), "size", size)
 			}
 		}
 		count++
@@ -841,19 +847,68 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			default:
 				var accounted bool
 				for _, meta := range [][]byte{
-					fastTrieProgressKey, persistentStateIDKey, trieJournalKey} {
+					fastTrieProgressKey, persistentStateIDKey, trieJournalKey, snapSyncStatusFlagKey} {
 					if bytes.Equal(key, meta) {
 						metadata.Add(size)
+						accounted = true
 						break
 					}
 				}
 				if !accounted {
 					unaccounted.Add(size)
+					log.Info("unaccounted 111", "key", string(key), "size", size)
 				}
 			}
 			count++
 			if count%1000 == 0 && time.Since(logged) > 8*time.Second {
 				log.Info("Inspecting separate state database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+		}
+	}
+	// inspect separate block db
+	if blockIter != nil {
+		count = 0
+		logged = time.Now()
+		log.Info("Inspecting separate state database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+
+		for blockIter.Next() {
+			var (
+				key   = blockIter.Key()
+				value = blockIter.Value()
+				size  = common.StorageSize(len(key) + len(value))
+			)
+
+			switch {
+			case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
+				headers.Add(size)
+			case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
+				bodies.Add(size)
+			case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
+				receipts.Add(size)
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+				tds.Add(size)
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
+				numHashPairings.Add(size)
+			case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
+				hashNumPairings.Add(size)
+			default:
+				var accounted bool
+				for _, meta := range [][]byte{headHeaderKey, headFinalizedBlockKey} {
+					if bytes.Equal(key, meta) {
+						metadata.Add(size)
+						accounted = true
+						break
+					}
+				}
+				if !accounted {
+					unaccounted.Add(size)
+					log.Info("unaccounted 222", "key", string(key), "size", size)
+				}
+			}
+			count++
+			if count%1000 == 0 && time.Since(logged) > 8*time.Second {
+				log.Info("Inspecting separate block database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 				logged = time.Now()
 			}
 		}
