@@ -1415,11 +1415,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Delete block data from the main database.
 		var (
-			batch       = bc.db.NewBatch()
 			canonHashes = make(map[common.Hash]struct{})
+			blockBatch  = bc.db.BlockStore().NewBatch()
 		)
-		blockBatch := bc.db.BlockStore().NewBatch()
-		canonHashes := make(map[common.Hash]struct{})
 		for _, block := range blockChain {
 			canonHashes[block.Hash()] = struct{}{}
 			if block.NumberU64() == 0 {
@@ -1445,8 +1443,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	writeLive := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
 		var (
 			skipPresenceCheck = false
-			batch := bc.db.NewBatch()
-			blockBatch := bc.db.BlockStore().NewBatch()
+			batch             = bc.db.NewBatch()
+			blockBatch        = bc.db.BlockStore().NewBatch()
 		)
 		for i, block := range blockChain {
 			// Short circuit insertion if shutting down or processing failed
