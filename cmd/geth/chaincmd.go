@@ -239,12 +239,12 @@ func initGenesis(ctx *cli.Context) error {
 
 		// if the trie data dir has been set, new trie db with a new state database
 		if ctx.IsSet(utils.SeparateDBFlag.Name) {
-			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name+"/state", 0, 0, "", "", false, false, false, false)
+			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name+"/state", 0, 0, "", "", false, false, false, false, false, false)
 			if dbErr != nil {
 				utils.Fatalf("Failed to open separate trie database: %v", dbErr)
 			}
 			chaindb.SetStateStore(statediskdb)
-			blockdb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, false, true)
+			blockdb, err := stack.OpenDatabaseWithFreezer(name+"/block", 0, 0, "", "", false, false, false, false, false, true)
 			if err != nil {
 				utils.Fatalf("Failed to open separate block database: %v", err)
 			}

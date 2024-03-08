@@ -784,24 +784,23 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	chainDataHandles := config.DatabaseHandles
 	cache := config.DatabaseCache
 	var (
-		err error
+		err         error
+		statediskdb ethdb.Database
+		blockdb     ethdb.Database
 	)
 
 	if config.PersistDiff {
 		chainDataHandles = config.DatabaseHandles * chainDataHandlesPercentage / 100
 	}
-	var statediskdb ethdb.Database
-	var blockdb ethdb.Database
-	var err error
 	// Open the separated state database if the state directory exists
 	if n.IsSeparatedDB() {
 		// Allocate half of the  handles and cache to this separate state data database
-		statediskdb, err = n.OpenDatabaseWithFreezer(name+"/state", cache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, pruneAncientData)
+		statediskdb, err = n.OpenDatabaseWithFreezer(name+"/state", cache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, config.PruneAncientData, true, false)
 		if err != nil {
 			return nil, err
 		}
 
-		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/10, chainDataHandles/20, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true)
+		blockdb, err = n.OpenDatabaseWithFreezer(name+"/block", config.DatabaseCache/10, chainDataHandles/20, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true)
 		if err != nil {
 			return nil, err
 		}
@@ -811,7 +810,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		chainDataHandles = int(float64(chainDataHandles) * 0.6)
 	}
 
-	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, freezer, namespace, readonly, false, false, pruneAncientData)
+	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -823,8 +822,8 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		chainDB.SetBlockStore(blockdb)
 	}
 
-	if persistDiff {
-		diffStore, err := n.OpenDiffDatabase(name, handles-chainDataHandles, diff, namespace, readonly)
+	if config.PersistDiff {
+		diffStore, err := n.OpenDiffDatabase(name, config.DatabaseHandles-chainDataHandles, config.DatabaseDiff, namespace, readonly)
 		if err != nil {
 			chainDB.Close()
 			return nil, err
