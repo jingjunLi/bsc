@@ -2325,8 +2325,8 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 		if stack.IsSeparatedDB() && err == nil {
 			stateDiskDb := MakeStateDataBase(ctx, stack, readonly, false)
 			chainDb.SetStateStore(stateDiskDb)
-			blockdb := MakeBlockDatabase(ctx, stack, readonly, false)
-			chainDb.SetBlockStore(blockdb)
+			blockDb := MakeBlockDatabase(ctx, stack, readonly, false)
+			chainDb.SetBlockStore(blockDb)
 		}
 	}
 	if err != nil {
@@ -2350,11 +2350,11 @@ func MakeStateDataBase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 func MakeBlockDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
 	cache := ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 	handles := MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name)) / 10
-	blockdb, err := stack.OpenDatabaseWithFreezer("chaindata", cache, handles, "", "", readonly, disableFreeze, false, false)
+	blockDb, err := stack.OpenDatabaseWithFreezer("chaindata/block", cache, handles, "", "", readonly, disableFreeze, false, false)
 	if err != nil {
 		Fatalf("Failed to open separate block database: %v", err)
 	}
-	return blockdb
+	return blockDb
 }
 
 // tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
