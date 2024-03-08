@@ -155,6 +155,10 @@ type AncientStater interface {
 	AncientDatadir() (string, error)
 }
 
+type StateStoreReader interface {
+	StateStoreReader() Reader
+}
+
 type BlockStore interface {
 	BlockStore() Database
 	SetBlockStore(block Database)
@@ -173,6 +177,7 @@ type BlockStoreWriter interface {
 type Reader interface {
 	KeyValueReader
 	AncientReader
+	StateStoreReader
 	BlockStoreReader
 }
 

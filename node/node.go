@@ -790,34 +790,32 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	if config.PersistDiff {
 		chainDataHandles = config.DatabaseHandles * chainDataHandlesPercentage / 100
 	}
-
+	var statediskdb ethdb.Database
 	var blockdb ethdb.Database
-	if config.SeparateDB {
-		log.Info("SeparateDB is enabled, open block database")
-		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/10, chainDataHandles/20, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true)
+	var err error
+	// Open the separated state database if the state directory exists
+	if n.IsSeparatedDB() {
+		// Allocate half of the  handles and cache to this separate state data database
+		statediskdb, err = n.OpenDatabaseWithFreezer(name+"/state", cache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, pruneAncientData)
 		if err != nil {
 			return nil, err
 		}
-	}
 
-	var statediskdb ethdb.Database
-	// Open the separated state database if the state directory exists
-	if n.HasSeparateTrieDir() {
-		// Allocate half of the  handles and cache to this separate state data database
-		statediskdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly, false, false, config.PruneAncientData, true, false)
+		blockdb, err = n.OpenDatabaseWithFreezer(name, config.DatabaseCache/10, chainDataHandles/20, "", "eth/db/blockdata/", readonly, false, false, config.PruneAncientData, false, true)
 		if err != nil {
 			return nil, err
 		}
 
 		// Reduce the handles and cache to this separate database because it is not a complete database with no trie data storing in it.
-		cache = int(float64(config.DatabaseCache) * 0.6)
+		cache = int(float64(cache) * 0.6)
 		chainDataHandles = int(float64(chainDataHandles) * 0.6)
 	}
 
-	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, config.DatabaseFreezer, namespace, readonly, false, false, config.PruneAncientData, false, false)
+	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, freezer, namespace, readonly, false, false, pruneAncientData)
 	if err != nil {
 		return nil, err
 	}
+
 	if statediskdb != nil {
 		chainDB.SetStateStore(statediskdb)
 	}
@@ -825,9 +823,8 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		chainDB.SetBlockStore(blockdb)
 	}
 
-	if config.PersistDiff {
-		log.Info("PersistDiff is enabled, open PersistDiff database, %s", config.PersistDiff)
-		diffStore, err := n.OpenDiffDatabase(name, config.DatabaseHandles-chainDataHandles, config.DatabaseDiff, namespace, readonly)
+	if persistDiff {
+		diffStore, err := n.OpenDiffDatabase(name, handles-chainDataHandles, diff, namespace, readonly)
 		if err != nil {
 			chainDB.Close()
 			return nil, err
@@ -852,27 +849,12 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
-		if isSeparateStateDB {
-			return nil, ErrSeprateDBDatadir
-		}
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		var dirName, ancientDirName string
-		if isSeparateStateDB {
-			dirName = filepath.Join(n.ResolvePath(name), "state")
-			ancientDirName = filepath.Join(dirName, "ancient")
-		} else if isSeparateBlockDB {
-			dirName = filepath.Join(n.ResolvePath(name), "block")
-			ancientDirName = filepath.Join(dirName, "ancient")
-		} else {
-			dirName = n.ResolvePath(name)
-			ancientDirName = n.ResolveAncient(name, ancient)
-		}
-		log.Info("OpenDatabaseWithFreezer", "dirName", dirName, "ancientDirName", ancientDirName, "namespace", namespace, "readonly", readonly, "disableFreeze", disableFreeze, "isLastOffset", isLastOffset, "pruneAncientData", pruneAncientData, "isSeparateStateDB", isSeparateStateDB, "isSeparateBlockDB", isSeparateBlockDB, "cache", cache, "handles", handles, "ancient", ancient)
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:              n.config.DBEngine,
-			Directory:         dirName,
-			AncientsDirectory: ancientDirName,
+			Directory:         n.ResolvePath(name),
+			AncientsDirectory: n.ResolveAncient(name, ancient),
 			Namespace:         namespace,
 			Cache:             cache,
 			Handles:           handles,
@@ -889,19 +871,9 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 	return db, err
 }
 
-// HasSeparateTrieDir check the state subdirectory of db, if subdirectory exists, return true
-func (n *Node) HasSeparateTrieDir() bool {
+// IsSeparatedDB check the state subdirectory of db, if subdirectory exists, return true
+func (n *Node) IsSeparatedDB() bool {
 	separateDir := filepath.Join(n.ResolvePath("chaindata"), "state")
-	fileInfo, err := os.Stat(separateDir)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return fileInfo.IsDir()
-}
-
-// HasSeparateBlockDir check the block subdirectory of db, if subdirectory exists, return true
-func (n *Node) HasSeparateBlockDir() bool {
-	separateDir := filepath.Join(n.ResolvePath("chaindata"), "block")
 	fileInfo, err := os.Stat(separateDir)
 	if os.IsNotExist(err) {
 		return false

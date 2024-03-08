@@ -42,8 +42,15 @@ type freezerdb struct {
 	ethdb.KeyValueStore
 	ethdb.AncientStore
 	diffStore  ethdb.KeyValueStore
-	blockStore ethdb.Database
 	stateStore ethdb.Database
+	blockStore ethdb.Database
+}
+
+func (frdb *freezerdb) StateStoreReader() ethdb.Reader {
+	if frdb.stateStore == nil {
+		return frdb
+	}
+	return frdb.stateStore
 }
 
 func (frdb *freezerdb) BlockStoreReader() ethdb.Reader {
@@ -149,34 +156,10 @@ func (frdb *freezerdb) Freeze() error {
 type nofreezedb struct {
 	ethdb.KeyValueStore
 	diffStore  ethdb.KeyValueStore
-	blockStore ethdb.Database
 	stateStore ethdb.Database
+	blockStore ethdb.Database
 }
 
-func (db *nofreezedb) BlockStoreWriter() ethdb.Writer {
-	if db.blockStore != nil {
-		return db.blockStore
-	}
-	return db
-}
-
-func (db *nofreezedb) BlockStore() ethdb.Database {
-	if db.blockStore != nil {
-		return db.blockStore
-	}
-	return db
-}
-
-func (db *nofreezedb) SetBlockStore(block ethdb.Database) {
-	db.blockStore = block
-}
-
-func (db *nofreezedb) BlockStoreReader() ethdb.Reader {
-	if db.blockStore != nil {
-		return db.blockStore
-	}
-	return db
-}
 
 // HasAncient returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) HasAncient(kind string, number uint64) (bool, error) {
@@ -247,6 +230,38 @@ func (db *nofreezedb) StateStore() ethdb.Database {
 
 func (db *nofreezedb) SetStateStore(state ethdb.Database) {
 	db.stateStore = state
+}
+
+func (db *nofreezedb) StateStoreReader() ethdb.Reader {
+	if db.stateStore != nil {
+		return db.stateStore
+	}
+	return db
+}
+
+func (db *nofreezedb) BlockStore() ethdb.Database {
+	if db.blockStore != nil {
+		return db.blockStore
+	}
+	return db
+}
+
+func (db *nofreezedb) SetBlockStore(block ethdb.Database) {
+	db.blockStore = block
+}
+
+func (db *nofreezedb) BlockStoreReader() ethdb.Reader {
+	if db.blockStore != nil {
+		return db.blockStore
+	}
+	return db
+}
+
+func (db *nofreezedb) BlockStoreWriter() ethdb.Writer {
+	if db.blockStore != nil {
+		return db.blockStore
+	}
+	return db
 }
 
 func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
@@ -815,7 +830,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			}
 			if !accounted {
 				unaccounted.Add(size)
-				log.Info("unaccounted 000", "key", string(key), "size", size)
 			}
 		}
 		count++
@@ -856,7 +870,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				}
 				if !accounted {
 					unaccounted.Add(size)
-					log.Info("unaccounted 111", "key", string(key), "size", size)
 				}
 			}
 			count++
@@ -903,7 +916,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				}
 				if !accounted {
 					unaccounted.Add(size)
-					log.Info("unaccounted 222", "key", string(key), "size", size)
 				}
 			}
 			count++

@@ -420,12 +420,7 @@ func inspectTrie(ctx *cli.Context) error {
 		}
 		fmt.Printf("ReadBlockHeader, root: %v, blocknum: %v\n", trieRootHash, blockNumber)
 
-		var dbScheme string
-		if db.StateStore() != nil {
-			dbScheme = rawdb.ReadStateSchemeByStateDB(db, db.StateStore())
-		} else {
-			dbScheme = rawdb.ReadStateScheme(db)
-		}
+		dbScheme := rawdb.ReadStateScheme(db)
 		var config *trie.Config
 		if dbScheme == rawdb.PathScheme {
 			config = &trie.Config{
@@ -621,11 +616,11 @@ func dbCompact(ctx *cli.Context) error {
 	log.Info("Stats after compaction")
 	showLeveldbStats(db)
 	if statediskdb != nil {
-		fmt.Println("show stats of state store")
+		fmt.Println("show stats of state store after compaction")
 		showLeveldbStats(statediskdb)
 	}
 	if db.BlockStore() != db {
-		fmt.Println("show stats of block store")
+		fmt.Println("show stats of block store after compaction")
 		showLeveldbStats(db.BlockStore())
 	}
 	return nil
@@ -1149,13 +1144,13 @@ func hbss2pbss(ctx *cli.Context) error {
 
 	db := utils.MakeChainDatabase(ctx, stack, false, false)
 	db.Sync()
-	statediskdb := db.StateStore()
+	stateDiskDb := db.StateStore()
 	defer db.Close()
 
 	// convert hbss trie node to pbss trie node
 	var lastStateID uint64
-	if statediskdb != nil {
-		lastStateID = rawdb.ReadPersistentStateID(statediskdb)
+	if stateDiskDb != nil {
+		lastStateID = rawdb.ReadPersistentStateID(stateDiskDb)
 	} else {
 		lastStateID = rawdb.ReadPersistentStateID(db)
 	}
@@ -1210,8 +1205,8 @@ func hbss2pbss(ctx *cli.Context) error {
 	}
 
 	// repair state ancient offset
-	if statediskdb != nil {
-		lastStateID = rawdb.ReadPersistentStateID(statediskdb)
+	if stateDiskDb != nil {
+		lastStateID = rawdb.ReadPersistentStateID(stateDiskDb)
 	} else {
 		lastStateID = rawdb.ReadPersistentStateID(db)
 	}
@@ -1233,8 +1228,8 @@ func hbss2pbss(ctx *cli.Context) error {
 		return err
 	}
 	// prune hbss trie node
-	if statediskdb != nil {
-		err = rawdb.PruneHashTrieNodeInDataBase(statediskdb)
+	if stateDiskDb != nil {
+		err = rawdb.PruneHashTrieNodeInDataBase(stateDiskDb)
 	} else {
 		err = rawdb.PruneHashTrieNodeInDataBase(db)
 	}
