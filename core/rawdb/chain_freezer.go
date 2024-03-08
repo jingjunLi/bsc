@@ -322,9 +322,11 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
 				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
+
 			hashes = append(hashes, hash)
 		}
 		return nil
 	})
+
 	return hashes, err
 }
