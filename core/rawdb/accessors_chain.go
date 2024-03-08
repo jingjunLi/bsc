@@ -993,7 +993,7 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 
 // ReadHeadBlock returns the current canonical head block.
 func ReadHeadBlock(db ethdb.Reader) *types.Block {
-	headBlockHash := ReadHeadBlockHash(db)
+	headBlockHash := ReadHeadBlockHash(db.BlockStoreReader())
 	if headBlockHash == (common.Hash{}) {
 		return nil
 	}

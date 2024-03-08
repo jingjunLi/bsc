@@ -93,10 +93,10 @@ var (
 		Value:    flags.DirectoryString(node.DefaultDataDir()),
 		Category: flags.EthCategory,
 	}
-	SeparateDBFlag = &cli.BoolFlag{
-		Name: "separatedb",
-		Usage: "Enable a separated trie database, it will be created within a subdirectory called state, " +
-			"Users can copy this state directory to another directory or disk, and then create a symbolic link to the state directory under the chaindata",
+	MultiDataBaseFlag = &cli.BoolFlag{
+		Name: "multidatabase",
+		Usage: "Enable a separated state and block database, it will be created within two subdirectory called state and block, " +
+			"Users can copy this state or block directory to another directory or disk, and then create a symbolic link to the state directory under the chaindata",
 		Category: flags.EthCategory,
 	}
 	DirectBroadcastFlag = &cli.BoolFlag{
@@ -1118,7 +1118,7 @@ var (
 		DBEngineFlag,
 		StateSchemeFlag,
 		HttpHeaderFlag,
-		SeparateDBFlag,
+		MultiDataBaseFlag,
 	}
 )
 
@@ -2322,11 +2322,11 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	default:
 		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly, disableFreeze, false, false)
 		// set the separate state database
-		if stack.IsSeparatedDB() && err == nil {
+		if stack.CheckIfMultiDataBase() && err == nil {
 			stateDiskDb := MakeStateDataBase(ctx, stack, readonly, false)
 			chainDb.SetStateStore(stateDiskDb)
-			blockdb := MakeBlockDatabase(ctx, stack, readonly, false)
-			chainDb.SetBlockStore(blockdb)
+			blockDb := MakeBlockDatabase(ctx, stack, readonly, false)
+			chainDb.SetBlockStore(blockDb)
 		}
 	}
 	if err != nil {
@@ -2350,11 +2350,11 @@ func MakeStateDataBase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 func MakeBlockDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
 	cache := ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 	handles := MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name)) / 10
-	blockdb, err := stack.OpenDatabaseWithFreezer("chaindata", cache, handles, "", "", readonly, disableFreeze, false, false, false, true)
+	blockDb, err := stack.OpenDatabaseWithFreezer("chaindata/block", cache, handles, "", "", readonly, disableFreeze, false, false)
 	if err != nil {
 		Fatalf("Failed to open separate block database: %v", err)
 	}
-	return blockdb
+	return blockDb
 }
 
 // tryMakeReadOnlyDatabase try to open the chain database in read-only mode,

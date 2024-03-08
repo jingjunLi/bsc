@@ -231,20 +231,20 @@ func initGenesis(ctx *cli.Context) error {
 		overrides.OverrideVerkle = &v
 	}
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false, false, false)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, false, false, false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
 		defer chaindb.Close()
 
 		// if the trie data dir has been set, new trie db with a new state database
-		if ctx.IsSet(utils.SeparateDBFlag.Name) {
+		if ctx.IsSet(utils.MultiDataBaseFlag.Name) {
 			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name+"/state", 0, 0, "", "", false, false, false, false)
 			if dbErr != nil {
 				utils.Fatalf("Failed to open separate trie database: %v", dbErr)
 			}
 			chaindb.SetStateStore(statediskdb)
-			blockdb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false, false, false, false, false, true)
+			blockdb, err := stack.OpenDatabaseWithFreezer(name+"/block", 0, 0, "", "", false, false, false, false)
 			if err != nil {
 				utils.Fatalf("Failed to open separate block database: %v", err)
 			}
@@ -696,6 +696,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
