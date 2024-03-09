@@ -137,7 +137,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	// Assemble the Ethereum object
-	chainDb, err := stack.OpenAndMergeDatabase("chaindata", "eth/db/chaindata/", false, config)
+	chainDb, err := stack.OpenAndMergeDatabase("chaindata", ChainDBNamespace, false, config)
 	if err != nil {
 		return nil, err
 	}
