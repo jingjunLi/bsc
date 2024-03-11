@@ -75,7 +75,8 @@ const (
 	runningState
 	closedState
 	blockDbCacheSize        = 256
-	blockDbHandlesSize      = 2000
+	blockDbHandlesMinSize   = 1000
+	blockDbHandlesMaxSize   = 1000
 	chainDbMemoryPercentage = 50
 	chainDbHandlesPercentage
 	diffStoreHandlesPercentage = 20
@@ -791,6 +792,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		stateDiskDb          ethdb.Database
 		blockDb              ethdb.Database
 		disableChainDbFreeze = false
+		blockDbHandlesSize   int
 	)
 
 	if config.PersistDiff {
@@ -799,11 +801,16 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	// Open the separated state database if the state directory exists
 	if n.CheckIfMultiDataBase() {
 		// Resource allocation rules:
-		// 1) Allocate a fixed percentage of memory for chaindb based on chainDbMemoryPercentage & chainDbHandlesPercentage.
-		// 2) Allocate a fixed size for blockdb based on blockDbCacheSize & blockDbHandlesSize.
-		// 3) Allocate the remaining resources to statedb.
-		chainDbCache = int(float64(chainDbCache) * chainDbMemoryPercentage / 100)
-		chainDataHandles = int(float64(chainDataHandles) * chainDbHandlesPercentage / 100)
+		// 1) Allocate a fixed percentage of memory for chainDb based on chainDbMemoryPercentage & chainDbHandlesPercentage.
+		// 2) Allocate a fixed size for blockDb based on blockDbCacheSize & blockDbHandlesSize.
+		// 3) Allocate the remaining resources to stateDb.
+		chainDbCache = int(float64(config.DatabaseCache) * chainDbMemoryPercentage / 100)
+		chainDataHandles = int(float64(config.DatabaseHandles) * chainDbHandlesPercentage / 100)
+		if float64(config.DatabaseHandles)*0.1 > blockDbHandlesMaxSize {
+			blockDbHandlesSize = blockDbHandlesMaxSize
+		} else {
+			blockDbHandlesSize = blockDbHandlesMinSize
+		}
 		stateDbCache := config.DatabaseCache - chainDbCache - blockDbCacheSize
 		stateDbHandles := config.DatabaseHandles - chainDataHandles - blockDbHandlesSize
 		disableChainDbFreeze = true
