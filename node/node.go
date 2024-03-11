@@ -798,11 +798,15 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 	}
 	// Open the separated state database if the state directory exists
 	if n.CheckIfMultiDataBase() {
+		// Resource allocation rules:
+		// 1) Allocate a fixed percentage of memory for chaindb based on chainDbMemoryPercentage & chainDbHandlesPercentage.
+		// 2) Allocate a fixed size for blockdb based on blockDbCacheSize & blockDbHandlesSize.
+		// 3) Allocate the remaining resources to statedb.
 		chainDbCache = int(float64(chainDbCache) * chainDbMemoryPercentage / 100)
 		chainDataHandles = int(float64(chainDataHandles) * chainDbHandlesPercentage / 100)
-		disableChainDbFreeze = true
 		stateDbCache := config.DatabaseCache - chainDbCache - blockDbCacheSize
 		stateDbHandles := config.DatabaseHandles - chainDataHandles - blockDbHandlesSize
+		disableChainDbFreeze = true
 
 		// Allocate half of the  handles and chainDbCache to this separate state data database
 		stateDiskDb, err = n.OpenDatabaseWithFreezer(name+"/state", stateDbCache, stateDbHandles, "", "eth/db/statedata/", readonly, true, false, config.PruneAncientData)
