@@ -76,7 +76,7 @@ const (
 	closedState
 	blockDbCacheSize        = 256
 	blockDbHandlesMinSize   = 1000
-	blockDbHandlesMaxSize   = 1000
+	blockDbHandlesMaxSize   = 2000
 	chainDbMemoryPercentage = 50
 	chainDbHandlesPercentage
 	diffStoreHandlesPercentage = 20
@@ -807,7 +807,7 @@ func (n *Node) OpenAndMergeDatabase(name string, namespace string, readonly bool
 		// 3) Allocate the remaining resources to stateDb.
 		chainDbCache = int(float64(config.DatabaseCache) * chainDbMemoryPercentage / 100)
 		chainDataHandles = int(float64(config.DatabaseHandles) * chainDbHandlesPercentage / 100)
-		if float64(config.DatabaseHandles)*0.1 > blockDbHandlesMaxSize {
+		if config.DatabaseHandles/10 > blockDbHandlesMaxSize {
 			blockDbHandlesSize = blockDbHandlesMaxSize
 		} else {
 			blockDbHandlesSize = blockDbHandlesMinSize
