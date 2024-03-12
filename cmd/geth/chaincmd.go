@@ -267,12 +267,17 @@ func initGenesis(ctx *cli.Context) error {
 		defer chaindb.Close()
 
 		// if the trie data dir has been set, new trie db with a new state database
-		if ctx.IsSet(utils.SeparateDBFlag.Name) {
+		if ctx.IsSet(utils.MultiDataBaseFlag.Name) {
 			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name+"/state", 0, 0, "", "", false, false, false, false)
 			if dbErr != nil {
 				utils.Fatalf("Failed to open separate trie database: %v", dbErr)
 			}
 			chaindb.SetStateStore(statediskdb)
+			blockdb, err := stack.OpenDatabaseWithFreezer(name+"/block", 0, 0, "", "", false, false, false, false)
+			if err != nil {
+				utils.Fatalf("Failed to open separate block database: %v", err)
+			}
+			chaindb.SetBlockStore(blockdb)
 		}
 
 		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
@@ -739,7 +744,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		arg := ctx.Args().First()
 		if hashish(arg) {
 			hash := common.HexToHash(arg)
-			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
+			if number := rawdb.ReadHeaderNumber(db.BlockStore(), hash); number != nil {
 				header = rawdb.ReadHeader(db, hash, *number)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
@@ -808,6 +813,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
