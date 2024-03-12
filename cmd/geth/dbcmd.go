@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -39,7 +40,8 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 )
@@ -410,7 +412,7 @@ func inspectTrie(ctx *cli.Context) error {
 		if blockNumber != math.MaxUint64 {
 			headerBlockHash = rawdb.ReadCanonicalHash(db, blockNumber)
 			if headerBlockHash == (common.Hash{}) {
-				return fmt.Errorf("ReadHeadBlockHash empry hash")
+				return errors.New("ReadHeadBlockHash empry hash")
 			}
 			blockHeader := rawdb.ReadHeader(db, headerBlockHash, blockNumber)
 			trieRootHash = blockHeader.Root
@@ -421,16 +423,16 @@ func inspectTrie(ctx *cli.Context) error {
 		fmt.Printf("ReadBlockHeader, root: %v, blocknum: %v\n", trieRootHash, blockNumber)
 
 		dbScheme := rawdb.ReadStateScheme(db)
-		var config *trie.Config
+		var config *triedb.Config
 		if dbScheme == rawdb.PathScheme {
-			config = &trie.Config{
+			config = &triedb.Config{
 				PathDB: pathdb.ReadOnly,
 			}
 		} else if dbScheme == rawdb.HashScheme {
-			config = trie.HashDefaults
+			config = triedb.HashDefaults
 		}
 
-		triedb := trie.NewDatabase(db, config)
+		triedb := triedb.NewDatabase(db, config)
 		theTrie, err := trie.New(trie.TrieID(trieRootHash), triedb)
 		if err != nil {
 			fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
@@ -1142,8 +1144,8 @@ func hbss2pbss(ctx *cli.Context) error {
 		lastStateID = rawdb.ReadPersistentStateID(db)
 	}
 	if lastStateID == 0 || force {
-		config := trie.HashDefaults
-		triedb := trie.NewDatabase(db, config)
+		config := triedb.HashDefaults
+		triedb := triedb.NewDatabase(db, config)
 		triedb.Cap(0)
 		log.Info("hbss2pbss triedb", "scheme", triedb.Scheme())
 		defer triedb.Close()
@@ -1163,7 +1165,7 @@ func hbss2pbss(ctx *cli.Context) error {
 		if *blockNumber != math.MaxUint64 {
 			headerBlockHash = rawdb.ReadCanonicalHash(db, *blockNumber)
 			if headerBlockHash == (common.Hash{}) {
-				return fmt.Errorf("ReadHeadBlockHash empty hash")
+				return errors.New("ReadHeadBlockHash empty hash")
 			}
 			blockHeader := rawdb.ReadHeader(db, headerBlockHash, *blockNumber)
 			trieRootHash = blockHeader.Root
@@ -1171,7 +1173,7 @@ func hbss2pbss(ctx *cli.Context) error {
 		}
 		if (trieRootHash == common.Hash{}) {
 			log.Error("Empty root hash")
-			return fmt.Errorf("Empty root hash.")
+			return errors.New("Empty root hash.")
 		}
 
 		id := trie.StateTrieID(trieRootHash)
