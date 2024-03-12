@@ -509,7 +509,7 @@ func checkStateContent(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer db.Close()
 	var (
-		it        = rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
+		it        ethdb.Iterator
 		hasher    = crypto.NewKeccakState()
 		got       = make([]byte, 32)
 		errs      int
@@ -517,6 +517,11 @@ func checkStateContent(ctx *cli.Context) error {
 		startTime = time.Now()
 		lastLog   = time.Now()
 	)
+	if stack.CheckIfMultiDataBase() {
+		it = rawdb.NewKeyLengthIterator(db.StateStore().NewIterator(prefix, start), 32)
+	} else {
+		it = rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
+	}
 	for it.Next() {
 		count++
 		k := it.Key()
@@ -634,22 +639,20 @@ func dbGet(ctx *cli.Context) error {
 		log.Info("Could not decode the key", "error", err)
 		return err
 	}
-
-	data, err := db.Get(key)
-	if err != nil {
-		if stack.CheckIfMultiDataBase() {
-			// if chainDb don't exist, try to get it from multidatabase
-			stateData, dberr := db.StateStore().Get(key)
-			if dberr == nil {
-				fmt.Printf("key %#x: %#x\n", key, stateData)
-				return nil
-			}
-			if blockData, dberr := db.BlockStore().Get(key); dberr != nil {
-				fmt.Printf("key %#x: %#x\n", key, blockData)
-				return nil
-			}
+	opDb := db
+	if stack.CheckIfMultiDataBase() {
+		keyType := rawdb.DataTypeByKey(key)
+		if keyType == rawdb.StateDataType {
+			opDb = db.StateStore()
+		} else if keyType == rawdb.BlockDataType {
+			opDb = db.BlockStore()
+		} else {
+			opDb = db
 		}
+	}
 
+	data, err := opDb.Get(key)
+	if err != nil {
 		log.Info("Get operation failed", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}
@@ -812,11 +815,23 @@ func dbDelete(ctx *cli.Context) error {
 		log.Info("Could not decode the key", "error", err)
 		return err
 	}
-	data, err := db.Get(key)
+	opDb := db
+	if stack.CheckIfMultiDataBase() {
+		keyType := rawdb.DataTypeByKey(key)
+		if keyType == rawdb.StateDataType {
+			opDb = db.StateStore()
+		} else if keyType == rawdb.BlockDataType {
+			opDb = db.BlockStore()
+		} else {
+			opDb = db
+		}
+	}
+
+	data, err := opDb.Get(key)
 	if err == nil {
 		fmt.Printf("Previous value: %#x\n", data)
 	}
-	if err = db.Delete(key); err != nil {
+	if err = opDb.Delete(key); err != nil {
 		log.Info("Delete operation returned an error", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}
@@ -850,11 +865,24 @@ func dbPut(ctx *cli.Context) error {
 		log.Info("Could not decode the value", "error", err)
 		return err
 	}
-	data, err = db.Get(key)
+
+	opDb := db
+	if stack.CheckIfMultiDataBase() {
+		keyType := rawdb.DataTypeByKey(key)
+		if keyType == rawdb.StateDataType {
+			opDb = db.StateStore()
+		} else if keyType == rawdb.BlockDataType {
+			opDb = db.BlockStore()
+		} else {
+			opDb = db
+		}
+	}
+
+	data, err = opDb.Get(key)
 	if err == nil {
 		fmt.Printf("Previous value: %#x\n", data)
 	}
-	return db.Put(key, value)
+	return opDb.Put(key, value)
 }
 
 // dbDumpTrie shows the key-value slots of a given storage trie
@@ -945,7 +973,7 @@ func freezerInspect(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	ancient := stack.ResolveAncient("chaindata", ctx.String(utils.AncientFlag.Name))
 	stack.Close()
-	return rawdb.InspectFreezerTable(ancient, freezer, table, start, end)
+	return rawdb.InspectFreezerTable(ancient, freezer, table, start, end, stack.CheckIfMultiDataBase())
 }
 
 func importLDBdata(ctx *cli.Context) error {
@@ -1085,11 +1113,11 @@ func showMetaData(ctx *cli.Context) error {
 	defer stack.Close()
 	db := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer db.Close()
-	ancients, err := db.Ancients()
+	ancients, err := db.BlockStore().Ancients()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error accessing ancients: %v", err)
 	}
-	data := rawdb.ReadChainMetadata(db)
+	data := rawdb.ReadChainMetadataCmd(db)
 	data = append(data, []string{"frozen", fmt.Sprintf("%d items", ancients)})
 	data = append(data, []string{"snapshotGenerator", snapshot.ParseGeneratorStatus(rawdb.ReadSnapshotGenerator(db))})
 	if b := rawdb.ReadHeadBlock(db); b != nil {
