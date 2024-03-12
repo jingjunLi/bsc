@@ -561,11 +561,9 @@ func dbStats(ctx *cli.Context) error {
 	defer db.Close()
 
 	showLeveldbStats(db)
-	if db.StateStore() != nil {
+	if stack.CheckIfMultiDataBase() {
 		fmt.Println("show stats of state store")
 		showLeveldbStats(db.StateStore())
-	}
-	if db.BlockStore() != db {
 		fmt.Println("show stats of block store")
 		showLeveldbStats(db.BlockStore())
 	}
@@ -583,13 +581,9 @@ func dbCompact(ctx *cli.Context) error {
 	log.Info("Stats before compaction")
 	showLeveldbStats(db)
 
-	statediskdb := db.StateStore()
-	if statediskdb != nil {
+	if stack.CheckIfMultiDataBase() {
 		fmt.Println("show stats of state store")
-		showLeveldbStats(statediskdb)
-	}
-
-	if db.BlockStore() != db {
+		showLeveldbStats(db.StateStore())
 		fmt.Println("show stats of block store")
 		showLeveldbStats(db.BlockStore())
 	}
@@ -600,13 +594,11 @@ func dbCompact(ctx *cli.Context) error {
 		return err
 	}
 
-	if statediskdb != nil {
-		if err := statediskdb.Compact(nil, nil); err != nil {
+	if stack.CheckIfMultiDataBase() {
+		if err := db.BlockStore().Compact(nil, nil); err != nil {
 			log.Error("Compact err", "error", err)
 			return err
 		}
-	}
-	if db.BlockStore() != db {
 		if err := db.BlockStore().Compact(nil, nil); err != nil {
 			log.Error("Compact err", "error", err)
 			return err
@@ -615,11 +607,9 @@ func dbCompact(ctx *cli.Context) error {
 
 	log.Info("Stats after compaction")
 	showLeveldbStats(db)
-	if statediskdb != nil {
+	if stack.CheckIfMultiDataBase() {
 		fmt.Println("show stats of state store after compaction")
-		showLeveldbStats(statediskdb)
-	}
-	if db.BlockStore() != db {
+		showLeveldbStats(db.StateStore())
 		fmt.Println("show stats of block store after compaction")
 		showLeveldbStats(db.BlockStore())
 	}
@@ -643,20 +633,17 @@ func dbGet(ctx *cli.Context) error {
 		return err
 	}
 
-	statediskdb := db.StateStore()
 	data, err := db.Get(key)
 	if err != nil {
-		// if separate trie db exist, try to get it from separate db
-		if statediskdb != nil {
-			statedata, dberr := statediskdb.Get(key)
+		if stack.CheckIfMultiDataBase() {
+			// if chainDb don't exist, try to get it from multidatabase
+			stateData, dberr := db.StateStore().Get(key)
 			if dberr == nil {
-				fmt.Printf("key %#x: %#x\n", key, statedata)
+				fmt.Printf("key %#x: %#x\n", key, stateData)
 				return nil
 			}
-		}
-		if db.BlockStore() != db {
-			if blockdata, dberr := db.BlockStore().Get(key); dberr != nil {
-				fmt.Printf("key %#x: %#x\n", key, blockdata)
+			if blockData, dberr := db.BlockStore().Get(key); dberr != nil {
+				fmt.Printf("key %#x: %#x\n", key, blockData)
 				return nil
 			}
 		}
