@@ -155,6 +155,10 @@ func (t *table) Delete(key []byte) error {
 	return t.db.Delete(append([]byte(t.prefix), key...))
 }
 
+func (t *table) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 // NewIterator creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
@@ -165,6 +169,13 @@ func (t *table) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		iter:   iter,
 		prefix: t.prefix,
 	}
+}
+func (t *table) NewSeekIterator(prefix, key []byte) ethdb.Iterator {
+	panic("not supported!")
+}
+
+func (t *table) NewReverseIterator(prefix, start, key []byte) ethdb.Iterator {
+	return nil
 }
 
 // Stat returns a particular internal stat of the database.
@@ -268,6 +279,10 @@ func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }
 
+func (b *tableBatch) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *tableBatch) ValueSize() int {
 	return b.batch.ValueSize()
@@ -302,6 +317,10 @@ func (r *tableReplayer) Delete(key []byte) error {
 	return r.w.Delete(trimmed)
 }
 
+func (r *tableReplayer) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 // Replay replays the batch contents.
 func (b *tableBatch) Replay(w ethdb.KeyValueWriter) error {
 	return b.batch.Replay(&tableReplayer{w: w, prefix: b.prefix})
@@ -312,6 +331,10 @@ func (b *tableBatch) Replay(w ethdb.KeyValueWriter) error {
 type tableIterator struct {
 	iter   ethdb.Iterator
 	prefix string
+}
+
+func (iter *tableIterator) Seek(key []byte) bool {
+	panic("not supported.")
 }
 
 // Next moves the iterator to the next key/value pair. It returns whether the

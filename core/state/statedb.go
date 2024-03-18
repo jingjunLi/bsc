@@ -249,6 +249,8 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		} else {
 			s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, common.Hash{}, namespace)
 		}
+	} else {
+		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, common.Hash{}, namespace)
 	}
 }
 
@@ -755,7 +757,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 		start := time.Now()
 		var err error
-		data, err = s.trie.GetAccount(addr)
+		data, err = s.trie.GetAccount(addr, true)
 		if metrics.EnabledExpensive {
 			s.AccountReads += time.Since(start)
 		}
@@ -1056,7 +1058,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	}
 	prefetcher := s.prefetcher
 	if prefetcher != nil && len(addressesToPrefetch) > 0 {
-		if s.snap.Verified() {
+		if s.snap == nil || s.snap.Verified() {
 			prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch)
 		} else if prefetcher.rootParent != (common.Hash{}) {
 			prefetcher.prefetch(common.Hash{}, prefetcher.rootParent, common.Address{}, addressesToPrefetch)
@@ -1110,6 +1112,7 @@ func (s *StateDB) PopulateSnapAccountAndStorage() {
 			if s.snap != nil {
 				s.populateSnapStorage(obj)
 				s.accounts[obj.addrHash] = types.SlimAccountRLP(obj.data)
+				log.Info("PopulateSnapAccountAndStorage", "hash", obj.addrHash.String(), "data", common.Bytes2Hex(s.accounts[obj.addrHash]))
 			}
 		}
 	}
@@ -1445,32 +1448,39 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 		if prev.Root == types.EmptyRootHash {
 			continue
 		}
-		// Remove storage slots belong to the account.
-		aborted, slots, set, err := s.deleteStorage(addr, addrHash, prev.Root)
-		if err != nil {
-			return nil, fmt.Errorf("failed to delete storage, err: %w", err)
-		}
-		// The storage is too huge to handle, skip it but mark as incomplete.
-		// For case (d), the account is resurrected might with a few slots
-		// created. In this case, wipe the entire storage state diff because
-		// of aborted deletion.
-		if aborted {
-			incomplete[addr] = struct{}{}
-			delete(s.storagesOrigin, addr)
-			continue
-		}
-		if s.storagesOrigin[addr] == nil {
-			s.storagesOrigin[addr] = slots
-		} else {
-			// It can overwrite the data in s.storagesOrigin[addrHash] set by
-			// 'object.updateTrie'.
-			for key, val := range slots {
-				s.storagesOrigin[addr][key] = val
+
+		// The storages will be deleted by DeleteRange in PathDB
+		incomplete[addr] = struct{}{}
+		delete(s.storagesOrigin, addr)
+
+		/*
+			// Remove storage slots belong to the account.
+			aborted, slots, set, err := s.deleteStorage(addr, addrHash, prev.Root)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete storage, err: %w", err)
 			}
-		}
-		if err := nodes.Merge(set); err != nil {
-			return nil, err
-		}
+			// The storage is too huge to handle, skip it but mark as incomplete.
+			// For case (d), the account is resurrected might with a few slots
+			// created. In this case, wipe the entire storage state diff because
+			// of aborted deletion.
+			if aborted {
+				incomplete[addr] = struct{}{}
+				delete(s.storagesOrigin, addr)
+				continue
+			}
+			if s.storagesOrigin[addr] == nil {
+				s.storagesOrigin[addr] = slots
+			} else {
+				// It can overwrite the data in s.storagesOrigin[addrHash] set by
+				// 'object.updateTrie'.
+				for key, val := range slots {
+					s.storagesOrigin[addr][key] = val
+				}
+			}
+			if err := nodes.Merge(set); err != nil {
+				return nil, err
+			}
+		*/
 	}
 	return incomplete, nil
 }
@@ -1615,8 +1625,8 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 
 				if root != origin {
 					start := time.Now()
-					set := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)
-					if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
+					stateSet := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete, s.mustConvertSlmAccount(s.accounts), s.storages, s.convertAccountSet(s.stateObjectsDestruct))
+					if err := s.db.TrieDB().Update(root, origin, block, nodes, stateSet); err != nil {
 						return err
 					}
 					s.originalRoot = root
@@ -1624,7 +1634,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 						s.TrieDBCommits += time.Since(start)
 					}
 					if s.onCommit != nil {
-						s.onCommit(set)
+						s.onCommit(stateSet)
 					}
 				}
 			}
@@ -1892,6 +1902,18 @@ func (s *StateDB) convertAccountSet(set map[common.Address]*types.StateAccount) 
 		} else {
 			ret[obj.addrHash] = struct{}{}
 		}
+	}
+	return ret
+}
+
+func (s *StateDB) mustConvertSlmAccount(slmAccounts map[common.Hash][]byte) map[common.Hash][]byte {
+	ret := make(map[common.Hash][]byte)
+	for h, acc := range slmAccounts {
+		fullAccount, err := types.FullAccountRLP(acc)
+		if err != nil {
+			panic(fmt.Sprintf("mustConvertSlmAccount, acc: %v", common.Bytes2Hex(acc)))
+		}
+		ret[h] = fullAccount
 	}
 	return ret
 }
