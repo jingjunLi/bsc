@@ -312,8 +312,13 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 // State Scheme 方案, 1) PathScheme 2) HashScheme
 func ReadStateScheme(db ethdb.Reader) string {
 	// Check if state in path-based scheme is present
-	blob, _ := ReadAccountTrieNode(db, nil)
+	blob, _ := ReadAccountTrieNode(db.StateStoreReader(), nil)
 	if len(blob) != 0 {
+		return PathScheme
+	}
+	// The root node might be deleted during the initial snap sync, check
+	// the persistent state id then.
+	if id := ReadPersistentStateID(db.StateStoreReader()); id != 0 {
 		return PathScheme
 	}
 	// In a hash-based scheme, the genesis state is consistently stored
@@ -323,9 +328,51 @@ func ReadStateScheme(db ethdb.Reader) string {
 	if header == nil {
 		return "" // empty datadir
 	}
-	blob = ReadLegacyTrieNode(db, header.Root)
+	blob = ReadLegacyTrieNode(db.StateStoreReader(), header.Root)
 	if len(blob) == 0 {
 		return "" // no state in disk
 	}
 	return HashScheme
+}
+
+// ValidateStateScheme used to check state scheme whether is valid.
+// Valid state scheme: hash and path.
+func ValidateStateScheme(stateScheme string) bool {
+	if stateScheme == HashScheme || stateScheme == PathScheme {
+		return true
+	}
+	return false
+}
+
+// ParseStateScheme checks if the specified state scheme is compatible with
+// the stored state.
+//
+//   - If the provided scheme is none, use the scheme consistent with persistent
+//     state, or fallback to path-based scheme if state is empty.
+//
+//   - If the provided scheme is hash, use hash-based scheme or error out if not
+//     compatible with persistent state scheme.
+//
+//   - If the provided scheme is path: use path-based scheme or error out if not
+//     compatible with persistent state scheme.
+func ParseStateScheme(provided string, disk ethdb.Database) (string, error) {
+	// If state scheme is not specified, use the scheme consistent
+	// with persistent state, or fallback to hash mode if database
+	// is empty.
+	stored := ReadStateScheme(disk)
+	if provided == "" {
+		if stored == "" {
+			log.Info("State scheme set to default", "scheme", "path")
+			return PathScheme, nil // use default scheme for empty database
+		}
+		log.Info("State scheme set to already existing disk db", "scheme", stored)
+		return stored, nil // reuse scheme of persistent scheme
+	}
+	// If state scheme is specified, ensure it's compatible with
+	// persistent state.
+	if stored == "" || provided == stored {
+		log.Info("State scheme set by user", "scheme", provided)
+		return provided, nil
+	}
+	return "", fmt.Errorf("incompatible state scheme, stored: %s, user provided: %s", stored, provided)
 }

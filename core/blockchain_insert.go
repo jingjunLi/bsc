@@ -44,7 +44,7 @@ const statsReportLimit = 8 * time.Second
 	t=2024-01-25T13:16:52+0000 lvl=info msg="Imported new chain segment"
 	number=765,957 hash=0x4360fc9bc1c30edc7cacc4ad2fac71e6073a1cd903d9e84182f61c9c56543613 miner=0x2f7bE8361C80A4c1e7e9aAF001d0877F1CFdE218 blocks=618  txs=1992  mgas=238.648  elapsed=6.175s    mgasps=38.645  age=3y4mo2w  triediffs="4.43 MiB"    triedirty="18.76 MiB"  trieimutabledirty="0.00 B"
 */
-func (st *insertStats) report(chain []*types.Block, index int, trieDiffNodes, trieBufNodes, trieImmutableBufNodes common.StorageSize, setHead bool) {
+func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, trieImmutableBufNodes common.StorageSize, setHead bool) {
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
@@ -69,13 +69,17 @@ func (st *insertStats) report(chain []*types.Block, index int, trieDiffNodes, tr
 		if timestamp := time.Unix(int64(end.Time()), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}
+		if snapDiffItems != 0 || snapBufItems != 0 { // snapshots enabled
+			context = append(context, []interface{}{"snapdiffs", snapDiffItems}...)
+			if snapBufItems != 0 { // future snapshot refactor
+				context = append(context, []interface{}{"snapdirty", snapBufItems}...)
+			}
+		}
 		if trieDiffNodes != 0 { // pathdb
 			context = append(context, []interface{}{"triediffs", trieDiffNodes}...)
-			context = append(context, []interface{}{"triedirty", trieBufNodes}...)
-			context = append(context, []interface{}{"trieimutabledirty", trieImmutableBufNodes}...)
-		} else {
-			context = append(context, []interface{}{"triedirty", trieBufNodes}...)
 		}
+		context = append(context, []interface{}{"triedirty", trieBufNodes}...)
+		context = append(context, []interface{}{"trieimutabledirty", trieImmutableBufNodes}...)
 
 		if st.queued > 0 {
 			context = append(context, []interface{}{"queued", st.queued}...)

@@ -18,10 +18,10 @@ package types
 
 import (
 	"bytes"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run ../../rlp/rlpgen -type StateAccount -out gen_account_rlp.go
@@ -34,7 +34,7 @@ Account storage trie: 存储的 合约信息 ??
 */
 type StateAccount struct {
 	Nonce    uint64
-	Balance  *big.Int
+	Balance  *uint256.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 }
@@ -42,7 +42,7 @@ type StateAccount struct {
 // NewEmptyStateAccount constructs an empty state account.
 func NewEmptyStateAccount() *StateAccount {
 	return &StateAccount{
-		Balance:  new(big.Int),
+		Balance:  new(uint256.Int),
 		Root:     EmptyRootHash,
 		CodeHash: EmptyCodeHash.Bytes(),
 	}
@@ -50,9 +50,9 @@ func NewEmptyStateAccount() *StateAccount {
 
 // Copy returns a deep-copied state account object.
 func (acct *StateAccount) Copy() *StateAccount {
-	var balance *big.Int
+	var balance *uint256.Int
 	if acct.Balance != nil {
-		balance = new(big.Int).Set(acct.Balance)
+		balance = new(uint256.Int).Set(acct.Balance)
 	}
 	return &StateAccount{
 		Nonce:    acct.Nonce,
@@ -67,7 +67,7 @@ func (acct *StateAccount) Copy() *StateAccount {
 // or slim format which replaces the empty root and code hash as nil byte slice.
 type SlimAccount struct {
 	Nonce    uint64
-	Balance  *big.Int
+	Balance  *uint256.Int
 	Root     []byte // Nil if root equals to types.EmptyRootHash
 	CodeHash []byte // Nil if hash equals to types.EmptyCodeHash
 }
@@ -91,7 +91,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 	return data
 }
 
-// FullAccount decodes the data on the 'slim RLP' format and return
+// FullAccount decodes the data on the 'slim RLP' format and returns
 // the consensus format account.
 func FullAccount(data []byte) (*StateAccount, error) {
 	var slim SlimAccount
