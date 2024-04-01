@@ -20,7 +20,6 @@ package ethdb
 import (
 	"io"
 
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 

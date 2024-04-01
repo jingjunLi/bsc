@@ -202,8 +202,6 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 		nodes[entry.Owner] = subset
 	}
 
-
-
 	// Resolve latest states
 	var (
 		jdestructSet    []journalDestruct
@@ -214,21 +212,21 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 		latestStorages = make(map[common.Hash]map[common.Hash][]byte)
 		destructSet    = make(map[common.Hash]struct{})
 	)
-	if err := r.Decode(&jdestructSet); err != nil {
+	if err := journalBuf.Decode(&jdestructSet); err != nil {
 		return nil, fmt.Errorf("load destrctSet: %v", err)
 	}
 	for _, entry := range jdestructSet {
 		destructSet[entry.Hash] = struct{}{}
 	}
 
-	if err := r.Decode(&jlatestAccounts); err != nil {
+	if err := journalBuf.Decode(&jlatestAccounts); err != nil {
 		return nil, fmt.Errorf("load latest accounts: %v", err)
 	}
 	for _, entry := range jlatestAccounts {
 		latestAccounts[entry.Hash] = entry.Blob
 	}
 
-	if err := r.Decode(&jlatestStorage); err != nil {
+	if err := journalBuf.Decode(&jlatestStorage); err != nil {
 		return nil, fmt.Errorf("load latest accounts: %v", err)
 	}
 	for _, entry := range jlatestStorage {
@@ -342,21 +340,21 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 		storages[entry.Account] = set
 	}
 
-	if err := r.Decode(&jdestructSet); err != nil {
+	if err := journalBuf.Decode(&jdestructSet); err != nil {
 		return nil, fmt.Errorf("load destrctSet: %v", err)
 	}
 	for _, entry := range jdestructSet {
 		destructSet[entry.Hash] = struct{}{}
 	}
 
-	if err := r.Decode(&jlatestAccounts); err != nil {
+	if err := journalBuf.Decode(&jlatestAccounts); err != nil {
 		return nil, fmt.Errorf("load latest accounts: %v", err)
 	}
 	for _, entry := range jlatestAccounts {
 		latestAccounts[entry.Hash] = entry.Blob
 	}
 
-	if err := r.Decode(&jlatestStorage); err != nil {
+	if err := journalBuf.Decode(&jlatestStorage); err != nil {
 		return nil, fmt.Errorf("load latest accounts: %v", err)
 	}
 	for _, entry := range jlatestStorage {
@@ -421,7 +419,7 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	for hash := range latestStates.DestructSet {
 		destructs = append(destructs, journalDestruct{Hash: hash})
 	}
-	if err := rlp.Encode(w, destructs); err != nil {
+	if err := rlp.Encode(journalBuf, destructs); err != nil {
 		return err
 	}
 
@@ -429,7 +427,7 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	for hash, blob := range latestStates.LatestAccounts {
 		latestAccounts = append(latestAccounts, journalLatestAccount{Hash: hash, Blob: blob})
 	}
-	if err := rlp.Encode(w, latestAccounts); err != nil {
+	if err := rlp.Encode(journalBuf, latestAccounts); err != nil {
 		return err
 	}
 	latestStorage := make([]journalLatestStorage, 0, len(latestStates.LatestStorages))
@@ -442,7 +440,7 @@ func (dl *diskLayer) journal(w io.Writer) error {
 		}
 		latestStorage = append(latestStorage, journalLatestStorage{Hash: hash, Keys: keys, Vals: vals})
 	}
-	if err := rlp.Encode(w, latestStorage); err != nil {
+	if err := rlp.Encode(journalBuf, latestStorage); err != nil {
 		return err
 	}
 
@@ -517,17 +515,12 @@ func (dl *diffLayer) journal(w io.Writer) error {
 		return err
 	}
 
-	// Store the journal buf into w and calculate checksum
-	if err := rlp.Encode(w, uint64(journalBuf.Len())); err != nil {
-		return err
-	}
-
 	// Write latest accounts/storages/destructSet into buffer
 	destructs := make([]journalDestruct, 0, len(dl.states.DestructSet))
 	for hash := range dl.states.DestructSet {
 		destructs = append(destructs, journalDestruct{Hash: hash})
 	}
-	if err := rlp.Encode(w, destructs); err != nil {
+	if err := rlp.Encode(journalBuf, destructs); err != nil {
 		return err
 	}
 
@@ -535,7 +528,7 @@ func (dl *diffLayer) journal(w io.Writer) error {
 	for hash, blob := range dl.states.LatestAccounts {
 		latestAccounts = append(latestAccounts, journalLatestAccount{Hash: hash, Blob: blob})
 	}
-	if err := rlp.Encode(w, latestAccounts); err != nil {
+	if err := rlp.Encode(journalBuf, latestAccounts); err != nil {
 		return err
 	}
 	latestStorage := make([]journalLatestStorage, 0, len(dl.states.LatestStorages))
@@ -548,7 +541,12 @@ func (dl *diffLayer) journal(w io.Writer) error {
 		}
 		latestStorage = append(latestStorage, journalLatestStorage{Hash: hash, Keys: keys, Vals: vals})
 	}
-	if err := rlp.Encode(w, latestStorage); err != nil {
+	if err := rlp.Encode(journalBuf, latestStorage); err != nil {
+		return err
+	}
+
+	// Store the journal buf into w and calculate checksum
+	if err := rlp.Encode(w, uint64(journalBuf.Len())); err != nil {
 		return err
 	}
 

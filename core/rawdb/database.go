@@ -135,10 +135,6 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 	return nil
 }
 
-func (frdb *freezerdb) SetupFreezerEnv(env *ethdb.FreezerEnv) error {
-	return frdb.AncientFreezer.SetupFreezerEnv(env)
-}
-
 func (frdb *freezerdb) journalPath() string {
 	return frdb.dbPath + "/" + JournalFile
 }
@@ -359,10 +355,6 @@ func (db *nofreezedb) JournalSize() uint64 {
 	return uint64(db.journalBuf.Len())
 }
 
-func (db *nofreezedb) SetupFreezerEnv(env *ethdb.FreezerEnv) error {
-	return nil
-}
-
 // NewDatabase creates a high level database on top of a given key-value data
 // store without a freezer moving immutable chain segments into cold storage.
 func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
@@ -429,10 +421,10 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, dbPath, ancient string, name
 			WriteAncientType(db, PruneFreezerType)
 		}
 		return &freezerdb{
-			ancientRoot:    ancient,
-			KeyValueStore:  db,
-			AncientStore:   frdb,
-			dbPath:         dbPath,
+			ancientRoot:   ancient,
+			KeyValueStore: db,
+			AncientStore:  frdb,
+			dbPath:        dbPath,
 		}, nil
 	}
 
@@ -545,10 +537,10 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, dbPath, ancient string, name
 		}()
 	}
 	return &freezerdb{
-		ancientRoot:    ancient,
-		KeyValueStore:  db,
-		AncientStore:   frdb,
-		dbPath:         dbPath,
+		ancientRoot:   ancient,
+		KeyValueStore: db,
+		AncientStore:  frdb,
+		dbPath:        dbPath,
 	}, nil
 }
 
