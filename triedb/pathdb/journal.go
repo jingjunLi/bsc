@@ -73,6 +73,7 @@ type journalStorage struct {
 
 // loadJournal tries to parse the layer journal from the disk.
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
+	start := time.Now()
 	r, err := db.diskdb.NewJournalReader()
 	defer db.diskdb.JournalClose()
 
@@ -110,7 +111,7 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Loaded layer journal", "diskroot", diskRoot, "diffhead", head.rootHash())
+	log.Info("Loaded layer journal", "diskroot", diskRoot, "diffhead", head.rootHash(), "elapsed", common.PrettyDuration(time.Since(start)))
 	return head, nil
 }
 
@@ -286,7 +287,7 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 	if shaSum != expectSum {
 		return nil, fmt.Errorf("expect shaSum: %v, real:%v", expectSum, shaSum)
 	}
-	log.Info("Loaded diff layer journal", "root", root, "parent", parent.rootHash(), "id", parent.stateID()+1, "block", block)
+	log.Debug("Loaded diff layer journal", "root", root, "parent", parent.rootHash(), "id", parent.stateID()+1, "block", block)
 
 	return db.loadDiffLayer(newDiffLayer(parent, root, parent.stateID()+1, block, nodes, triestate.New(accounts, storages, incomplete)), r)
 }
@@ -408,7 +409,7 @@ func (dl *diffLayer) journal(w io.Writer) error {
 	if err := rlp.Encode(w, shasum); err != nil {
 		return err
 	}
-	log.Info("Journaled pathdb diff layer", "root", dl.root, "parent", dl.parent.rootHash(), "id", dl.stateID(), "block", dl.block, "nodes", len(dl.nodes))
+	log.Debug("Journaled pathdb diff layer", "root", dl.root, "parent", dl.parent.rootHash(), "id", dl.stateID(), "block", dl.block, "nodes", len(dl.nodes))
 	return nil
 }
 

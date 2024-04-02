@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -214,7 +216,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 		ctx     = newCtx()
 		dirties = make(map[common.Hash]struct{})
 	)
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 4000; i++ {
 		switch rand.Intn(opLen) {
 		case createAccountOp:
 			// account creation
@@ -504,6 +506,7 @@ func TestCommit(t *testing.T) {
 }
 
 func TestJournal(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	tester := newTester(t, 0)
 	defer tester.release()
 
