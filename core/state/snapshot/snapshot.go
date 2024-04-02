@@ -96,6 +96,7 @@ var (
 )
 
 // Snapshot represents the functionality supported by a snapshot storage layer.
+// 具体的 Snapshot 代表 某一个 snapshot storage layer
 type Snapshot interface {
 	// Root returns the root hash for which this snapshot was made.
 	Root() common.Hash
@@ -339,6 +340,9 @@ func (t *Tree) Disable() {
 
 // Snapshot retrieves a snapshot belonging to the given block root, or nil if no
 // snapshot is maintained for that block.
+/*
+Snapshot 返回 blockRoot 对应的 snapshot, 如果没有则返回 nil
+*/
 func (t *Tree) Snapshot(blockRoot common.Hash) Snapshot {
 	t.lock.RLock()
 	defer t.lock.RUnlock()

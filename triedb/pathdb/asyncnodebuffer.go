@@ -23,6 +23,9 @@ var _ trienodebuffer = &asyncnodebuffer{}
 // to disk.
 /*
 asyncnodebuffer
+1) current
+2) background
+one current node buffer, the other one is sealed to flush
 */
 type asyncnodebuffer struct {
 	mux          sync.RWMutex
@@ -120,6 +123,9 @@ func (a *asyncnodebuffer) empty() bool {
 
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
+/*
+flush 将 in-memory dirty trie node 持久化到 磁盘, 当内存阈值到达的时候;
+*/
 func (a *asyncnodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
@@ -140,6 +146,10 @@ func (a *asyncnodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, 
 		}
 	}
 
+	/*
+		1) 当 当前的 node cache 达到 limit 才进行 flush
+		2) 判断 后台的 node cache 不在 flush 才可以 进行 前台的 flush
+	*/
 	if a.current.size < a.current.limit {
 		return nil
 	}
@@ -205,12 +215,25 @@ func (a *asyncnodebuffer) getSize() (uint64, uint64) {
 	return a.current.size, a.background.size
 }
 
+/*
+nodecache : asyncnodebuffer 使用
+主要的操作:
+1) commit
+2) flush
+merge
+revert
+
+---
+limit: 配置的 TrieDirtyLimit, 256MB
+nodes: 核心存储的对象, dirty node set;
+*/
 type nodecache struct {
-	layers    uint64                                    // The number of diff layers aggregated inside
-	size      uint64                                    // The size of aggregated writes
-	limit     uint64                                    // The maximum memory allowance in bytes
-	nodes     map[common.Hash]map[string]*trienode.Node // The dirty node set, mapped by owner and path
-	immutable uint64                                    // The flag equal 1, flush nodes to disk background
+	layers uint64                                    // The number of diff layers aggregated inside
+	size   uint64                                    // The size of aggregated writes
+	limit  uint64                                    // The maximum memory allowance in bytes
+	nodes  map[common.Hash]map[string]*trienode.Node // The dirty node set, mapped by owner and path
+	//
+	immutable uint64 // The flag equal 1, flush nodes to disk background
 }
 
 func newNodeCache(limit, size uint64, nodes map[common.Hash]map[string]*trienode.Node, layers uint64) *nodecache {
@@ -307,6 +330,9 @@ func (nc *nodecache) empty() bool {
 	return nc.layers == 0
 }
 
+/*
+将  nodecache 持久化落盘
+*/
 func (nc *nodecache) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error {
 	if atomic.LoadUint64(&nc.immutable) != 1 {
 		return errFlushMutable

@@ -43,7 +43,7 @@ encoding.go 主要处理trie树中的三种编码格式的相互转换的工作�
 这种编码格式每一个字节包含了Key的一个半字节，尾部接上一个可选的'终结符','终结符'代表这个节点到底是叶子节点还是扩展节点。当节点被加载到内存里面的时候使用的是这种节点，
 因为它的方便访问。
 3) COMPACT encoding
-这种编码格式就是上面黄皮书里面说到的Hex-Prefix Encoding，这种编码格式可以看成是*HEX encoding**这种编码格式的另外一种版本，可以在存储到数据库的时候节约磁盘空间。
+这种编码格式就是上面黄皮书里面说到的 Hex-Prefix Encoding，这种编码格式可以看成是*HEX encoding**这种编码格式的另外一种版本，可以在存储到数据库的时候节约磁盘空间。
 简单的理解为：将普通的字节序列keybytes编码为带有t标志与奇数个半字节nibble标志位的keybytes
 
 keybytes为按完整字节（8bit）存储的正常信息
@@ -135,6 +135,7 @@ func hexToKeybytes(hex []byte) []byte {
 	return key
 }
 
+// 解码
 func decodeNibbles(nibbles []byte, bytes []byte) {
 	for bi, ni := 0, 0; ni < len(nibbles); bi, ni = bi+1, ni+2 {
 		bytes[bi] = nibbles[ni]<<4 | nibbles[ni+1]

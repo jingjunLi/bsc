@@ -65,6 +65,9 @@ func (acct *StateAccount) Copy() *StateAccount {
 // SlimAccount is a modified version of an Account, where the root is replaced
 // with a byte slice. This format can be used to represent full-consensus format
 // or slim format which replaces the empty root and code hash as nil byte slice.
+/*
+SlimAccount 是修改版本的 Account; root 被替换为 a byte slice.
+*/
 type SlimAccount struct {
 	Nonce    uint64
 	Balance  *uint256.Int

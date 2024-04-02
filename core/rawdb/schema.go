@@ -330,6 +330,10 @@ func IsLegacyTrieNode(key []byte, val []byte) bool {
 // ResolveAccountTrieNodeKey reports whether a provided database entry is an
 // account trie node in path-based state scheme, and returns the resolved
 // node path if so.
+/*
+trieNodeAccountPrefix + hexPath -> trie node
+"A"+hexPath -> trie node
+*/
 func ResolveAccountTrieNodeKey(key []byte) (bool, []byte) {
 	if !bytes.HasPrefix(key, trieNodeAccountPrefix) {
 		return false, nil
@@ -345,6 +349,9 @@ func ResolveAccountTrieNodeKey(key []byte) (bool, []byte) {
 
 // IsAccountTrieNode reports whether a provided database entry is an account
 // trie node in path-based state scheme.
+/*
+PBSS database key 是否是 account trie node
+*/
 func IsAccountTrieNode(key []byte) bool {
 	ok, _ := ResolveAccountTrieNodeKey(key)
 	return ok
@@ -353,6 +360,11 @@ func IsAccountTrieNode(key []byte) bool {
 // ResolveStorageTrieNode reports whether a provided database entry is a storage
 // trie node in path-based state scheme, and returns the resolved account hash
 // and node path if so.
+/*
+trieNodeStoragePrefix + accountHash + hexPath -> trie node
+"O"+accountHash + hexPath -> trie node
+1)
+*/
 func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 	if !bytes.HasPrefix(key, trieNodeStoragePrefix) {
 		return false, common.Hash{}, nil
@@ -372,6 +384,9 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 
 // IsStorageTrieNode reports whether a provided database entry is a storage
 // trie node in path-based state scheme.
+/*
+PBSS 模式下 是否是 storage trie node
+*/
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok

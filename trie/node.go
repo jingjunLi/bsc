@@ -46,7 +46,12 @@ node的结构，可以看到node分为4种类型，
 2.2) 叶子结点
 shortNode.Val 为 valueNode;
 3) valueNode: 用于存储数据（存在于fullNode或者叶子结点shortNode中）
-4) hashNode: 用于实现结点的折叠
+4) hashNode: 用于实现节点的折叠
+----
+shortNode
+1) 扩展结点 :
+1.1) Val字段存储的是其孩子节点在数据库中存储的索引值（其实该索引值也是孩子节点的哈希值）；
+1.2) Val字段存储的是其孩子节点的引用
 */
 type (
 	fullNode struct {
@@ -77,6 +82,10 @@ func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
 func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 
 // nodeFlag contains caching-related metadata about a node.
+/*
+节点哈希：若该字段不为空，则当需要进行哈希计算时，可以跳过计算过程而直接使用上次计算的结果（当节点变脏时，该字段被置空）；
+脏标志：当一个节点被修改时，该标志位被置为1；
+*/
 type nodeFlag struct {
 	hash  hashNode // cached hash of the node (may be nil)
 	dirty bool     // whether the node has changes that must be written to the database
@@ -93,6 +102,8 @@ func (n *shortNode) String() string { return n.fstring("") }
 func (n hashNode) String() string   { return n.fstring("") }
 func (n valueNode) String() string  { return n.fstring("") }
 
+/*
+ */
 func (n *fullNode) fstring(ind string) string {
 	resp := fmt.Sprintf("[\n%s  ", ind)
 	for i, node := range &n.Children {

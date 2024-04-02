@@ -159,17 +159,17 @@ type Database struct {
 		1) readOnly mutation 突变 是否被允许,  ?
 		2) waitSync 如果 database deactivated, initial state sync 还未完成 ?
 	*/
-	readOnly   bool                     // Flag if database is opened in read only mode
-	waitSync   bool                     // Flag if database is deactivated due to initial state sync
-	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
-	config     *Config                  // Configuration for database
-	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
-	tree       *layerTree               // The group for all known layers
+	readOnly   bool           // Flag if database is opened in read only mode
+	waitSync   bool           // Flag if database is deactivated due to initial state sync
+	bufferSize int            // Memory allowance (in bytes) for caching dirty nodes
+	config     *Config        // Configuration for database
+	diskdb     ethdb.Database // Persistent storage for matured trie nodes
+	tree       *layerTree     // The group for all known layers
 	/*
 		Freezer 作用 ? 存储 trie 历史数据 ?
 	*/
-	freezer    *rawdb.ResettableFreezer // Freezer for storing trie histories, nil possible in tests
-	lock       sync.RWMutex             // Lock to prevent mutations from happening at the same time
+	freezer *rawdb.ResettableFreezer // Freezer for storing trie histories, nil possible in tests
+	lock    sync.RWMutex             // Lock to prevent mutations from happening at the same time
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -269,8 +269,8 @@ func (db *Database) Reader(root common.Hash) (layer, error) {
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
 // Therefore, these maps must not be changed afterwards.
 /*
-
- */
+Update: 向 layerTree
+*/
 func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Hold the lock to prevent concurrent mutations.
 	db.lock.Lock()

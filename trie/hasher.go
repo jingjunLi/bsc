@@ -62,13 +62,12 @@ func returnHasherToPool(h *hasher) {
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
 /*
-计算原有hash值的主要流程是首先调用 h.hashChildren(n,db)把所有的子节点的hash值求出来，把原有的子节点替换成子节点的hash值。
+计算原有hash值的主要流程是首先调用 h.hashChildren(n,db) 把所有的子节点的hash值求出来，把原有的子节点替换成子节点的hash值。
 这是一个递归调用的过程，会从树叶依次往上计算直到树根。然后调用store方法计算当前节点的hash值，并把当前节点的hash值放入cache节点，
 设置dirty参数为false(新创建的节点的dirty值是为true的)，然后返回。
-
 返回值说明， cache变量包含了原有的node节点，并且包含了node节点的hash值。 hash变量返回了当前节点的hash值(这个值其实是根据node和node的所有子节点计算出来的)。
-有一个小细节： 根节点调用hash函数的时候， force参数是为true的，其他的子节点调用的时候force参数是为false的。 force参数的用途是当||c(J,i)||<32的时候也对c(J,i)进行hash计算，这样保证无论如何也会对根节点进行Hash计算。
-
+有一个小细节: 根节点调用hash函数的时候, force参数是为true的，其他的子节点调用的时候force参数是为false的。
+force 参数的用途是当 ||c(J,i)||<32 的时候也对 c(J,i) 进行 hash 计算，这样保证无论如何也会对根节点进行 Hash 计算。
 */
 func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
 	// Return the cached hash if it's available
@@ -78,7 +77,6 @@ func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
 	// Trie not processed yet, walk the children
 	/*
 		hashChildren方法,这个方法把所有的子节点替换成他们的hash，可以看到cache变量接管了原来的Trie树的完整结构，collapsed变量把子节点替换成子节点的hash值。
-
 		1) 如果当前节点是shortNode, 首先把collapsed.Key从Hex Encoding 替换成 Compact Encoding, 然后递归调用hash方法计算子节点的hash和cache，这样就把子节点替换成了子节点的hash值，
 		2) 如果当前节点是fullNode, 那么遍历每个子节点，把子节点替换成子节点的Hash值，
 		3) 否则的化这个节点没有children。直接返回。
@@ -163,6 +161,9 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 // should have hex-type Key, which will be converted (without modification)
 // into compact form for RLP encoding.
 // If the rlp data is smaller than 32 bytes, `nil` is returned.
+/*
+
+ */
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	n.encode(h.encbuf)
 	enc := h.encodedBytes()

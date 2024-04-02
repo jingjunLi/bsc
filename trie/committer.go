@@ -28,6 +28,7 @@ import (
 // insertion order.
 /*
 dirty nodes
+committer 是
 */
 type committer struct {
 	nodes       *trienode.NodeSet
@@ -111,6 +112,9 @@ func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
+		/*
+			1) embedded nodes
+		*/
 		children[i] = c.commit(append(path, byte(i)), child)
 	}
 	// For the 17th child, it's possible the type is valuenode.
@@ -122,6 +126,9 @@ func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection
 // is enabled, leaf nodes will be tracked in the modified nodeset as well.
+/*
+对 node n 做 hash, 然后将其添加到 nodeset;
+*/
 func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
@@ -130,6 +137,9 @@ func (c *committer) store(path []byte, n node) node {
 	// In theory, we should check if the node is leaf here (embedded node
 	// usually is leaf node). But small value (less than 32bytes) is not
 	// our target (leaves in account trie only).
+	/*
+
+	 */
 	if hash == nil {
 		// The node is embedded in its parent, in other words, this node
 		// will not be stored in the database independently, mark it as

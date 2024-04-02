@@ -597,7 +597,7 @@ func compareNodes(a, b NodeIterator) int {
 	return 0
 }
 
-// 对比两个 node  a b 是否一样 ?
+// 对比两个 node, a b 是否一样 ?
 type differenceIterator struct {
 	a, b  NodeIterator // Nodes returned are those in b - a.
 	eof   bool         // Indicates a has run out of elements

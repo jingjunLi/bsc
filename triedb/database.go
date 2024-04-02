@@ -53,6 +53,7 @@ var HashDefaults = &Config{
 // state scheme.
 /*
 定义一个公共的方法, access/update trie nodes in different  state scheme.
+实现两种: hashdb.Database, pathdb.Database
 */
 type backend interface {
 	// Scheme returns the identifier of used storage scheme.
@@ -72,6 +73,11 @@ type backend interface {
 	//
 	// The passed in maps(nodes, states) will be retained to avoid copying
 	// everything. Therefore, these maps must not be changed afterwards.
+	/*
+		核心的两个 interfact:
+		1) Update: 将指定 MergedNodeSet 包含的 dirty nodes, 执行 state transition 如何理解 ?
+		2) Commit: 将所有关联的 trie nodes 写入磁盘;
+	*/
 	Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error
 
 	// Commit writes all relevant trie nodes belonging to the specified state

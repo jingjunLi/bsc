@@ -370,6 +370,10 @@ Trie 树的 cache 管理。 还记得Trie树的结构里面有两个参数， �
 Trie 树每一次调用 Commit 方法，会导致当前的cachegen增加1。
 */
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
+	/*
+		在 insert 方法的开头，检查键的长度是否为零，如果是，则表示在当前节点处结束。在这种情况下，如果当前节点是一个 valueNode 类型的节点，则直接比较其值与要插入的值是否相等，
+		如果相等则不做任何修改，否则替换为要插入的值。
+	*/
 	if len(key) == 0 {
 		if v, ok := n.(valueNode); ok {
 			return !bytes.Equal(v, value.(valueNode)), value, nil
@@ -481,6 +485,9 @@ func (t *Trie) Delete(key []byte) error {
 func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 	switch n := n.(type) {
 	case *shortNode:
+		/*
+			shortNode -> branchNode ?
+		*/
 		matchlen := prefixLen(key, n.Key)
 		if matchlen < len(n.Key) {
 			return false, n, nil // don't replace n on mismatch

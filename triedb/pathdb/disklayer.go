@@ -95,11 +95,16 @@ func NewTrieNodeBuffer(sync bool, limit int, nodes map[common.Hash]map[string]*t
 }
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
-
+/*
+diskLayer 基于 kv 存储实现, 主要是 存储
+*/
 type diskLayer struct {
-	root   common.Hash      // Immutable, root hash to which this layer was made for
-	id     uint64           // Immutable, corresponding state id
-	db     *Database        // Path-based trie database
+	root common.Hash // Immutable, root hash to which this layer was made for
+	id   uint64      // Immutable, corresponding state id
+	db   *Database   // Path-based trie database
+	/*
+		cacheKey(owner, path) -> rawdb.ReadAccountTrieNode 的映射
+	*/
 	cleans *fastcache.Cache // GC friendly memory cache of clean node RLPs
 	/*
 		1) (dl *diskLayer) commit

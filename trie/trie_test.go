@@ -190,6 +190,34 @@ func TestInsert(t *testing.T) {
 	}
 }
 
+/*
+1) 新建一个 Trie
+2) 向 trie 增加 4 个 key
+*/
+func TestEmbeddedNodes(t *testing.T) {
+	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
+	trie := NewEmpty(db)
+
+	updateString(trie, "01234567890123456789012345678900", "00")
+	updateString(trie, "01234567890123456789012345678901", "01")
+	updateString(trie, "01234567890123456789022345678900", "11")
+	updateString(trie, "01234567890122456789012345678900", "30")
+
+	root := trie.Hash()
+	var set *trienode.NodeSet
+	root, set, _ = trie.Commit(false)
+	fmt.Println("root is", "root=%v", root, set.Summary())
+
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(set))
+	trie, _ = New(TrieID(root), db)
+
+	deleteString(trie, "01234567890123456789022345678900")
+	root = trie.Hash()
+	var set1 *trienode.NodeSet
+	root, set1, _ = trie.Commit(false)
+	fmt.Println("root is", "root=%v", root, set1.Summary())
+}
+
 func TestGet(t *testing.T) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 	trie := NewEmpty(db)

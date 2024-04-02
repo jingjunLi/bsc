@@ -43,7 +43,12 @@ type diffLayer struct {
 	*/
 	id    uint64 // Corresponding state id
 	block uint64 // Associated block number
-	// nodes trie nodes ?
+	/*
+		nodes trie nodes , 会传给 diskLayer & nodecache
+		owner(addr) -> map[string]*trienode.Node 的映射 ?
+		nodes 是如何赋值的 ? 通过下面的调用方式 一路传下来:MergedNodeSet 转换而成;
+		(db *Database) Update -> (db *Database) Update -> (tree *layerTree) add(trienode.MergedNodeSet) -> (dl *diffLayer) update (nodes)
+	*/
 	nodes  map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
 	states *triestate.Set                            // Associated state change set for building history
 	memory uint64                                    // Approximate guess as to how much memory we use

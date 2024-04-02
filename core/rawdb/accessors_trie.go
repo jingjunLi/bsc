@@ -81,7 +81,7 @@ db 指什么 ?
 accountTrieNodeKey = trieNodeAccountPrefix + nodePath -> trieNodeAccountPrefix + hexPath -> trie node
 2) StorageTrieNode
 trieNodeStoragePrefix + accountHash + hexPath -> trie node
-3)LegacyTrieNode
+3) LegacyTrieNode
 兼容 hashdb 的场景, 给定 hash 读写数据;
 ---
 4)TrieNode: 对上面三种数据类型的封装, 提供给用户统一的接口: HasTrieNode, ReadTrieNode, WriteTrieNode, DeleteTrieNode

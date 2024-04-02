@@ -345,6 +345,13 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 //   - And the 'st.type' will be 'hashedNode' AGAIN
 //
 // This method also sets 'st.type' to hashedNode, and clears 'st.key'.
+/*
+1) hash 转换为 hashedNode
+1. value >= 32 bytes
+
+2. value < 32 bytes
+
+*/
 func (t *StackTrie) hash(st *stNode, path []byte) {
 	var (
 		blob     []byte   // RLP-encoded node blob

@@ -85,6 +85,7 @@ type revision struct {
 type StateDB struct {
 	/*
 		db 和 trie 是什么 ?
+		noTrie: New StateDB  root 参数传入的 trie.EmptyTrie
 	*/
 	db             Database
 	prefetcherLock sync.Mutex
@@ -105,13 +106,18 @@ type StateDB struct {
 	// It will be updated when the Commit is called.
 	originalRoot common.Hash
 	expectedRoot common.Hash // The state root in the block header
-	stateRoot    common.Hash // The calculation result of IntermediateRoot
+	// 存储到 block 中的 stateRoot, 表示当前 block 的 世界状态 ?
+	stateRoot common.Hash // The calculation result of IntermediateRoot
 
 	fullProcessed bool
 	pipeCommit    bool
 
 	// These maps hold the state changes (including the corresponding
 	// original value) that occurred in this **block**.
+	/*
+		1) accounts: 'slim RLP' encoding ?
+		SlimAccountRLP
+	*/
 	AccountMux     sync.Mutex                                // Mutex for accounts access
 	StorageMux     sync.Mutex                                // Mutex for storages access
 	accounts       map[common.Hash][]byte                    // The mutated accounts in 'slim RLP' encoding
@@ -216,6 +222,9 @@ func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*St
 }
 
 // New creates a new state from a given trie.
+/*
+root: 1) common.Hash{} 的时候,  pruneAll; 2) 正常的 root hash
+*/
 func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                   db,
@@ -1265,6 +1274,10 @@ func (s *StateDB) AccountsIntermediateRoot() {
 	wg.Wait()
 }
 
+/*
+StateIntermediateRoot 计算当前状态 trie 的 root hash
+1) 正常的逻辑 : 打开 originalRoot, 返回 trie 的 Hash()
+*/
 func (s *StateDB) StateIntermediateRoot() common.Hash {
 	// If there was a trie prefetcher operating, it gets aborted and irrevocably
 	// modified after we start retrieving tries. Remove it from the statedb after
@@ -1279,6 +1292,10 @@ func (s *StateDB) StateIntermediateRoot() common.Hash {
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
+	/*
+		1) 如果开启 prefetcher, 则使用 prefetcher 打开 db.OpenTrie
+		2) 否则 使用 db.OpenTrie 来打开 db.OpenTrie
+	*/
 	if prefetcher != nil {
 		if trie := prefetcher.trie(common.Hash{}, s.originalRoot); trie != nil {
 			s.trie = trie
@@ -1602,6 +1619,8 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		/*
 			commitErr 主要流程:
 			1) tries 的修改 -> nodeSet(MergedNodeSet) -> Trie::Commit
+			---
+			pipeCommit: 目前都没有开 ???
 		*/
 		commitErr := func() error {
 			if s.pipeCommit {
@@ -1693,6 +1712,10 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 			close(finishCh)
 
 			if !s.noTrie {
+				/*
+					1) tries 的修改 -> nodeSet(MergedNodeSet) -> Trie::Commit
+					(t *StateTrie) Commit ->
+				*/
 				root, set, err := s.trie.Commit(true)
 				if err != nil {
 					return err

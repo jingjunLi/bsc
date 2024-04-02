@@ -152,6 +152,10 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	// restart, the head is rewound to the point with available state(trie)
 	// which is below the snapshot. In this case the snapshot can be recovered
 	// by re-executing blocks but right now it's unavailable.
+	/*
+		这里的场景 ??
+		the head is rewound to the point with available state(trie) which is below the snapshot.
+	*/
 	if head := snapshot.Root(); head != root {
 		log.Warn("Snapshot is not continuous with chain", "snaproot", head, "chainroot", root)
 

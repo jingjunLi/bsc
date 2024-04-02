@@ -151,6 +151,10 @@ const (
 
 // CacheConfig contains the configuration values for the trie database
 // and state snapshot these are resident in a blockchain.
+/*
+CacheConfig 保存了 trie 数据库的配置值和状态快照，这些都是 blockchain 中的常驻数据。
+CacheConfig:: SnapshotLimit: 内存中缓存快照条目的内存限制 >0 表示开启 Snapshot 缓存
+*/
 type CacheConfig struct {
 	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
@@ -266,8 +270,8 @@ type BlockChain struct {
 		1) triedb 保存 trie nodes, 具体如何读写数据 ?
 		2) stateCache 保存 contract codes ??
 	*/
-	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
-	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
+	triedb     *triedb.Database // The database handler for maintaining trie nodes.
+	stateCache state.Database   // State database to reuse between imports (contains state cache)
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -504,7 +508,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			}
 			if diskRoot != (common.Hash{}) {
 				/*
-				为什么走到 这里 ? diskRoot HasState false ?
+					为什么走到 这里 ? diskRoot HasState false ?
 				*/
 				log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash(), "diskRoot", diskRoot)
 
@@ -2185,6 +2189,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		bc.updateHighestVerifiedHeader(block.Header())
 
 		// Enable prefetching to pull in trie node paths while processing transactions
+		/*
+			第一种写法可以保证在goroutine内部参数的值不会被修改，而第二种写法则更简洁，但需要注意外部变量的引用可能会导致并发访问问题。
+		*/
 		statedb.StartPrefetcher("chain")
 		interruptCh := make(chan struct{})
 		// For diff sync, it may fallback to full sync, so we still do prefetch

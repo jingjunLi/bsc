@@ -27,6 +27,9 @@ import (
 // Node is a wrapper which contains the encoded blob of the trie node and its
 // node hash. It is general enough that can be used to represent trie node
 // corresponding to different trie implementations.
+/*
+Node 包含 trie node 的 encoded blob ,表示 trie node 对应的 不同 trie 实现 ?
+*/
 type Node struct {
 	Hash common.Hash // Node hash, empty for deleted node
 	Blob []byte      // Encoded node blob, nil for the deleted node
