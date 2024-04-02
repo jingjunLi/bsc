@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -504,6 +506,7 @@ func TestCommit(t *testing.T) {
 }
 
 func TestJournal(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	tester := newTester(t, 0)
 	defer tester.release()
 
