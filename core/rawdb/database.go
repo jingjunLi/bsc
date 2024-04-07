@@ -734,6 +734,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			stateLookups.Add(size)
 		case IsAccountTrieNode(key):
 			accountTries.Add(size)
+			log.Info("accountTries", "key", key)
 		case IsStorageTrieNode(key):
 			storageTries.Add(size)
 		case bytes.HasPrefix(key, CodePrefix) && len(key) == len(CodePrefix)+common.HashLength:

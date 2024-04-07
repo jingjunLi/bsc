@@ -261,9 +261,11 @@ func (b *nodebuffer) waitAndStopFlushing() {}
 // writeNodes writes the trie nodes into the provided database batch.
 // Note this function will also inject all the newly written nodes
 // into clean cache.
+/* writeNodes 将 trie nodes 持久化到 db */
 func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.Node, clean *cleanCache) (total int) {
 	for owner, subset := range nodes {
 		for path, n := range subset {
+			// 已经删除的 node, 会 从 db 删除, 然后删除 cleanCache;
 			if n.IsDeleted() {
 				if owner == (common.Hash{}) {
 					rawdb.DeleteAccountTrieNode(batch, []byte(path))
@@ -274,6 +276,10 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 					clean.nodes.Del(cacheKey(owner, []byte(path)))
 				}
 			} else {
+				/*
+					1) Account
+					2) Storage
+				*/
 				if owner == (common.Hash{}) {
 					rawdb.WriteAccountTrieNode(batch, []byte(path), n.Blob)
 				} else {

@@ -333,6 +333,9 @@ func (dl *diskLayer) readAccountTrie(hash common.Hash) []byte {
 }
 
 // readStorageTrie return value of the storage leaf node directly from the db
+/*
+data 试图当作 DecodeLeafNode 进行解析;
+*/
 func (dl *diskLayer) readStorageTrie(accountHash, storageHash common.Hash) []byte {
 	start := time.Now()
 	defer func() {

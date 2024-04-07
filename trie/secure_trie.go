@@ -86,12 +86,22 @@ func (t *StateTrie) MustGet(key []byte) []byte {
 // and slot key. The value bytes must not be modified by the caller.
 // If the specified storage slot is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
+/*
+GetStorage 给定 address ?
+panic: Storage mismatch,  account:0x4b710ce561dc045adc61e716cf215fd4b00aa4249975ba5d6be9b8f88da725ce,
+key: 25614c354b9d8d00684cfa81d47634d5b3132a5155a76f1d2884c23b440549bd, len(enc): 1, len(enc1): 0, err: unexpected EOF
+*/
 func (t *StateTrie) GetStorage(_ common.Address, key []byte, direct bool) ([]byte, error) {
 	var (
 		enc []byte
 		err error
 	)
 	if direct {
+		/*
+			enc: GetDirectly 读取
+			enc1: trie.Get 内存读取
+
+		*/
 		enc, err = t.trie.GetDirectly(t.hashKey(key))
 	} else {
 		enc, err = t.trie.Get(t.hashKey(key))
@@ -106,6 +116,9 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte, direct bool) ([]byt
 // GetAccount attempts to retrieve an account with provided account address.
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
+/*
+ GetAccount 给定 address, 读取 account
+*/
 func (t *StateTrie) GetAccount(address common.Address, direct bool) (*types.StateAccount, error) {
 	var (
 		res []byte

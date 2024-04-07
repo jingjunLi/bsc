@@ -146,6 +146,11 @@ func DeleteAccountTrieNode(db ethdb.KeyValueWriter, path []byte) {
 	}
 }
 
+/*
+DeleteStorageTrie 删除 storage trie ?
+CA 账户的 Storage trie;
+1)
+*/
 func DeleteStorageTrie(db ethdb.KeyValueWriter, accountHash common.Hash) {
 	nextAccountHash := common.BigToHash(accountHash.Big().Add(accountHash.Big(), big.NewInt(1)))
 	if err := db.DeleteRange(storageTrieNodeKey(accountHash, nil), storageTrieNodeKey(nextAccountHash, nil)); err != nil {
@@ -165,6 +170,11 @@ func ReadStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path 
 	return data, h.hash(data)
 }
 
+/*
+ReadStorageFromTrieDirectly 直接使用 key 编码进行 seek
+dbKey 是找到的 it.Key(), trieNodeStoragePrefix + accountHash + hexPath -> trie node
+dbKey[1:] 表示 去掉前缀 trieNodeStoragePrefix, 返回 accountHash + path ?
+*/
 func ReadStorageFromTrieDirectly(db ethdb.Database, accountHash common.Hash, key []byte) ([]byte, []byte, common.Hash) {
 	it := db.NewSeekIterator(storageTrieNodePrefix(accountHash), key)
 	defer it.Release()

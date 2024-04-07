@@ -129,6 +129,10 @@ func mustDecodeNode(hash, buf []byte) node {
 }
 
 // DecodeLeafNode return the Key and Val part of the shorNode
+/*
+val: DecodeNode 的 Val
+key: path+sn.Key
+*/
 func DecodeLeafNode(hash, path, value []byte) ([]byte, []byte) {
 	n := mustDecodeNode(hash, value)
 	switch sn := n.(type) {
