@@ -218,11 +218,15 @@ type cachingDB struct {
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	// 是什么 ?
-	triedb        *triedb.Database
-	noTries       bool
+	triedb  *triedb.Database
+	noTries bool
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
+/*
+为什么 需要 OpenTrie ? 直接 GetDirectly;
+这个 root 是什么 ? 为什么需要 root ? 为什么需要 OpenTrie ? 为什么需要 trie ?
+*/
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.noTries {
 		return trie.NewEmptyTrie(), nil
