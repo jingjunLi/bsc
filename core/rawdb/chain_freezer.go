@@ -170,6 +170,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		headNum := f.readHeadNumber(db)
 		hash := ReadHeadBlockHash(nfdb)
 		head := ReadHeader(nfdb, hash, headNum)
+		log.Info("Freezer is running", "headNum", headNum, "headHash", hash, "head", head)
 		threshold, err := f.freezeThreshold(nfdb)
 		if err != nil {
 			backoff = true
