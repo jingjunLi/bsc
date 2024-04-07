@@ -167,10 +167,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				return
 			}
 		}
-		headNum := f.readHeadNumber(db)
-		hash := ReadHeadBlockHash(nfdb)
-		head := ReadHeader(nfdb, hash, headNum)
-		log.Info("Freezer is running", "headNum", headNum, "headHash", hash, "head", head)
+
 		threshold, err := f.freezeThreshold(nfdb)
 		if err != nil {
 			backoff = true
@@ -178,6 +175,16 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		frozen := f.frozen.Load()
+		hash := ReadCanonicalHash(nfdb, threshold)
+		if hash == (common.Hash{}) {
+			return
+		}
+		header := ReadHeader(nfdb, hash, threshold)
+		log.Info("Freezer is running", "threshold", threshold, "headHash", hash, "head", header, "frozen", frozen)
+
+		if header == nil {
+			return
+		}
 
 		// Short circuit if the blocks below threshold are already frozen.
 		if frozen != 0 && frozen-1 >= threshold {
@@ -282,8 +289,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		env, _ := f.freezeEnv.Load().(*ethdb.FreezerEnv)
 		// try prune blob data after cancun fork
-		if isCancun(env, head.Number, head.Time) {
-			f.tryPruneBlobAncientTable(env, headNum)
+		if isCancun(env, header.Number, header.Time) {
+			f.tryPruneBlobAncientTable(env, threshold)
 		}
 
 		// Avoid database thrashing with tiny writes
