@@ -144,6 +144,10 @@ func (set *NodeSet) Hashes() []common.Hash {
 }
 
 // Summary returns a string-representation of the NodeSet.
+/*
+Deletion : 用 "[-]" 表示,
+Insertion or update: 插入或更新用 "[+/*]" 表示.
+*/
 func (set *NodeSet) Summary() string {
 	var out = new(strings.Builder)
 	fmt.Fprintf(out, "nodeset owner: %v\n", set.Owner)

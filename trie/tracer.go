@@ -124,6 +124,9 @@ func (t *tracer) copy() *tracer {
 }
 
 // deletedNodes returns a list of node paths which are deleted from the trie.
+/*
+
+ */
 func (t *tracer) deletedNodes() []string {
 	var paths []string
 	for path := range t.deletes {

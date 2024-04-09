@@ -21,9 +21,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"hash"
 	"io"
 	"math/rand"
+	"os"
 	"reflect"
 	"sort"
 	"testing"
@@ -193,6 +195,7 @@ func TestInsert(t *testing.T) {
 /*
 1) 新建一个 Trie
 2) 向 trie 增加 4 个 key
+测试 ?
 */
 func TestEmbeddedNodes(t *testing.T) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
@@ -1048,6 +1051,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 // that even a small trie which contains a leaf will have an extension making it
 // not fit into 32 bytes, rlp-encoded. However, it's still the correct thing to do.
 func TestCommitSequenceSmallRoot(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	s := &spongeDb{
 		sponge: sha3.NewLegacyKeccak256(),
 		id:     "a",

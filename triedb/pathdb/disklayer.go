@@ -37,6 +37,10 @@ import (
 // disk (since it basically is not-yet-written data).
 /*
 trienodebuffer 为了实现 nodebuffer, asyncnodebuffer 封装的 interface;
+1) commit: 将 dirty nodes 合并到 trienodebuffer
+2) revert:
+3) flush
+4) 其他几个接口 都是 读 辅助接口;
 */
 type trienodebuffer interface {
 	// node retrieves the trie node with given node info.

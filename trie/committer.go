@@ -27,8 +27,11 @@ import (
 // capture all dirty nodes during the commit process and keep them cached in
 // insertion order.
 /*
-dirty nodes
+committer 是 trie Commit 操作的工具; 在 commit 过程中, committer 会捕获所有 dirty nodes ; 并且按照插入顺序保持它们的缓存;
 committer 是
+核心的函数:
+1) Commit -> commit
+2)
 */
 type committer struct {
 	nodes       *trienode.NodeSet
@@ -46,11 +49,15 @@ func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *
 }
 
 // Commit collapses a node down into a hash node.
+// 调用方 : trie.Commit
 func (c *committer) Commit(n node) hashNode {
 	return c.commit(nil, n).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
+/*
+
+ */
 func (c *committer) commit(path []byte, n node) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()

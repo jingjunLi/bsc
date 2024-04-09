@@ -341,7 +341,9 @@ func (t *Tree) Disable() {
 // Snapshot retrieves a snapshot belonging to the given block root, or nil if no
 // snapshot is maintained for that block.
 /*
-Snapshot 返回 blockRoot 对应的 snapshot, 如果没有则返回 nil
+Snapshot 返回 blockRoot 对应的 snapshot, 如果没有则返回 nil;
+block root 是什么 ? block 为单位的 ?
+每一个 block 一个 layers,
 */
 func (t *Tree) Snapshot(blockRoot common.Hash) Snapshot {
 	t.lock.RLock()

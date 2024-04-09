@@ -40,13 +40,13 @@ node的结构，可以看到node分为4种类型，
 1) fullNode 对应了黄皮书里面的分支节点(branch node),包含16个分支，以及1个value
 2) shortNode 对应了黄皮书里面的扩展节点和叶子节点
 (通过shortNode.Val的类型来判断当前节点是叶子节点还是扩展节点)。
-区别是看Val字段指向的是 valueNode 还是其他类型的 node
+区别是看Val字段指向的是 valueNode 还是其他类型的 node, 保存的是 ???
 2.1) 扩展结点
-通过 shortNode.Val 指向下一个 node;
+通过 shortNode.Val 指向下一个 node; hashNode ?
 2.2) 叶子结点
 shortNode.Val 为 valueNode;
 3) valueNode: 用于存储数据（存在于fullNode或者叶子结点shortNode中）
-4) hashNode: 用于实现节点的折叠
+4) hashNode: 用于实现节点的折叠 ? 如何理解 ?
 ----
 shortNode
 1) 扩展结点 :

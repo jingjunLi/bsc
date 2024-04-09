@@ -40,12 +40,20 @@ import (
 Trie is a Merkle Patricia Trie. 1) 使用 New 来创建 trie, 基于 database; 档 trie 执行 commit 操作时, 生成的 nodes 会聚集返回一个 set;
 一旦 trie committed, 它就变成不可用 ?
 对外提供的接口:
-
+1) New
 
 trie的结构， root包含了当前的root节点， db是后端的KV存储，trie的结构最终都是需要通过KV的形式存储到数据库里面去，然后启动的时候是需要从数据库里面加载的。
 originalRoot 启动加载的时候的hash值，通过这个hash值可以在数据库里面恢复出整颗的trie树。cachegen字段指示了当前Trie树的cache时代，
 每次调用Commit操作的时候，会增加Trie树的cache时代。 cache时代会被附加在node节点上面，如果当前的cache时代 - cachelimit参数 大于node的cache时代，
 那么node会从cache里面卸载，以便节约内存。 其实这就是缓存更新的LRU算法， 如果一个缓存在多久没有被使用，那么就从缓存里面移除，以节约内存空间。
+
+1) root : 当前的 root 节点
+
+核心内容:
+1) 理解 trie 的结构, 各种结点的定义和使用;
+2) 理解 trie 的操作, 各种增删改查;Get, Update, Delete, Commit
+Hash() : 返回当前 trie 的 root hash
+Commit() : 提交 trie 的修改
 */
 type Trie struct {
 	root  node
@@ -91,6 +99,9 @@ func (t *Trie) Copy() *Trie {
 // zero hash or the sha3 hash of an empty string, then trie is initially
 // empty, otherwise, the root node must be present in database or returns
 // a MissingNodeError if not.
+/*
+创建 Trie ?
+*/
 func New(id *ID, db database.Database) (*Trie, error) {
 	reader, err := newTrieReader(id.StateRoot, id.Owner, db)
 	if err != nil {
@@ -335,7 +346,6 @@ func (t *Trie) MustUpdate(key, value []byte) {
 Update
 1) insert
 2) delete
-
 */
 func (t *Trie) Update(key, value []byte) error {
 	// Short circuit if the trie is already committed and not usable.
@@ -645,6 +655,9 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
+/*
+
+ */
 func (t *Trie) Hash() common.Hash {
 	hash, cached := t.hashRoot()
 	t.root = cached
@@ -660,6 +673,8 @@ func (t *Trie) Hash() common.Hash {
 /*
 Commit 搜集 trie 内所有的 dirty nodes, 并使用对应的 node hash 进行替换;
 所有收集的 nodes(包含 dirty leaves) 封装到 nodeset, 并返回;
+返回值:
+1) NodeSet:
 */
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	defer t.tracer.reset()
@@ -670,6 +685,9 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 	// (a) The trie was empty and no update happens => return nil
 	// (b) The trie was non-empty and all nodes are dropped => return
 	//     the node set includes all deleted nodes
+	/*
+		t.root
+	*/
 	if t.root == nil {
 		paths := t.tracer.deletedNodes()
 		if len(paths) == 0 {
@@ -683,6 +701,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
+	// 所有 dirty nodes 的 hash;
 	rootHash := t.Hash()
 
 	// Do a quick check if we really need to commit. This can happen e.g.
@@ -693,7 +712,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 		t.root = hashedNode
 		return rootHash, nil, nil
 	}
-	// 初始化 NodeSet,
+	// 初始化 NodeSet
 	nodes := trienode.NewNodeSet(t.owner)
 	for _, path := range t.tracer.deletedNodes() {
 		nodes.AddNode([]byte(path), trienode.NewDeleted())
