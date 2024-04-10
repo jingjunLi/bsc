@@ -101,25 +101,23 @@ func NewTrieNodeBuffer(sync bool, limit int, nodes map[common.Hash]map[string]*t
 // diskLayer is a low level persistent layer built on top of a key-value store.
 /*
 diskLayer 基于 kv 存储实现, 主要是 存储
+buffer -> cleans -> database 顺序来写入;
+1) cleans 用途:
+cacheKey(owner, path) -> rawdb.ReadAccountTrieNode 的映射
+2) trienodebuffer 用途:
+	1) (dl *diskLayer) commit
+3) stale 用途: 通知 layer 已经过时, 数据无效;
+	1) 与 database waitSync 类似,lock 是保护 stale
+
 */
 type diskLayer struct {
-	root common.Hash // Immutable, root hash to which this layer was made for
-	id   uint64      // Immutable, corresponding state id
-	db   *Database   // Path-based trie database
-	/*
-		cacheKey(owner, path) -> rawdb.ReadAccountTrieNode 的映射
-	*/
+	root   common.Hash      // Immutable, root hash to which this layer was made for
+	id     uint64           // Immutable, corresponding state id
+	db     *Database        // Path-based trie database
 	cleans *fastcache.Cache // GC friendly memory cache of clean node RLPs
-	/*
-		1) (dl *diskLayer) commit
-	*/
-	buffer trienodebuffer // Node buffer to aggregate writes
-	/*
-		1) 与 database waitSync 类似,
-		lock 是保护 stale
-	*/
-	stale bool         // Signals that the layer became stale (state progressed)
-	lock  sync.RWMutex // Lock used to protect stale flag
+	buffer trienodebuffer   // Node buffer to aggregate writes
+	stale  bool             // Signals that the layer became stale (state progressed)
+	lock   sync.RWMutex     // Lock used to protect stale flag
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
@@ -177,6 +175,10 @@ func (dl *diskLayer) markStale() {
 
 // Node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
+/*
+Node 实现 layer interface, 通过 node info 获取 trie node; 如果 node 不存在, 不会返回 error;
+读取顺序: 1) trienodebuffer; 2) cleans; 3) disk(database)
+*/
 func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
@@ -249,7 +251,7 @@ func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes map
 // and returns a newly constructed disk layer. Note the current disk
 // layer must be tagged as stale first to prevent re-access.
 /*
-commit 将最底层的 diff layer 放到 node buffer, 并且构造一个新的 diff layer; 并且将当前 disk layer 设置为 stale, 防止重复访问;
+commit 将最底层的 diff layer 放到 node buffer, 并且构造一个新的 disk layer; 并且将当前 disk layer 设置为 stale, 防止重复访问;
 buffer.flush
 核心的流程:
 */
@@ -263,6 +265,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	/*
 		1) 先构造和存储 state history, 需要开启 freezer; 如果 state history 保存了,但是 对应的 states(journal) 没有 flushing,
 		持久化的 state history 在下次重启的时候会被 truncated 截断;
+		---
+		将 diffLayer 转换为 history, 并且写入 freezer;
 	*/
 	var (
 		overflow bool

@@ -287,8 +287,14 @@ func ReadStateHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []by
 // position of state history in freezer by minus one since the id of first state
 // history starts from one(zero for initial state).
 /*
-
- */
+WriteStateHistory 写入提供的状态历史记录到数据库。 由于第一个状态历史记录的 id 从 1 开始（初始状态为零），因此计算状态历史记录在冰箱中的位置减一。
+主要有下面五种数据:
+1) "history.meta"
+2) "account.index"
+"storage.index"
+"account.data"
+"storage.data"
+*/
 func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) {
 	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		err := op.AppendRaw(stateHistoryMeta, id-1, meta)

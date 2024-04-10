@@ -403,7 +403,10 @@ func (db *Database) Journal(root common.Hash) error {
 	if l == nil {
 		return fmt.Errorf("triedb layer [%#x] missing", root)
 	}
-	// 1) 只有一个 disk layer 2) 具有很多 diffLayer & diskLayer
+	/*
+		1) 只有一个 disk layer
+		2) 具有很多 diffLayer & diskLayer, layers 的数量如何确定 ?
+	*/
 	disk := db.tree.bottom()
 	if l, ok := l.(*diffLayer); ok {
 		log.Info("Persisting dirty state to disk", "head", l.block, "root", root, "layers", l.id-disk.id+disk.buffer.getLayers())
