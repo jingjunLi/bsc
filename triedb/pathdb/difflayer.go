@@ -32,7 +32,9 @@ import (
 // The goal of a diff layer is to act as a journal, tracking recent modifications
 // made to the state, that have not yet graduated into a semi-immutable state.
 /*
-diffLayer 表示 内存中 tries 的一系列修改, diff layer 的目标是与 journal 相似, 追踪最近修改的 state; 不保证进入 半不变状态 ?
+diffLayer 表示 内存中 tries 的一系列修改, diff layer 的目标是与 journal 相似, 追踪最近修改的 state; 不保证进入半不变状态 ?
+diffLayer 相当于保存在内存中的缓存, 类似 journal; 所以即使丢失 也可以进行重建;
+
 1) id 用途 ? the state id of the layer ?
 2) nodes 用途 ? Cached trie nodes indexed by owner and path ?
 	nodes trie nodes , 会传给 diskLayer & nodecache
@@ -40,6 +42,9 @@ diffLayer 表示 内存中 tries 的一系列修改, diff layer 的目标是与 
 	nodes 是如何赋值的 ? 通过下面的调用方式 一路传下来:MergedNodeSet 转换而成;
 	(db *Database) Update -> (db *Database) Update -> (tree *layerTree) add(trienode.MergedNodeSet) -> (dl *diffLayer) update (nodes)
 3) parent & lock: lock 保护 parent ? 为什么只保护 parent, 存在并发读写 ?
+---
+核心的功能:
+
 */
 type diffLayer struct {
 	// Immutables
@@ -111,6 +116,9 @@ func (dl *diffLayer) parentLayer() layer {
 // node retrieves the node with provided node information. It's the internal
 // version of Node function with additional accessed layer tracked. No error
 // will be returned if node is not found.
+/*
+查询接口, 给定 node 信息;
+*/
 func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, depth int) ([]byte, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.

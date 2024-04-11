@@ -73,6 +73,9 @@ type journalStorage struct {
 // loadJournal tries to parse the layer journal from the disk.
 /*
 TrieJournal 的读取, 如何做一个 iterator ?
+1) diskRoot 含义 ?
+---
+1) 从 diskdb 中读取 TrieJournal, TrieJournal 中保存了 root
 */
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	journal := rawdb.ReadTrieJournal(db.diskdb)
@@ -92,6 +95,9 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	// Secondly, resolve the disk layer root, ensure it's continuous
 	// with disk layer. Note now we can ensure it's the layer journal
 	// correct version, so we expect everything can be resolved properly.
+	/*
+
+	 */
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
 		return nil, errMissDiskRoot
@@ -117,14 +123,15 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 
 // loadLayers loads a pre-existing state layer backed by a key-value store.
 /*
-1) 调用rawdb.ReadAccountTrieNode从持久状态里检索根节点
-2) 调用db.loadJournal(root)通过解析日志加载layers：
-    (1) loadJournal 会尝试从磁盘里解析layer日志：调用rawdb.ReadTrieJournal(db.diskdb)获取journal，调用rlp.NewStream将journal转换为stream
-    (2) 拿到stream后，首先解析stream第一个元素作为journal version，check version
+1) 调用 rawdb.ReadAccountTrieNode 从持久状态里检索根节点
+2) 调用 db.loadJournal(root) 通过解析日志加载layers:
+    (1) loadJournal 会尝试从磁盘里解析 layer 日志: 调用 rawdb.ReadTrieJournal(db.diskdb) 获取 journal, 调用 rlp.NewStream 将 journal 转换为 stream
+    (2) 拿到 stream 后，首先解析 stream 第一个元素作为 journal version, check version
     (3) 第二步，解析磁盘层根hash，确保和磁盘层根hash一致；如果不一致就报错
-    (4) 从journal中加载disk layer
-    (5) 以diskLayer做为base，在其基础上加载diffLayer，将获取到的diffLayer做为loadLayers结果返回
-3) 如果db.loadJournal(root)出错，返回具有持久状态的单层，即调用newDiskLayer()做为loadLayers返回结果
+    (4) 从 journal 中加载 disk layer
+    (5) 以 diskLayer 做为 base，在其基础上加载 diffLayer, 将获取到的 diffLayer 做为 loadLayers 结果返回
+3) 如果 db.loadJournal(root) 出错，返回具有持久状态的单层，即调用 newDiskLayer() 做为 loadLayers 返回结果
+loadJournal 出错, 丢弃 journal, 相当于 diffLayer 的缓存丢弃, 创建 diskLayer 使用;
 */
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
@@ -139,6 +146,9 @@ func (db *Database) loadLayers() layer {
 	// journal is not matched(or missing) with the persistent state, discard
 	// it. Display log for discarding journal, but try to avoid showing
 	// useless information when the db is created from scratch.
+	/*
+		如果journal和持久状态不匹配，或者journal丢失，就丢弃它。显示日志以丢弃journal，但尽量避免在从头开始创建db时显示无用信息。
+	*/
 	if !(root == types.EmptyRootHash && errors.Is(err, errMissJournal)) {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
@@ -385,9 +395,8 @@ func (dl *diffLayer) journal(w io.Writer) error {
 // database as read-only to prevent all following mutation to disk.
 /*
 Journal 提交 整个 diff 到一个单独的 journal entry
-TrieJournal 的写入:
+TrieJournal 的写入: journalVersion + diskroot + diffLayer + diskLayer
 128 层
-journalVersion + diskroot + diffLayer + diskLayer
 1) diffLayer: 递归的寻找 parent 进行 journal
 root + block + trie nodes + journalAccounts + journalStorage
 2) journal
@@ -422,8 +431,6 @@ func (db *Database) Journal(root common.Hash) error {
 		return errDatabaseReadOnly
 	}
 	// Firstly write out the metadata of journal
-	/*
-	 */
 	journal := new(bytes.Buffer)
 	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return err
