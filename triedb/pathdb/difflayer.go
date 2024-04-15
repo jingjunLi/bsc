@@ -95,6 +95,9 @@ func init() {
 //
 // The goal of a diff layer is to act as a journal, tracking recent modifications
 // made to the state, that have not yet graduated into a semi-immutable state.
+/*
+diffed: 类似于 snapshot 的 diffLayer, 移植 bloomfilter 过来; 存储不与 disk layer 相同的 items;
+*/
 type diffLayer struct {
 	// Immutables
 	root   common.Hash                               // Root hash to which this layer diff belongs to
@@ -171,6 +174,7 @@ func storageBloomHash(h0, h1 common.Hash) uint64 {
 
 // rebloom discards the layer's current bloom and rebuilds it from scratch based
 // on the parent's and the local diffs.
+/**/
 func (dl *diffLayer) rebloom(origin *diskLayer) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -183,6 +187,10 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	dl.origin = origin
 
 	// Retrieve the parent bloom or create a fresh empty one
+	/*
+		diffed 是所有的 diffLayer , 还是仅仅一层的 ?
+		为什么要对 DestructSet, LatestAccounts, LatestStorages 进行遍历 ?
+	*/
 	if parent, ok := dl.parent.(*diffLayer); ok {
 		parent.lock.RLock()
 		dl.diffed, _ = parent.diffed.Copy()
@@ -244,6 +252,12 @@ func (dl *diffLayer) parentLayer() layer {
 	return dl.parent
 }
 
+/*
+Account
+(dl *diffLayer) Account
+1) 检查 diffed 是否存在, 如果存在 从 diff layer 读取;
+2) 如果不存在, 则从 disk layer 读取
+*/
 func (dl *diffLayer) Account(hash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()

@@ -91,6 +91,9 @@ type trienodebuffer interface {
 	waitAndStopFlushing()
 }
 
+/*
+cleanCache 为什么需要 三个 cache ? 分别的用途 ?
+*/
 type cleanCache struct {
 	nodes       *fastcache.Cache
 	plainStates *fastcache.Cache
@@ -179,6 +182,12 @@ func (dl *diskLayer) markStale() {
 	dl.stale = true
 }
 
+/*
+Account 直接从 磁盘读取
+1) buffer
+2) cleans.plainAccounts
+如果两者都没有, 从磁盘读取, 然后加入到 plainAccounts cache 中; fastcache.Cache
+*/
 func (dl *diskLayer) Account(hash common.Hash) ([]byte, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.
@@ -207,6 +216,9 @@ func (dl *diskLayer) Account(hash common.Hash) ([]byte, error) {
 	return blob, nil
 }
 
+/*
+Storage 与 Account 类似, 换成了 cleans.plainStorages
+*/
 func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.
