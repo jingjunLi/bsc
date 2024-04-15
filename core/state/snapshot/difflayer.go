@@ -362,6 +362,8 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		为什么会有两个 BloomHasher ?
 		accountBloomHasher
 		destructBloomHasher
+		1) account 的 diffed 是否存在
+		2) destruct 的 diffed 是否存在
 	*/
 	hit := dl.diffed.ContainsHash(accountBloomHash(hash))
 	if !hit {
@@ -375,7 +377,7 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 
 	// If the bloom filter misses, don't even bother with traversing the memory
 	// diff layers, reach straight into the bottom persistent disk layer
-	// 如果 bloom filter miss, 直接从 disk layer 中获取 account 数据;
+	// 如果 bloom filter miss, 直接从 disk layer 中获取 account 数据; 不需要遍历 内存的 diff layers
 	if origin != nil {
 		snapshotBloomAccountMissMeter.Mark(1)
 		return origin.AccountRLP(hash)
