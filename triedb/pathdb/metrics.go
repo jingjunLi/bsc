@@ -20,6 +20,11 @@ import "github.com/ethereum/go-ethereum/metrics"
 
 var (
 	/*
+		cleanHitMeter
+		dirtyHitMeter
+		commitTimeTimer
+	*/
+	/*
 		cleanHitMeter: 用在disklayer.go文件中Node函数里，如果fastcache缓存里有对应的node data，标记一下，`cleanHitMeter.Mark(1)`
 		cleanMissMeter: 用在disklayer.go文件中Node函数里，如果fastcache缓存里没有对应的node data，标记一下，`cleanMissMeter.Mark(1)`
 		cleanReadMeter: 用在disklayer.go文件中Node函数里，如果fastcache缓存里有对应的node data，记录数据大小，`cleanReadMeter.Mark(int64(len(blob)))`

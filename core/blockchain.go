@@ -921,8 +921,7 @@ func (bc *BlockChain) tryRewindBadBlocks() {
 // The method returns the block number where the requested root cap was found.
 /*
 setHeadBeyondRoot 重置区块链到指定的区块高度，如果指定的区块高度大于当前区块高度，则不做任何操作；
-如果指定的区块高度小于当前区块高度，则从当前区块高度开始回滚到指定的区块高度；
-rewinds 当前区块高度到指定的区块高度；
+如果指定的区块高度小于当前区块高度，则从当前区块高度开始回滚到指定的区块高度; rewinds 当前区块高度到指定的区块高度；
 1) NewBlockChain
 2) SetHead
 3) tryRewindBadBlocks

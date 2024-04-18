@@ -778,7 +778,8 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
 /*
-a deleted state object 是 返回 nil;
+如果 state object 已经删除, 则返回 nil; state journal revert 的时候需要 ?
+根据 addr 返回 stateObject;
 */
 func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	// Prefer live objects if any is available

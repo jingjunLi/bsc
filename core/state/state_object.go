@@ -352,7 +352,7 @@ func (s *stateObject) finalise(prefetch bool) {
 /*
 1) s.finalise() 将dirtyStorage中的所有数据移动到pendingStorage中
 2) 根据账户哈希和账户 root 打开账户存储树
-3) 将key与trie中的value关联，更新数据
+3) 将 key 与 trie 中的 value 关联，更新数据
 */
 func (s *stateObject) updateTrie() (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
