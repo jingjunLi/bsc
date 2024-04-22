@@ -18,11 +18,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -591,6 +593,27 @@ func checkDanglingStorage(ctx *cli.Context) error {
 	return snapshot.CheckDanglingStorage(db)
 }
 
+type ContractMeta struct {
+	Owner                string
+	AccountRoot          string
+	StorageTrieKeySize   int
+	StorageTrieValueSize int
+	StorageTrieKeyNum    int
+	ContractCodeHash     string
+}
+
+// 再次写入数据
+func writeContractMetaToCSV(contractDatas []ContractMeta, writer *csv.Writer) {
+	for _, d := range contractDatas {
+		record := []string{d.Owner, d.AccountRoot, strconv.Itoa(d.StorageTrieKeySize), strconv.Itoa(d.StorageTrieValueSize), strconv.Itoa(d.StorageTrieKeyNum),
+			d.ContractCodeHash}
+		if err := writer.Write(record); err != nil {
+			log.Error("Error writing record to CSV: %v", err)
+		}
+	}
+	contractDatas = []ContractMeta{}
+}
+
 // traverseState is a helper function used for pruning verification.
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present.
@@ -633,8 +656,27 @@ func traverseState(ctx *cli.Context) error {
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return err
 	}
+
+	// 创建CSV文件
+	file, err := os.Create("contract_meta.csv")
+	if err != nil {
+		log.Error("Failed to create file: %v", err)
+	}
+	defer file.Close()
+
+	// 创建CSV Writer
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// 写入表头
+	headers := []string{"Owner", "AccountRoot", "StorageTrieKeySize", "StorageTrieValueSize", "StorageTrieKeyNum", "ContractCodeHash"}
+	if err := writer.Write(headers); err != nil {
+		log.Error("Error writing headers to CSV: %v", err)
+	}
+
 	var (
 		accounts   int
+		caAccounts int
 		slots      int
 		codes      int
 		lastReport time.Time
@@ -646,6 +688,7 @@ func traverseState(ctx *cli.Context) error {
 		return err
 	}
 	accIter := trie.NewIterator(acctIt)
+	var contractDatas []ContractMeta
 	for accIter.Next() {
 		accounts += 1
 		var acc types.StateAccount
@@ -653,6 +696,14 @@ func traverseState(ctx *cli.Context) error {
 			log.Error("Invalid account encountered during traversal", "err", err)
 			return err
 		}
+		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
+			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
+				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
+				return errors.New("missing code")
+			}
+			codes += 1
+		}
+
 		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
 			storageTrie, err := trie.NewStateTrie(id, triedb)
@@ -665,8 +716,13 @@ func traverseState(ctx *cli.Context) error {
 				log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
 				return err
 			}
+			caAccounts++
+			var storageTrieKeySize, storageTrieValueSize, codeSlots int
 			storageIter := trie.NewIterator(storageIt)
 			for storageIter.Next() {
+				storageTrieKeySize += len(storageIter.Key)
+				storageTrieValueSize += len(storageIter.Value)
+				codeSlots += 1
 				slots += 1
 
 				if time.Since(lastReport) > time.Second*8 {
@@ -674,28 +730,37 @@ func traverseState(ctx *cli.Context) error {
 					lastReport = time.Now()
 				}
 			}
+			contractData := ContractMeta{
+				Owner:                common.BytesToHash(accIter.Key).String(),
+				AccountRoot:          acc.Root.String(),
+				StorageTrieKeySize:   storageTrieKeySize,
+				StorageTrieValueSize: storageTrieValueSize,
+				StorageTrieKeyNum:    codeSlots,
+				ContractCodeHash:     common.BytesToHash(acc.CodeHash).String(),
+			}
+			contractDatas = append(contractDatas, contractData)
 			if storageIter.Err != nil {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Err)
 				return storageIter.Err
 			}
 		}
-		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
-			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
-				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
-				return errors.New("missing code")
-			}
-			codes += 1
+		// 将数据写入CSV文件
+		if len(contractDatas) > 1000 {
+			writeContractMetaToCSV(contractDatas, writer)
 		}
+
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
 	}
+	writeContractMetaToCSV(contractDatas, writer)
+	contractDatas = []ContractMeta{}
 	if accIter.Err != nil {
 		log.Error("Failed to traverse state trie", "root", root, "err", accIter.Err)
 		return accIter.Err
 	}
-	log.Info("State is complete", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("State is complete", "accounts", accounts, "caAccounts", caAccounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
