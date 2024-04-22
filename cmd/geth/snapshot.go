@@ -654,6 +654,7 @@ func traverseState(ctx *cli.Context) error {
 		log.Error("Failed to open iterator", "root", root, "err", err)
 		return err
 	}
+	// accIter 遍历 当前的世界状态
 	accIter := trie.NewIterator(acctIt)
 	for accIter.Next() {
 		accounts += 1
@@ -662,6 +663,10 @@ func traverseState(ctx *cli.Context) error {
 			log.Error("Invalid account encountered during traversal", "err", err)
 			return err
 		}
+		// 当前 account 非空 表示合约账户
+		/*
+			ID:
+		*/
 		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
 			storageTrie, err := trie.NewStateTrie(id, triedb)
@@ -669,11 +674,13 @@ func traverseState(ctx *cli.Context) error {
 				log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 				return err
 			}
+			// 遍历存储 trie
 			storageIt, err := storageTrie.NodeIterator(nil)
 			if err != nil {
 				log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
 				return err
 			}
+			// 合约 的 所有 kv ?
 			storageIter := trie.NewIterator(storageIt)
 			for storageIter.Next() {
 				slots += 1
@@ -695,6 +702,10 @@ func traverseState(ctx *cli.Context) error {
 			}
 			codes += 1
 		}
+		/*
+			1) slots: 推算出来 codes 大小;
+			2) codes: 合约账户/Codes 数量 ?
+		*/
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
