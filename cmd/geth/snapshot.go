@@ -747,6 +747,7 @@ func traverseState(ctx *cli.Context) error {
 		// 将数据写入CSV文件
 		if len(contractDatas) > 1000 {
 			writeContractMetaToCSV(contractDatas, writer)
+			contractDatas = []ContractMeta{}
 		}
 
 		if time.Since(lastReport) > time.Second*8 {
