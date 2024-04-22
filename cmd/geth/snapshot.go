@@ -748,6 +748,7 @@ func traverseState(ctx *cli.Context) error {
 		if len(contractDatas) > 1000 {
 			writeContractMetaToCSV(contractDatas, writer)
 			contractDatas = []ContractMeta{}
+			log.Info("Traversing state persist contractDatas", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 		}
 
 		if time.Since(lastReport) > time.Second*8 {
