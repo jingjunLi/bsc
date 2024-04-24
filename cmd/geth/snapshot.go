@@ -747,7 +747,7 @@ func traverseState(ctx *cli.Context) error {
 			}
 		}
 		// 将数据写入CSV文件
-		if len(contractDatas) > 1000 {
+		if len(contractDatas) > 10000 {
 			writeContractMetaToCSV(contractDatas, writer)
 			contractDatas = []ContractMeta{}
 			log.Info("Traversing state persist contractDatas", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -941,7 +941,7 @@ func traverseRawState(ctx *cli.Context) error {
 				}
 				contractDatas = append(contractDatas, contractData)
 				// 将数据写入CSV文件
-				if len(contractDatas) > 1000 {
+				if len(contractDatas) > 10000 {
 					writeContractMetaToCSV(contractDatas, writer)
 					contractDatas = []ContractMeta{}
 					log.Info("Traversing state persist contractDatas", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
