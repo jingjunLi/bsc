@@ -594,18 +594,19 @@ func checkDanglingStorage(ctx *cli.Context) error {
 }
 
 type ContractMeta struct {
-	Owner                string
-	AccountRoot          string
-	StorageTrieKeySize   int
-	StorageTrieValueSize int
-	StorageTrieKeyNum    int
-	ContractCodeHash     string
+	Owner                  string
+	AccountRoot            string
+	StorageTrieKeySize     int
+	StorageTrieValueSize   int
+	StorageTrieNodeNum     int
+	StorageTrieLeafNodeNum int
+	ContractCodeHash       string
 }
 
 // 再次写入数据
 func writeContractMetaToCSV(contractDatas []ContractMeta, writer *csv.Writer) {
 	for _, d := range contractDatas {
-		record := []string{d.Owner, d.AccountRoot, strconv.Itoa(d.StorageTrieKeySize), strconv.Itoa(d.StorageTrieValueSize), strconv.Itoa(d.StorageTrieKeyNum),
+		record := []string{d.Owner, d.AccountRoot, strconv.Itoa(d.StorageTrieKeySize), strconv.Itoa(d.StorageTrieValueSize), strconv.Itoa(d.StorageTrieNodeNum), strconv.Itoa(d.StorageTrieLeafNodeNum),
 			d.ContractCodeHash}
 		if err := writer.Write(record); err != nil {
 			log.Error("Error writing record to CSV: %v", err)
@@ -669,7 +670,7 @@ func traverseState(ctx *cli.Context) error {
 	defer writer.Flush()
 
 	// 写入表头
-	headers := []string{"Owner", "AccountRoot", "StorageTrieKeySize", "StorageTrieValueSize", "StorageTrieKeyNum", "ContractCodeHash"}
+	headers := []string{"Owner", "AccountRoot", "StorageTrieKeySize", "StorageTrieValueSize", "StorageTrieNodeNum", "StorageTrieLeafNodeNum", "ContractCodeHash"}
 	if err := writer.Write(headers); err != nil {
 		log.Error("Error writing headers to CSV: %v", err)
 	}
@@ -717,12 +718,12 @@ func traverseState(ctx *cli.Context) error {
 				return err
 			}
 			caAccounts++
-			var storageTrieKeySize, storageTrieValueSize, codeSlots int
+			var storageTrieKeySize, storageTrieValueSize, storageTrieLeafNodes int
 			storageIter := trie.NewIterator(storageIt)
 			for storageIter.Next() {
 				storageTrieKeySize += len(storageIter.Key)
 				storageTrieValueSize += len(storageIter.Value)
-				codeSlots += 1
+				storageTrieLeafNodes += 1
 				slots += 1
 
 				if time.Since(lastReport) > time.Second*8 {
@@ -731,12 +732,13 @@ func traverseState(ctx *cli.Context) error {
 				}
 			}
 			contractData := ContractMeta{
-				Owner:                common.BytesToHash(accIter.Key).String(),
-				AccountRoot:          acc.Root.String(),
-				StorageTrieKeySize:   storageTrieKeySize,
-				StorageTrieValueSize: storageTrieValueSize,
-				StorageTrieKeyNum:    codeSlots,
-				ContractCodeHash:     common.BytesToHash(acc.CodeHash).String(),
+				Owner:                  common.BytesToHash(accIter.Key).String(),
+				AccountRoot:            acc.Root.String(),
+				StorageTrieKeySize:     storageTrieKeySize,
+				StorageTrieValueSize:   storageTrieValueSize,
+				StorageTrieLeafNodeNum: storageTrieLeafNodes,
+				StorageTrieNodeNum:     0,
+				ContractCodeHash:       common.BytesToHash(acc.CodeHash).String(),
 			}
 			contractDatas = append(contractDatas, contractData)
 			if storageIter.Err != nil {
@@ -809,11 +811,29 @@ func traverseRawState(ctx *cli.Context) error {
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return err
 	}
+	// 创建CSV文件
+	file, err := os.Create("contract_meta_raw_state.csv")
+	if err != nil {
+		log.Error("Failed to create file: %v", err)
+	}
+	defer file.Close()
+
+	// 创建CSV Writer
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// 写入表头
+	headers := []string{"Owner", "AccountRoot", "StorageTrieKeySize", "StorageTrieValueSize", "StorageTrieNodeNum", "StorageTrieLeafNodeNum", "ContractCodeHash"}
+	if err := writer.Write(headers); err != nil {
+		log.Error("Error writing headers to CSV: %v", err)
+	}
+
 	var (
 		nodes      int
 		accounts   int
 		slots      int
 		codes      int
+		caAccounts int
 		lastReport time.Time
 		start      = time.Now()
 		hasher     = crypto.NewKeccakState()
@@ -829,6 +849,7 @@ func traverseRawState(ctx *cli.Context) error {
 		log.Error("State is non-existent", "root", root)
 		return nil
 	}
+	var contractDatas []ContractMeta
 	for accIter.Next(true) {
 		nodes += 1
 		node := accIter.Hash()
@@ -870,13 +891,18 @@ func traverseRawState(ctx *cli.Context) error {
 					log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
 					return err
 				}
+				caAccounts++
+				var storageTrieKeySize, storageTrieValueSize, storageTrieLeafNodes, mptNodes int
 				for storageIter.Next(true) {
 					nodes += 1
+					mptNodes += 1
+					storageTrieValueSize += len(storageIter.NodeBlob())
 					node := storageIter.Hash()
 
 					// Check the presence for non-empty hash node(embedded node doesn't
 					// have their own hash).
 					if node != (common.Hash{}) {
+						storageTrieKeySize = storageTrieKeySize + 1 + common.HashLength + len(storageIter.Path())
 						blob, _ := reader.Node(common.BytesToHash(accIter.LeafKey()), storageIter.Path(), node)
 						if len(blob) == 0 {
 							log.Error("Missing trie node(storage)", "hash", node)
@@ -893,6 +919,7 @@ func traverseRawState(ctx *cli.Context) error {
 					// Bump the counter if it's leaf node.
 					if storageIter.Leaf() {
 						slots += 1
+						storageTrieLeafNodes += 1
 					}
 					if time.Since(lastReport) > time.Second*8 {
 						log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -902,6 +929,22 @@ func traverseRawState(ctx *cli.Context) error {
 				if storageIter.Error() != nil {
 					log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Error())
 					return storageIter.Error()
+				}
+				contractData := ContractMeta{
+					Owner:                  common.BytesToHash(accIter.LeafKey()).String(),
+					AccountRoot:            acc.Root.String(),
+					StorageTrieKeySize:     storageTrieKeySize,
+					StorageTrieValueSize:   storageTrieValueSize,
+					StorageTrieNodeNum:     mptNodes,
+					StorageTrieLeafNodeNum: storageTrieLeafNodes,
+					ContractCodeHash:       common.BytesToHash(acc.CodeHash).String(),
+				}
+				contractDatas = append(contractDatas, contractData)
+				// 将数据写入CSV文件
+				if len(contractDatas) > 1000 {
+					writeContractMetaToCSV(contractDatas, writer)
+					contractDatas = []ContractMeta{}
+					log.Info("Traversing state persist contractDatas", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 				}
 			}
 			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
@@ -917,10 +960,13 @@ func traverseRawState(ctx *cli.Context) error {
 			}
 		}
 	}
+	writeContractMetaToCSV(contractDatas, writer)
+	contractDatas = []ContractMeta{}
 	if accIter.Error() != nil {
 		log.Error("Failed to traverse state trie", "root", root, "err", accIter.Error())
 		return accIter.Error()
 	}
+	log.Info("State is complete", "accounts", accounts, "caAccounts", caAccounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 	log.Info("State is complete", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
