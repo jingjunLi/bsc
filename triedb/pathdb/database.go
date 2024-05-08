@@ -546,7 +546,9 @@ func (db *Database) DetermineJournalTypeForWriter() JournalType {
 
 // DetermineJournalTypeForReader is used when loading the journal. It loads based on whether JournalKV or JournalFile currently exists.
 func (db *Database) DetermineJournalTypeForReader() JournalType {
+	start := time.Now()
 	if journal := rawdb.ReadTrieJournal(db.diskdb); len(journal) != 0 {
+		log.Info("Persisted dirty state to disk", "size", len(journal), "elapsed", common.PrettyDuration(time.Since(start)))
 		return JournalKVType
 	}
 
