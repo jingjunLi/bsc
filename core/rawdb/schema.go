@@ -364,6 +364,7 @@ func IsAccountTrieNode(key []byte) bool {
 trieNodeStoragePrefix + accountHash + hexPath -> trie node
 "O"+accountHash + hexPath -> trie node
 1)
+是指所有的 storage trie nodes, mpt 树的 ?
 */
 func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 	if !bytes.HasPrefix(key, trieNodeStoragePrefix) {

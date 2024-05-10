@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"os"
 	"runtime"
@@ -22,7 +23,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -39,6 +39,11 @@ type Database interface {
 	Cap(limit common.StorageSize) error
 	DiskDB() ethdb.Database
 }
+
+/*
+Inspector
+1) result: ownerAddress -> TrieTreeStat
+*/
 type Inspector struct {
 	trie           *Trie // traverse trie
 	db             Database
@@ -147,10 +152,14 @@ func NewInspector(tr *Trie, db Database, stateRootHash common.Hash, blocknum uin
 }
 
 // Run statistics, external call
+/*
+
+ */
 func (inspect *Inspector) Run() {
 	accountTrieStat := &TrieTreeStat{
 		is_account_trie: true,
 	}
+	// 为什么 hash 模式, 需要执行 (db *Database) Cap ??
 	if inspect.db.Scheme() == rawdb.HashScheme {
 		ticker := time.NewTicker(30 * time.Second)
 		go func() {
@@ -170,11 +179,20 @@ func (inspect *Inspector) Run() {
 	inspect.wg.Wait()
 }
 
+// SubConcurrentTraversal 用途 ?
 func (inspect *Inspector) SubConcurrentTraversal(theTrie *Trie, theTrieTreeStat *TrieTreeStat, theNode node, height uint32, path []byte) {
 	inspect.ConcurrentTraversal(theTrie, theTrieTreeStat, theNode, height, path)
 	inspect.wg.Done()
 }
 
+/*
+ConcurrentTraversal 入口函数:
+1) theNode 表示遍历到哪个 Node;
+1.1) shortNode
+1.2) fullNode
+hashNode
+valueNode
+*/
 func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *TrieTreeStat, theNode node, height uint32, path []byte) {
 	// print process progress
 	total_num := atomic.AddUint64(&inspect.totalNum, 1)
@@ -196,6 +214,7 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *Tr
 				continue
 			}
 			childPath := append(path, byte(idx))
+			// 遍历 fullnode 的时候 SubConcurrentTraversal 并行
 			if inspect.sem.TryAcquire(1) {
 				inspect.wg.Add(1)
 				dst := make([]byte, len(childPath))
@@ -221,12 +240,19 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *Tr
 		if err := rlp.Decode(bytes.NewReader(current), &account); err != nil {
 			break
 		}
+		/*
+			1) EOA: account 数量
+			2) CA:
+		*/
 		if common.BytesToHash(account.CodeHash) == types.EmptyCodeHash {
 			inspect.eoaAccountNums++
 		}
 		if account.Root == (common.Hash{}) || account.Root == types.EmptyRootHash {
 			break
 		}
+		/*
+			ca account 统计
+		*/
 		ownerAddress := common.BytesToHash(hexToCompact(path))
 		contractTrie, err := New(StorageTrieID(inspect.stateRootHash, ownerAddress, account.Root), inspect.db)
 		if err != nil {
@@ -246,6 +272,7 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *Tr
 
 		// log.Info("Find Contract Trie Tree, rootHash: ", contractTrie.Hash().String(), "")
 		inspect.wg.Add(1)
+		// 递归遍历 storage trie mpt
 		go inspect.SubConcurrentTraversal(contractTrie, trieStat, contractTrie.root, 0, []byte{})
 	default:
 		panic(errors.New("Invalid node type to traverse."))
@@ -255,6 +282,9 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *Tr
 
 func (inspect *Inspector) DisplayResult() {
 	// display root hash
+	/*
+		1) "" 空字符串对应 AccountTrie ??
+	*/
 	if _, ok := inspect.result[""]; !ok {
 		log.Info("Display result error", "missing account trie")
 		return
@@ -270,6 +300,9 @@ func (inspect *Inspector) DisplayResult() {
 	var totalContactsNodeStat NodeStat
 	var contractTrieCnt uint64 = 0
 
+	/*
+		展示 contract trie 的结果:
+	*/
 	for ownerAddress, stat := range inspect.result {
 		if ownerAddress == "" {
 			continue

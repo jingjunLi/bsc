@@ -31,13 +31,17 @@ import (
 // from disk. In those cases, this resolver allows short circuiting accesses and
 // returning them from memory.
 /*
+查找 trie nodes 在到达 真实的 persistent layer 之前 ?
 1) NodeResolver
-
 */
 type NodeResolver func(owner common.Hash, path []byte, hash common.Hash) []byte
 
 // Iterator is a key-value trie iterator that traverses a Trie.
-// 用于遍历 Trie, kv trie iterator;
+/*
+Iterator 是 kv trie iterator 遍历一个 Trie: 用于遍历 Trie, kv trie iterator;
+核心的方法:
+1) Next() 利用 NodeIterator 遍历到一个 Leaf Node 为止, 返回的都是 Leaf Node;
+*/
 type Iterator struct {
 	nodeIt NodeIterator
 
@@ -77,7 +81,9 @@ func (it *Iterator) Prove() [][]byte {
 }
 
 // NodeIterator is an iterator to traverse the trie pre-order.
-// 用于 前序遍历 trie
+/*
+用于 前序遍历 trie
+*/
 type NodeIterator interface {
 	// Next moves the iterator to the next node. If the parameter is false, any child
 	// nodes will be skipped.
@@ -147,7 +153,6 @@ type nodeIteratorState struct {
 /*
 1) Trie 要遍历的内容
 2) stack 将迭代状态持久化, 堆叠的 trie nodes; 针对 stack 的操作:
-
 对外提供的 接口 API:
 Next(descend bool)
 NodeBlob()
@@ -273,6 +278,9 @@ func (it *nodeIterator) Path() []byte {
 	return it.path
 }
 
+/*
+NodeBlob blob 是什么 ?
+*/
 func (it *nodeIterator) NodeBlob() []byte {
 	if it.Hash() == (common.Hash{}) {
 		return nil // skip the non-standalone node

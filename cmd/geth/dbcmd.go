@@ -373,6 +373,12 @@ func confirmAndRemoveDB(paths []string, kind string, ctx *cli.Context, removeFla
 	}
 }
 
+/*
+Inspect the MPT tree of the account and contract. This commands iterates the entrie WorldState.
+遍历整个世界状态:
+inspect-trie <blocknum> <jobnum>
+*/
+
 func inspectTrie(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
@@ -1183,6 +1189,9 @@ func showMetaData(ctx *cli.Context) error {
 	return nil
 }
 
+/*
+hbss-to-pbss <jobnum (optional)>
+*/
 func hbss2pbss(ctx *cli.Context) error {
 	if ctx.NArg() > 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
