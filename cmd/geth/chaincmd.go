@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -273,15 +274,21 @@ func initGenesis(ctx *cli.Context) error {
 		defer chaindb.Close()
 
 		// if the trie data dir has been set, new trie db with a new state database
-		if ctx.IsSet(utils.SeparateDBFlag.Name) {
+		if ctx.IsSet(utils.MultiDataBaseFlag.Name) {
 			statediskdb, dbErr := stack.OpenDatabaseWithFreezer(name+"/state", 0, 0, "", "", false, false, false, false)
 			if dbErr != nil {
 				utils.Fatalf("Failed to open separate trie database: %v", dbErr)
 			}
 			chaindb.SetStateStore(statediskdb)
+			blockdb, err := stack.OpenDatabaseWithFreezer(name+"/block", 0, 0, "", "", false, false, false, false)
+			if err != nil {
+				utils.Fatalf("Failed to open separate block database: %v", err)
+			}
+			chaindb.SetBlockStore(blockdb)
+			log.Warn("Multi-database is an experimental feature")
 		}
 
-		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+		triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 		defer triedb.Close()
 
 		_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
@@ -479,6 +486,13 @@ func dumpGenesis(ctx *cli.Context) error {
 			}
 			continue
 		}
+		// set the separate state & block database
+		if stack.CheckIfMultiDataBase() && err == nil {
+			stateDiskDb := utils.MakeStateDataBase(ctx, stack, true, false)
+			db.SetStateStore(stateDiskDb)
+			blockDb := utils.MakeBlockDatabase(ctx, stack, true, false)
+			db.SetBlockStore(blockDb)
+		}
 		genesis, err := core.ReadGenesis(db)
 		if err != nil {
 			utils.Fatalf("failed to read genesis: %s", err)
@@ -506,10 +520,16 @@ func importChain(ctx *cli.Context) error {
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
-	stack, _ := makeConfigNode(ctx)
+	stack, cfg := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack, false)
+	backend, err := eth.New(stack, &cfg.Eth)
+	if err != nil {
+		return err
+	}
+
+	chain := backend.BlockChain()
+	db := backend.ChainDb()
 	defer db.Close()
 
 	// Start periodically gathering memory profiles
@@ -745,7 +765,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		arg := ctx.Args().First()
 		if hashish(arg) {
 			hash := common.HexToHash(arg)
-			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
+			if number := rawdb.ReadHeaderNumber(db.BlockStore(), hash); number != nil {
 				header = rawdb.ReadHeader(db, hash, *number)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
@@ -764,7 +784,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 	} else {
 		// Use latest
 		if scheme == rawdb.PathScheme {
-			triedb := triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.ReadOnly})
+			triedb := triedb.NewDatabase(db, &triedb.Config{PathDB: utils.PathDBConfigAddJournalFilePath(stack, pathdb.ReadOnly)})
 			defer triedb.Close()
 			if stateRoot := triedb.Head(); stateRoot != (common.Hash{}) {
 				header.Root = stateRoot
@@ -814,7 +834,8 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
+	defer db.Close()
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
 	state, err := state.New(root, state.NewDatabaseWithNodeDB(db, triedb), nil)
@@ -834,7 +855,7 @@ func dumpAllRootHashInPath(ctx *cli.Context) error {
 	defer stack.Close()
 	db := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer db.Close()
-	triedb := triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.ReadOnly})
+	triedb := triedb.NewDatabase(db, &triedb.Config{PathDB: utils.PathDBConfigAddJournalFilePath(stack, pathdb.ReadOnly)})
 	defer triedb.Close()
 
 	scheme, err := rawdb.ParseStateScheme(ctx.String(utils.StateSchemeFlag.Name), db)

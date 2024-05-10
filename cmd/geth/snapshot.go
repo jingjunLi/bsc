@@ -92,7 +92,7 @@ WARNING: it's only supported in hash mode(--state.scheme=hash)".
 geth offline prune-block for block data in ancientdb.
 The amount of blocks expected for remaining after prune can be specified via block-amount-reserved in this command,
 will prune and only remain the specified amount of old block data in ancientdb.
-the brief workflow is to backup the the number of this specified amount blocks backward in original ancientdb 
+the brief workflow is to backup the number of this specified amount blocks backward in original ancientdb
 into new ancient_backup, then delete the original ancientdb dir and rename the ancient_backup to original one for replacement,
 finally assemble the statedb and new ancientDb together.
 The purpose of doing it is because the block data will be moved into the ancient store when it
@@ -368,7 +368,15 @@ func pruneBlock(ctx *cli.Context) error {
 	if !ctx.IsSet(utils.AncientFlag.Name) {
 		return errors.New("datadir.ancient must be set")
 	} else {
-		oldAncientPath = ctx.String(utils.AncientFlag.Name)
+		if stack.CheckIfMultiDataBase() {
+			ancientPath := ctx.String(utils.AncientFlag.Name)
+			index := strings.LastIndex(ancientPath, "/ancient/chain")
+			if index != -1 {
+				oldAncientPath = ancientPath[:index] + "/block/ancient/chain"
+			}
+		} else {
+			oldAncientPath = ctx.String(utils.AncientFlag.Name)
+		}
 		if !filepath.IsAbs(oldAncientPath) {
 			// force absolute paths, which often fail due to the splicing of relative paths
 			return errors.New("datadir.ancient not abs path")
@@ -426,7 +434,7 @@ func pruneBlock(ctx *cli.Context) error {
 	}
 
 	if _, err := os.Stat(newAncientPath); err == nil {
-		// No file lock found for old ancientDB but new ancientDB exsisted, indicating the geth was interrupted
+		// No file lock found for old ancientDB but new ancientDB existed, indicating the geth was interrupted
 		// after old ancientDB removal, this happened after backup successfully, so just rename the new ancientDB
 		/*
 			如果 没有 file lock, 但是 newAncientPath 存在, 说明 geth 在 oldAncientPath 删除后中断, 这发生在备份成功后, 所以只需重命名 newAncientPath
@@ -555,7 +563,7 @@ func verifyState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
 	defer triedb.Close()
 
 	snapConfig := snapshot.Config{
@@ -610,7 +618,7 @@ func traverseState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
 	defer triedb.Close()
 
 	headBlock := rawdb.ReadHeadBlock(chaindb)
@@ -731,7 +739,7 @@ func traverseRawState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
 	defer triedb.Close()
 
 	headBlock := rawdb.ReadHeadBlock(chaindb)
@@ -895,7 +903,8 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeTrieDatabase(ctx, db, false, true, false)
+	defer db.Close()
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
 	snapConfig := snapshot.Config{
@@ -978,7 +987,7 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
 	defer triedb.Close()
 
 	var root common.Hash

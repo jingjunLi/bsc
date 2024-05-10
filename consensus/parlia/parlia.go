@@ -16,7 +16,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/willf/bitset"
 	"golang.org/x/crypto/sha3"
 
@@ -48,8 +48,9 @@ import (
 )
 
 const (
-	inMemorySnapshots  = 256  // Number of recent snapshots to keep in memory
-	inMemorySignatures = 4096 // Number of recent block signatures to keep in memory
+	inMemorySnapshots  = 256   // Number of recent snapshots to keep in memory
+	inMemorySignatures = 4096  // Number of recent block signatures to keep in memory
+	inMemoryHeaders    = 86400 // Number of recent headers to keep in memory for double sign detection,
 
 	checkpointInterval = 1024        // Number of blocks after which to save the snapshot to the database
 	defaultEpochLength = uint64(100) // Default number of blocks of checkpoint to update validatorSet from contract
@@ -80,6 +81,7 @@ var (
 	verifyVoteAttestationErrorCounter = metrics.NewRegisteredCounter("parlia/verifyVoteAttestation/error", nil)
 	updateAttestationErrorCounter     = metrics.NewRegisteredCounter("parlia/updateAttestation/error", nil)
 	validVotesfromSelfCounter         = metrics.NewRegisteredCounter("parlia/VerifyVote/self", nil)
+	doubleSignCounter                 = metrics.NewRegisteredCounter("parlia/doublesign", nil)
 
 	systemContracts = map[common.Address]bool{
 		common.HexToAddress(systemcontracts.ValidatorContract):          true,
@@ -216,8 +218,11 @@ type Parlia struct {
 	genesisHash common.Hash
 	db          ethdb.Database // Database to store and retrieve snapshot checkpoints
 
-	recentSnaps *lru.ARCCache // Snapshots for recent block to speed up
-	signatures  *lru.ARCCache // Signatures of recent blocks to speed up mining
+	recentSnaps   *lru.ARCCache // Snapshots for recent block to speed up
+	signatures    *lru.ARCCache // Signatures of recent blocks to speed up mining
+	recentHeaders *lru.ARCCache //
+	// Recent headers to check for double signing: key includes block number and miner. value is the block header
+	// If same key's value already exists for different block header roots then double sign is detected
 
 	signer types.Signer
 
@@ -263,6 +268,10 @@ func New(
 	if err != nil {
 		panic(err)
 	}
+	recentHeaders, err := lru.NewARC(inMemoryHeaders)
+	if err != nil {
+		panic(err)
+	}
 	vABIBeforeLuban, err := abi.JSON(strings.NewReader(validatorSetABIBeforeLuban))
 	if err != nil {
 		panic(err)
@@ -286,6 +295,7 @@ func New(
 		db:                         db,
 		ethAPI:                     ethAPI,
 		recentSnaps:                recentSnaps,
+		recentHeaders:              recentHeaders,
 		signatures:                 signatures,
 		validatorSetABIBeforeLuban: vABIBeforeLuban,
 		validatorSetABI:            vABI,
@@ -583,14 +593,6 @@ func (p *Parlia) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		return err
 	}
 
-	// Verify existence / non-existence of withdrawalsHash.
-	if header.WithdrawalsHash != nil {
-		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
-	}
-	// Verify the existence / non-existence of cancun-specific header fields
-	if header.ParentBeaconRoot != nil {
-		return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
-	}
 	cancun := chain.Config().IsCancun(header.Number, header.Time)
 	if !cancun {
 		switch {
@@ -598,8 +600,18 @@ func (p *Parlia) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 			return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
 		case header.BlobGasUsed != nil:
 			return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
+		case header.ParentBeaconRoot != nil:
+			return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
+		case header.WithdrawalsHash != nil:
+			return fmt.Errorf("invalid WithdrawalsHash, have %#x, expected nil", header.WithdrawalsHash)
 		}
 	} else {
+		switch {
+		case header.ParentBeaconRoot != nil:
+			return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
+		case !header.EmptyWithdrawalsHash():
+			return errors.New("header has wrong WithdrawalsHash")
+		}
 		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
 			return err
 		}
@@ -697,10 +709,8 @@ func (p *Parlia) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 			}
 		}
 
-		// If we're at the genesis, snapshot the initial state. Alternatively if we have
-		// piled up more headers than allowed to be reorged (chain reinit from a freezer),
-		// consider the checkpoint trusted and snapshot it.
-		if number == 0 || (number%p.config.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold/10)) {
+		// If we're at the genesis, snapshot the initial state.
+		if number == 0 {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
 				// get checkpoint data
@@ -714,12 +724,10 @@ func (p *Parlia) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 
 				// new snapshot
 				snap = newSnapshot(p.config, p.signatures, number, hash, validators, voteAddrs, p.ethAPI)
-				if snap.Number%checkpointInterval == 0 { // snapshot will only be loaded when snap.Number%checkpointInterval == 0
-					if err := snap.store(p.db); err != nil {
-						return nil, err
-					}
-					log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
+				if err := snap.store(p.db); err != nil {
+					return nil, err
 				}
+				log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
 				break
 			}
 		}
@@ -809,6 +817,17 @@ func (p *Parlia) verifySeal(chain consensus.ChainHeaderReader, header *types.Hea
 
 	if signer != header.Coinbase {
 		return errCoinBaseMisMatch
+	}
+
+	// check for double sign & add to cache
+	key := proposalKey(*header)
+	preHash, ok := p.recentHeaders.Get(key)
+	if ok && preHash != header.Hash() {
+		doubleSignCounter.Inc(1)
+		log.Warn("DoubleSign detected", " block", header.Number, " miner", header.Coinbase,
+			"hash1", preHash.(common.Hash), "hash2", header.Hash())
+	} else {
+		p.recentHeaders.Add(key, header.Hash())
 	}
 
 	if _, ok := snap.Validators[signer]; !ok {
@@ -2012,4 +2031,9 @@ func applyMessage(
 		log.Error("apply message failed", "msg", string(ret), "err", err)
 	}
 	return msg.Gas() - returnGas, err
+}
+
+// proposalKey build a key which is a combination of the block number and the proposer address.
+func proposalKey(header types.Header) string {
+	return header.ParentHash.String() + header.Coinbase.String()
 }

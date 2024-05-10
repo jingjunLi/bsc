@@ -61,8 +61,6 @@ var (
 	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accept
 	// another remote transaction.
 	ErrTxPoolOverflow = errors.New("txpool is full")
-
-	ErrInBlackList = errors.New("sender or to in black list")
 )
 
 var (
@@ -226,6 +224,7 @@ type LegacyPool struct {
 	scope        event.SubscriptionScope
 	signer       types.Signer
 	mu           sync.RWMutex
+	maxGas       atomic.Uint64 // Currently accepted max gas, it will be modified by MinerAPI
 
 	currentHead   atomic.Pointer[types.Header] // Current head of the blockchain
 	currentState  *state.StateDB               // Current state in the blockchain head
@@ -667,7 +666,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 	for _, blackAddr := range types.NanoBlackList {
 		if sender == blackAddr || (tx.To() != nil && *tx.To() == blackAddr) {
 			log.Error("blacklist account detected", "account", blackAddr, "tx", tx.Hash())
-			return ErrInBlackList
+			return txpool.ErrInBlackList
 		}
 	}
 
@@ -679,6 +678,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 			1<<types.DynamicFeeTxType,
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load().ToBig(),
+		MaxGas:  pool.GetMaxGas(),
 	}
 	if local {
 		opts.MinTip = new(big.Int)
@@ -714,7 +714,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 	for _, blackAddr := range types.NanoBlackList {
 		if sender == blackAddr || (tx.To() != nil && *tx.To() == blackAddr) {
 			log.Error("blacklist account detected", "account", blackAddr, "tx", tx.Hash())
-			return ErrInBlackList
+			return txpool.ErrInBlackList
 		}
 	}
 
@@ -1824,6 +1824,14 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			}
 		}
 	}
+}
+
+func (pool *LegacyPool) GetMaxGas() uint64 {
+	return pool.maxGas.Load()
+}
+
+func (pool *LegacyPool) SetMaxGas(maxGas uint64) {
+	pool.maxGas.Store(maxGas)
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.

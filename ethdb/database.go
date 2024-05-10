@@ -17,7 +17,11 @@
 // Package ethdb defines the interfaces for an Ethereum data store.
 package ethdb
 
-import "io"
+import (
+	"io"
+
+	"github.com/ethereum/go-ethereum/params"
+)
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
@@ -136,6 +140,23 @@ type AncientWriter interface {
 	// The second argument is a function that takes a raw entry and returns it
 	// in the newest format.
 	MigrateTable(string, func([]byte) ([]byte, error)) error
+
+	// TruncateTableTail will truncate certain table to new tail
+	TruncateTableTail(kind string, tail uint64) (uint64, error)
+
+	// ResetTable will reset certain table with new start point
+	ResetTable(kind string, startAt uint64, onlyEmpty bool) error
+}
+
+type FreezerEnv struct {
+	ChainCfg         *params.ChainConfig
+	BlobExtraReserve uint64
+}
+
+// AncientFreezer defines the help functions for freezing ancient data
+type AncientFreezer interface {
+	// SetupFreezerEnv provides params.ChainConfig for checking hark forks, like isCancun.
+	SetupFreezerEnv(env *FreezerEnv) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.
@@ -160,12 +181,26 @@ type StateStoreReader interface {
 	StateStoreReader() Reader
 }
 
+type BlockStore interface {
+	BlockStore() Database
+	SetBlockStore(block Database)
+}
+
+type BlockStoreReader interface {
+	BlockStoreReader() Reader
+}
+
+type BlockStoreWriter interface {
+	BlockStoreWriter() Writer
+}
+
 // Reader contains the methods required to read data from both key-value as well as
 // immutable ancient data.
 type Reader interface {
 	KeyValueReader
 	AncientReader
 	StateStoreReader
+	BlockStoreReader
 }
 
 // Writer contains the methods required to write data to both key-value as well as
@@ -173,6 +208,7 @@ type Reader interface {
 type Writer interface {
 	KeyValueWriter
 	AncientWriter
+	BlockStoreWriter
 }
 
 // Stater contains the methods required to retrieve states from both key-value as well as
@@ -214,10 +250,12 @@ type Database interface {
 	Writer
 	DiffStore
 	StateStore
+	BlockStore
 	Batcher
 	Iteratee
 	Stater
 	Compacter
 	Snapshotter
+	AncientFreezer
 	io.Closer
 }

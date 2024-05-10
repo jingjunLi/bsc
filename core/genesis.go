@@ -445,6 +445,10 @@ func (g *Genesis) ToBlock() *types.Block {
 			withdrawals = make([]*types.Withdrawal, 0)
 		}
 		if conf.IsCancun(num, g.Timestamp) {
+			if conf.Parlia != nil {
+				head.WithdrawalsHash = &types.EmptyWithdrawalsHash
+			}
+
 			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
 			// the zero hash. This is because the genesis block does not have a parent
 			// by definition.
@@ -489,13 +493,13 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	if err := flushAlloc(&g.Alloc, db, triedb, block.Hash()); err != nil {
 		return nil, err
 	}
-	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
-	rawdb.WriteBlock(db, block)
-	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
-	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-	rawdb.WriteHeadBlockHash(db, block.Hash())
+	rawdb.WriteTd(db.BlockStore(), block.Hash(), block.NumberU64(), block.Difficulty())
+	rawdb.WriteBlock(db.BlockStore(), block)
+	rawdb.WriteReceipts(db.BlockStore(), block.Hash(), block.NumberU64(), nil)
+	rawdb.WriteCanonicalHash(db.BlockStore(), block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(db.BlockStore(), block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
-	rawdb.WriteHeadHeaderHash(db, block.Hash())
+	rawdb.WriteHeadHeaderHash(db.BlockStore(), block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
 	return block, nil
 }

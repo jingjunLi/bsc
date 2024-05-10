@@ -147,12 +147,11 @@ var (
 		LondonBlock:         big.NewInt(31302048),
 		HertzBlock:          big.NewInt(31302048),
 		HertzfixBlock:       big.NewInt(34140700),
-		// UnixTime: 1705996800 is January 23, 2024 8:00:00 AM UTC
-		ShanghaiTime: newUint64(1705996800),
-		KeplerTime:   newUint64(1705996800),
-
-		// TODO
-		FeynmanTime: nil,
+		ShanghaiTime:        newUint64(1705996800), // 2024-01-23 08:00:00 AM UTC
+		KeplerTime:          newUint64(1705996800), // 2024-01-23 08:00:00 AM UTC
+		FeynmanTime:         newUint64(1713419340), // 2024-04-18 05:49:00 AM UTC
+		FeynmanFixTime:      newUint64(1713419340), // 2024-04-18 05:49:00 AM UTC
+		CancunTime:          newUint64(1718863500), // 2024-06-20 06:05:00 AM UTC
 
 		Parlia: &ParliaConfig{
 			Period: 3,
@@ -186,11 +185,11 @@ var (
 		LondonBlock:         big.NewInt(31103030),
 		HertzBlock:          big.NewInt(31103030),
 		HertzfixBlock:       big.NewInt(35682300),
-		// UnixTime: 1702972800 is December 19, 2023 8:00:00 AM UTC
-		ShanghaiTime:   newUint64(1702972800),
-		KeplerTime:     newUint64(1702972800),
-		FeynmanTime:    newUint64(1710136800),
-		FeynmanFixTime: newUint64(1711342800),
+		ShanghaiTime:        newUint64(1702972800), // 2023-12-19 8:00:00 AM UTC
+		KeplerTime:          newUint64(1702972800),
+		FeynmanTime:         newUint64(1710136800), // 2024-03-11 6:00:00 AM UTC
+		FeynmanFixTime:      newUint64(1711342800), // 2024-03-25 5:00:00 AM UTC
+		CancunTime:          newUint64(1713330442), // 2024-04-17 05:07:22 AM UTC
 
 		Parlia: &ParliaConfig{
 			Period: 3,
@@ -229,6 +228,7 @@ var (
 		KeplerTime:          newUint64(0),
 		FeynmanTime:         newUint64(0),
 		FeynmanFixTime:      newUint64(0),
+		CancunTime:          newUint64(0),
 
 		Parlia: &ParliaConfig{
 			Period: 3,
@@ -262,6 +262,11 @@ var (
 		LondonBlock:         big.NewInt(0),
 		HertzBlock:          big.NewInt(0),
 		HertzfixBlock:       big.NewInt(0),
+		ShanghaiTime:        newUint64(0),
+		KeplerTime:          newUint64(0),
+		FeynmanTime:         newUint64(0),
+		FeynmanFixTime:      newUint64(0),
+		CancunTime:          newUint64(0),
 		Parlia: &ParliaConfig{
 			Period: 3,
 			Epoch:  200,
@@ -599,7 +604,12 @@ func (c *ChainConfig) String() string {
 		FeynmanFixTime = big.NewInt(0).SetUint64(*c.FeynmanFixTime)
 	}
 
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v,Luban: %v, Plato: %v, Hertz: %v, Hertzfix: %v, ShanghaiTime: %v, KeplerTime: %v, FeynmanTime: %v, FeynmanFixTime: %v, Engine: %v}",
+	var CancunTime *big.Int
+	if c.CancunTime != nil {
+		CancunTime = big.NewInt(0).SetUint64(*c.CancunTime)
+	}
+
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v,Luban: %v, Plato: %v, Hertz: %v, Hertzfix: %v, ShanghaiTime: %v, KeplerTime: %v, FeynmanTime: %v, FeynmanFixTime: %v, CancunTime: %v, Engine: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -635,6 +645,7 @@ func (c *ChainConfig) String() string {
 		KeplerTime,
 		FeynmanTime,
 		FeynmanFixTime,
+		CancunTime,
 		engine,
 	)
 }
@@ -964,7 +975,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "keplerTime", timestamp: c.KeplerTime},
 		{name: "feynmanTime", timestamp: c.FeynmanTime},
 		{name: "feynmanFixTime", timestamp: c.FeynmanFixTime},
-		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
+		{name: "cancunTime", timestamp: c.CancunTime},
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 		{name: "verkleTime", timestamp: c.VerkleTime, optional: true},
 	} {
@@ -1257,7 +1268,7 @@ func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCo
 		NewTime:      newtime,
 		RewindToTime: 0,
 	}
-	if rew != nil {
+	if rew != nil && *rew != 0 {
 		err.RewindToTime = *rew - 1
 	}
 	return err
@@ -1267,7 +1278,13 @@ func (err *ConfigCompatError) Error() string {
 	if err.StoredBlock != nil {
 		return fmt.Sprintf("mismatching %s in database (have block %d, want block %d, rewindto block %d)", err.What, err.StoredBlock, err.NewBlock, err.RewindToBlock)
 	}
-	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, err.StoredTime, err.NewTime, err.RewindToTime)
+
+	if err.StoredTime == nil {
+		return fmt.Sprintf("mismatching %s in database (have timestamp nil, want timestamp %d, rewindto timestamp %d)", err.What, *err.NewTime, err.RewindToTime)
+	} else if err.NewTime == nil {
+		return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp nil, rewindto timestamp %d)", err.What, *err.StoredTime, err.RewindToTime)
+	}
+	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, *err.StoredTime, *err.NewTime, err.RewindToTime)
 }
 
 // Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
