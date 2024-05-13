@@ -196,7 +196,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		// Short circuit if the blocks below threshold are already frozen.
 		if frozen != 0 && frozen-1 >= threshold {
 			backoff = true
-			log.Debug("Ancient blocks frozen already", "threshold", threshold, "frozen", frozen)
+			log.Info("Ancient blocks frozen already", "threshold", threshold, "frozen", frozen)
 			continue
 		}
 		// Seems we have data ready to be frozen, process in usable batches
@@ -292,7 +292,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		if n := len(ancients); n > 0 {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
 		}
-		log.Debug("Deep froze chain segment", context...)
+		log.Info("Deep froze chain segment", context...)
 
 		env, _ := f.freezeEnv.Load().(*ethdb.FreezerEnv)
 		hash := ReadHeadBlockHash(nfdb)
