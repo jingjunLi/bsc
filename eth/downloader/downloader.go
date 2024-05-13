@@ -817,6 +817,7 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		}
 	}
 
+	log.Info("findAncestorSpanSearch before", "remoteHeight", remoteHeight, "localHeight", localHeight, "floor", floor)
 	ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
 	if err == nil {
 		return ancestor, nil
@@ -829,6 +830,7 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		return 0, err
 	}
 
+	log.Info("findAncestorBinarySearch before", "remoteHeight", remoteHeight, "localHeight", localHeight, "floor", floor)
 	ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
 	if err != nil {
 		return 0, err
