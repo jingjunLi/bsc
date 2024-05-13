@@ -906,11 +906,12 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 	if floor > 0 {
 		start = uint64(floor)
 	}
-	p.log.Trace("Binary searching for common ancestor", "start", start, "end", end)
+	p.log.Warn("Binary searching for common ancestor", "start", start, "end", end)
 
 	for start+1 < end {
 		// Split our chain interval in two, and request the hash to cross check
 		check := (start + end) / 2
+		p.log.Warn("Binary searching for common ancestor in for loop", "start", start, "end", end)
 
 		headers, hashes, err := d.fetchHeadersByNumber(p, check, 1, 0, false)
 		if err != nil {
@@ -955,7 +956,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
 		return 0, errInvalidAncestor
 	}
-	p.log.Debug("Found common ancestor", "number", start, "hash", hash)
+	p.log.Warn("Found common ancestor", "number", start, "hash", hash)
 	return start, nil
 }
 
