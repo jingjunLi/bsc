@@ -911,7 +911,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 	for start+1 < end {
 		// Split our chain interval in two, and request the hash to cross check
 		check := (start + end) / 2
-		p.log.Warn("Binary searching for common ancestor in for loop", "start", start, "end", end)
+		p.log.Warn("Binary searching for common ancestor in for loop", "start", start, "end", end, "mode", mode)
 
 		headers, hashes, err := d.fetchHeadersByNumber(p, check, 1, 0, false)
 		if err != nil {

@@ -488,6 +488,7 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 		return true
 	}
 	if has, err := db.BlockStoreReader().Has(blockBodyKey(number, hash)); !has || err != nil {
+		log.Info("HasBody false", "number", number, "hash", hash)
 		return false
 	}
 	return true

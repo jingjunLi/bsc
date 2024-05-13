@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -152,10 +153,12 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 
 // HasBlock checks if a block is fully present in the database or not.
 func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
+	log.Info("HasBlock", "number", number, "hash", hash)
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
 	if !bc.HasHeader(hash, number) {
+		log.Info("HasBlock false", "number", number, "hash", hash)
 		return false
 	}
 	return rawdb.HasBody(bc.db, hash, number)
