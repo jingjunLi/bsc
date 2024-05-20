@@ -495,6 +495,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	origin, err := d.findAncestor(p, localHeight, remoteHeader)
 	if err != nil {
 		if errors.Is(err, errInvalidAncestor) {
+			log.Info("--------findAncestor error ignore ----------", "localHeight", localHeight)
 			origin = localHeight
 		} else {
 			return err
