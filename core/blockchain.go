@@ -3044,9 +3044,21 @@ func (bc *BlockChain) isCachedBadBlock(block *types.Block) bool {
 
 // reportBlock logs a bad block error.
 // bad block need not save receipts & sidecars.
+const (
+	defaultStackSize = 4096
+)
+
+// getCurrentGoroutineStack 获取当前Goroutine的调用栈，便于排查panic异常
+func getCurrentGoroutineStack() string {
+	var buf [defaultStackSize]byte
+	n := runtime.Stack(buf[:], false)
+	return string(buf[:n])
+}
+
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	rawdb.WriteBadBlock(bc.db, block)
 	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
+	log.Info("[panic] err: %v\nstack: %s\n", err, getCurrentGoroutineStack())
 }
 
 // summarizeBadBlock returns a string summarizing the bad block and other
