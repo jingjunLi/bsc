@@ -330,12 +330,15 @@ func pruneBlock(ctx *cli.Context) error {
 		blockpruner         *pruner.BlockPruner
 	)
 	/*
+
 		geth offline prune-block 可以用于清理 ancientdb 中的区块数据。
 		通过该命令可以指定在清理后预期保留的区块数量，这可以通过 block-amount-reserved 参数来指定。
 		此命令将会删除 ancientdb 中指定数量的旧区块数据，并将其备份到新的 ancient_backup 目录中。
 		操作流程是将原始 ancientdb 中指定数量的区块数据备份到 ancient_backup 中，然后删除原始 ancientdb 目录，并将 ancient_backup 重命名为原始目录以替换之， 最后将 statedb 和新的 ancientDb 合并在一起。
 		进行此操作的目的是因为当区块数据变得足够旧（超过阈值 90000）时，它们将被移动到 ancient 存储中， 随着时间的推移，磁盘使用量会变得非常大，主要是由 ancientDb 占用，
 		因此有必要进行区块数据清理，这个功能可以很好地处理这个问题。
+		---
+		1) 删除 ancient 存储中 block 数据, 只对 hash mode 启用; 是否会影响后续的操作 ?
 	*/
 	stack, config = makeConfigNode(ctx)
 	defer stack.Close()
@@ -457,7 +460,7 @@ func pruneBlock(ctx *cli.Context) error {
 
 	log.Info("backup block successfully")
 
-	//After backing up successfully, rename the new ancientdb name to the original one, and delete the old ancientdb
+	// After backing up successfully, rename the new ancientdb name to the original one, and delete the old ancientdb
 	if err := blockpruner.AncientDbReplacer(); err != nil {
 		return err
 	}

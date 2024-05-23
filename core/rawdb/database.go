@@ -345,6 +345,10 @@ func NewFreezerDb(db ethdb.KeyValueStore, frz, namespace string, readonly bool, 
 // rules:
 // 1. in path mode, block data is stored in chain dir and state data is in state dir.
 // 2. in hash mode, block data is stored in chain dir or ancient dir(before big merge), no state dir.
+/*
+block 放到 ancient , 旧的 snapshot ?
+基于 hash 裁剪两次 ? --prune ancient ?
+*/
 func resolveChainFreezerDir(ancient string) string {
 	// Check if the chain freezer is already present in the specified
 	// sub folder, if not then two possibilities:
@@ -698,6 +702,12 @@ func (s *stat) Count() string {
 	return s.count.String()
 }
 
+/*
+AncientInspect
+Offset/StartBlockNumber
+Amount of remained items in AncientStore:AncientStore 内的数量 ?
+The last BlockNumber within ancientDB:
+*/
 func AncientInspect(db ethdb.Database) error {
 	offset := counter(ReadOffSetOfCurrentAncientFreezer(db))
 	// Get number of ancient rows inside the freezer.

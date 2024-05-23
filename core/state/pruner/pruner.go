@@ -256,6 +256,10 @@ func pruneAll(maindb ethdb.Database, g *core.Genesis) error {
 	return nil
 }
 
+/*
+prune: 删除所有的磁盘上 stale trie nodes. 利用 state bloom the trie nodes(and codes) 将 active state 过滤出来;
+因为 bloom filter 的误判, 一小部分 stale tries 会被 filtered 出来;(~0.05%)
+*/
 func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, middleStateRoots map[common.Hash]struct{}, start time.Time) error {
 	// Delete all stale trie nodes in the disk. With the help of state bloom
 	// the trie nodes(and codes) belong to the active state will be filtered
@@ -468,6 +472,9 @@ func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace str
 
 	start := time.Now()
 	// All ancient data after and including startBlockNumber should write into new ancientDB ancient_back.
+	/*
+		[startBlockNumber, itemsOfAncient+oldOffSet) 区间内的数据; 写到新的 ancientdb 内
+	*/
 	for blockNumber := startBlockNumber; blockNumber < itemsOfAncient+oldOffSet; blockNumber++ {
 		blockHash := rawdb.ReadCanonicalHash(chainDb, blockNumber)
 		block := rawdb.ReadBlock(chainDb, blockHash, blockNumber)
@@ -595,6 +602,11 @@ func (p *BlockPruner) AncientDbReplacer() error {
 // Prune deletes all historical state nodes except the nodes belong to the
 // specified state version. If user doesn't specify the state version, use
 // the bottom-most snapshot diff layer as the target.
+/*
+Prune : 删除所有的 历史 state 节点, 属于特定 state version;
+如果用户没有指定 state version, 使用 bottom-most snapshot diff layer;
+1) stateBloomRoot
+*/
 func (p *Pruner) Prune(root common.Hash) error {
 	// If the state bloom filter is already committed previously,
 	// reuse it for pruning instead of generating a new one. It's
@@ -636,6 +648,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// Ensure the root is really present. The weak assumption
 	// is the presence of root can indicate the presence of the
 	// entire trie.
+	// 确保根确实存在; 弱假设 root 的存在可以表明 root 的存在 整个 trie 。
 	if !rawdb.HasLegacyTrieNode(trienodedb, root) {
 		// The special case is for clique based networks(goerli
 		// and some other private networks), it's possible that two
@@ -834,6 +847,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	return accIter.Error()
 }
 
+// statebloom.hash.bf.gz
 func bloomFilterName(datadir string, hash common.Hash) string {
 	return filepath.Join(datadir, fmt.Sprintf("%s.%s.%s", stateBloomFilePrefix, hash.Hex(), stateBloomFileSuffix))
 }

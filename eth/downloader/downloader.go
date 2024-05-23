@@ -508,6 +508,11 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		localHeight = d.lightchain.CurrentHeader().Number.Uint64()
 	}
 
+	/*
+		1) 查找祖先 findAncestor
+		origin 是 ancestor, 返回的共同祖先;
+		2) 是否可以使用 localHeight 直接下载 ?
+	*/
 	origin, err := d.findAncestor(p, localHeight, remoteHeader)
 	if err != nil {
 		return err
@@ -857,7 +862,7 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		查找共同祖先的方式有两种, 首先通过第一种, 如果失败, 再通过第二种;
 		1) 一种是通过获取一组某一高度区间内、固定间隔高度的区块，看是否能从这些区块中找到一个本地也拥有的区块； -> findAncestorSpanSearch
 		2) 另一种是从某一高度区间内，通过二分法查找共同区块。这两种方法都实现在 Downloader.findAncestor 中。我们分别来看一下这两种方法。 -> findAncestorBinarySearch
-
+		binary search ?
 		remoteHeight 是远程节点的最新区块高度，localHeight 是本地节点的最新区块高度，floor 是本地节点的最新区块高度减去 maxForkAncestry 后的值。
 		1)
 	*/
@@ -885,6 +890,7 @@ findAncestorSpanSearch 通过获取一组某一高度区间内、固定间隔高
 findAncestor                             floor=70870 local=160,870 remote=29,020,049 mode=full
 每次从 remoteHeight 尝试 10-20 height,
 1) headers 可能是 10 个 ?
+remoteHeight & localHeight 关系 ?
 */
 func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (uint64, error) {
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
@@ -1017,7 +1023,10 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		hash = h
 	}
 	// Ensure valid ancestry and return
-	/**/
+	/*
+		msg="Ancestor below allowance" peer=9b2c0b66 number=38422430 hash=0x0000000000000000000000000000000000000000000000000000000000000000 allowance=38422430
+		38422430  38422430
+	*/
 	if int64(start) <= floor {
 		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
 		return 0, errInvalidAncestor

@@ -310,7 +310,11 @@ type BlockChain struct {
 	chainmu *syncx.ClosableMutex
 
 	/*
-		当前区块，blockchain 中并不是储存链所有的block，而是通过 currentBlock 向前回溯直到 genesisBlock，这样就构成了区块链;
+		当前区块 blockchain 中并不是储存链所有的block，而是通过 currentBlock 向前回溯直到 genesisBlock，这样就构成了区块链;
+		1) currentBlock 什么时候设置 ?
+		1.1) loadLastState() 中读取的 headblock
+		1.2) setHeadBeyondRoot :: updateFn 重置之后
+		1.3) writeHeadBlock 每次更新的时候 ?
 	*/
 	highestVerifiedHeader atomic.Pointer[types.Header]
 	currentBlock          atomic.Pointer[types.Header] // Current head of the chain
@@ -507,6 +511,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			/*
 				diskRoot 的含义 ?
 				在状态恢复之前，如果丢失了头状态，请找出快照的 disk layer 指针（如果启用了快照）。确保 rewound点 低于 disk layer 。
+				1) 如果开启 Snapshot 从 Snapshot 读取;
+				2) 如果是 PathScheme, 从 triedb 获取;
+
 			*/
 			var diskRoot common.Hash
 			if bc.cacheConfig.SnapshotLimit > 0 {
@@ -787,15 +794,23 @@ func (bc *BlockChain) getFinalizedNumber(header *types.Header) uint64 {
 
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
+/*
+loadLastState, 加载数据库里面的最新的我们知道的区块链状态. 这个方法假设已经获取到锁了.
+1) ReadHeadBlockHash -> HeadBlockHash
+2) GetBlockByHash -> headBlock
+*/
 func (bc *BlockChain) loadLastState() error {
 	// Restore the last known head block
+	// 返回我们知道的最新的区块的 hash -> HeadBlockHash
 	head := rawdb.ReadHeadBlockHash(bc.db.BlockStore())
 	if head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
+		// 如果获取到了空. 那么认为数据库已经被破坏.那么设置区块链为创世区块.
 		log.Warn("Empty database, resetting chain")
 		return bc.Reset()
 	}
 	// Make sure the entire head block is available
+	// 根据 blockHash 来查找 block -> headBlock
 	headBlock := bc.GetBlockByHash(head)
 	if headBlock == nil {
 		// Corrupt or empty database, init from scratch
@@ -804,12 +819,14 @@ func (bc *BlockChain) loadLastState() error {
 	}
 
 	// Everything seems to be fine, set as the head block
+	// 将其设置为 currentBlock
 	bc.currentBlock.Store(headBlock.Header())
 	headBlockGauge.Update(int64(headBlock.NumberU64()))
 	justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(headBlock.Header())))
 	finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(headBlock.Header())))
 
 	// Restore the last known head header
+	// ReadHeadHeaderHash -> HeadHeaderHash -> headHeader
 	headHeader := headBlock.Header()
 	if head := rawdb.ReadHeadHeaderHash(bc.db.BlockStore()); head != (common.Hash{}) {
 		if header := bc.GetHeaderByHash(head); header != nil {
@@ -822,6 +839,7 @@ func (bc *BlockChain) loadLastState() error {
 	bc.currentSnapBlock.Store(headBlock.Header())
 	headFastBlockGauge.Update(int64(headBlock.NumberU64()))
 
+	// HeadFastBlockHash
 	if head := rawdb.ReadHeadFastBlockHash(bc.db); head != (common.Hash{}) {
 		if block := bc.GetBlockByHash(head); block != nil {
 			bc.currentSnapBlock.Store(block.Header())
@@ -844,6 +862,11 @@ func (bc *BlockChain) loadLastState() error {
 		snapTd := bc.GetTd(currentSnapBlock.Hash(), currentSnapBlock.Number.Uint64())
 		log.Info("Loaded most recent local snap block", "number", currentSnapBlock.Number, "hash", currentSnapBlock.Hash(), "root", currentSnapBlock.Root, "td", snapTd, "age", common.PrettyAge(time.Unix(int64(currentSnapBlock.Time), 0)))
 	}
+	/*
+		Loaded most recent local finalized block , 什么情况下会出错 ?
+		msg="Unexpected error when getting snapshot" error="unknown ancestor" blockNumber=38582058
+		GetFinalizedHeader 读取出错 ?
+	*/
 	if posa, ok := bc.engine.(consensus.PoSA); ok {
 		if currentFinalizedHeader := posa.GetFinalizedHeader(bc, headHeader); currentFinalizedHeader != nil {
 			if currentFinalizedBlock := bc.GetBlockByHash(currentFinalizedHeader.Hash()); currentFinalizedBlock != nil {
@@ -862,6 +885,9 @@ func (bc *BlockChain) loadLastState() error {
 // SetHead rewinds the local chain to a new head. Depending on whether the node
 // was snap synced or full synced and in which state, the method will try to
 // delete minimal data from disk whilst retaining chain consistency.
+/*
+SetHead 将本地链回卷到新的头部。 在给定新header之上的所有内容都将被删除，新的header将被设置。 如果块体丢失（快速同步之后的非归档节点），头部可能被进一步倒回。
+*/
 func (bc *BlockChain) SetHead(head uint64) error {
 	if _, err := bc.setHeadBeyondRoot(head, 0, common.Hash{}, false); err != nil {
 		return err
@@ -945,11 +971,19 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*typ
 	//   might be not enough for a chain that is nearly empty. In the worst case,
 	//   the entire chain is reset to genesis, and snap sync is re-enabled on top,
 	//   which is still acceptable.
+	/*
+		1) limit: rewinding searched 的最老位置
+		2) pivot:枢纽点状态? 什么是 Last Pivot Number ?
+		pivot block 存在 -> Snap sync; pivot block 不存在 -> Full sync;
+		3) 	beyondRoot
+		表示当前状态是否已经超出了某个请求的根节点
+	*/
 	if pivot != nil {
 		limit = *pivot
 	} else if head.Number.Uint64() > params.FullImmutabilityThreshold {
 		limit = head.Number.Uint64() - params.FullImmutabilityThreshold
 	}
+	// 一直向前找 header,
 	for {
 		logger := log.Trace
 		if time.Since(logged) > time.Second*8 {
@@ -964,6 +998,7 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*typ
 		}
 		// If search limit is reached, return the genesis block as the
 		// new chain head.
+		// head 必须 >
 		if head.Number.Uint64() < limit {
 			log.Info("Rewinding limit reached, resetting to genesis", "number", head.Number, "hash", head.Hash(), "limit", limit)
 			return bc.genesisBlock.Header(), rootNumber
@@ -1133,14 +1168,14 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		pivot = rawdb.ReadLastPivotNumber(bc.db)
 	)
 	/*
-		在重置区块链时，确保我们不会最终得到一个无状态的头块。注意，深度相等是允许的，这样可以使用SetHead作为链修复机制，而不会删除任何数据。
+		在重置区块链时，确保我们不会最终得到一个无状态的头块。注意，深度相等是允许的，这样可以使用 SetHead 作为链修复机制，而不会删除任何数据。
 	*/
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
 		// chain reparation mechanism without deleting any data!
 		/*
-			在重置区块链时，确保我们不会最终得到一个无状态的头块。注意，深度相等是允许的，这样可以使用SetHead作为链修复机制，而不会删除任何数据。
+			在重置区块链时，确保我们不会最终得到一个无状态的头块。注意，深度相等是允许的，这样可以使用 SetHead 作为链修复机制，而不会删除任何数据。
 		*/
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
 			// load bc.snaps for the judge `HasState`
@@ -1215,6 +1250,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	}
 	// Rewind the header chain, deleting all block bodies until then
 	/*
+		Rewind header chain, 删除之后的 所有 blocks ?
 		为什么要删除 ? 倒回到 header chain, 删除在此之前的所有块体
 		1) 根据 Ancients()(the ancient item numbers in the ancient store) 判断是否是 ancient 还是 db 内删除
 	*/
@@ -1331,8 +1367,10 @@ func (bc *BlockChain) Reset() error {
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
 // specified genesis state.
+// 清理 整个区块链, 将其 restoring 到 genesis state;
 func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	// Dump the entire block chain and purge the caches
+	// 把整个区块链转储并清除缓存
 	if err := bc.SetHead(0); err != nil {
 		return err
 	}
@@ -1342,6 +1380,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	defer bc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
+	// 使用创世区块重新初始化区块链
 	blockBatch := bc.db.BlockStore().NewBatch()
 	rawdb.WriteTd(blockBatch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
 	rawdb.WriteBlock(blockBatch, genesis)
@@ -2143,7 +2182,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // wrong. After insertion is done, all accumulated events will be fired.
 /*
 InsertChain 尝试将给定的一批区块插入到规范链中，否则创建一个分叉。 如果返回错误，它将返回失败块的索引号以及描述出错的错误。 插入完成后，将触发所有累积的事件。
-chain 必须是连续的
+chain 必须是连续的;
 1）对待插入的区块进行一次健全检查：区块号是否连续；区块的父 Hash 是否指向前一个区块。
 注意：要求区块连续的这个条件可以简化插入流程，比如验证第一个区块时，发现它是已存储的区块，那么对于接下来的区块可以采取相同的措施，而不必挨个处理了。
 */
@@ -2207,7 +2246,7 @@ bc.validator.ValidateState
 2) writeState
 bc.writeBlockWithStat
 ---
-1) setHead
+1) setHead 什么情况下 ?
 */
 func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
@@ -2482,7 +2521,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			1) AccountCommits
 			2) StorageCommits
 			3) SnapshotCommits
-			4)TrieDBCommits
+			4) TrieDBCommits
 		*/
 		var (
 			wstart = time.Now()
@@ -3253,6 +3292,10 @@ func (bc *BlockChain) isCachedBadBlock(block *types.Block) bool {
 
 // reportBlock logs a bad block error.
 // bad block need not save receipts & sidecars.
+/*
+1) bc.validator.ValidateState
+2) bc.processor.Process
+*/
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	rawdb.WriteBadBlock(bc.db, block)
 	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))

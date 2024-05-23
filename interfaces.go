@@ -95,6 +95,11 @@ type ChainStateReader interface {
 
 // SyncProgress gives progress indications when the node is synchronising with
 // the Ethereum network.
+/*
+SyncProgress 同步的进度:
+1) CurrentBlock & HighestBlock
+2) TxIndexRemainingBlocks
+*/
 type SyncProgress struct {
 	StartingBlock uint64 // Block number where sync began
 	CurrentBlock  uint64 // Current block number where sync is at
@@ -127,6 +132,11 @@ type SyncProgress struct {
 }
 
 // Done returns the indicator if the initial sync is finished or not.
+/*
+Done 表示 initial sync 是否完成 ?
+1) prog.CurrentBlock < prog.HighestBlock 没有完成
+2) TxIndexRemainingBlocks == 0 表示完成;
+*/
 func (prog SyncProgress) Done() bool {
 	if prog.CurrentBlock < prog.HighestBlock {
 		return false

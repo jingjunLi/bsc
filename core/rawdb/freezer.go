@@ -525,6 +525,7 @@ func (f *Freezer) repair() error {
 }
 
 // delete leveldb data that save to ancientdb, split from func freeze
+// 删除 旧的 block 数据, 在 leveldb 内 准备保存到 ancientdb;
 func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, frozen uint64, start time.Time) {
 	// Wipe out all data from the active database
 	batch := db.NewBatch()

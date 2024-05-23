@@ -18,7 +18,7 @@ import (
 // prunedfreezer not contain ancient data, only record 'frozen' , the next recycle block number form kvstore.
 /*
 1) 用途 : 用于删除数据，只保留最近的数据，删除旧数据。
-2) 主要原理: 通过一个frozen字段记录下一个要删除的blockNumber，然后通过读取blockNumber来删除数据。
+2) 主要原理: 通过一个 frozen 字段记录下一个要删除的 blockNumber，然后通过读取 blockNumber 来删除数据。
 3) 适用场景: 适用于不需要保存所有数据，只需要保存最近数据的场景。
 */
 type prunedfreezer struct {
@@ -35,6 +35,9 @@ type prunedfreezer struct {
 }
 
 // newNoDataFreezer creates a chain freezer that deletes data enough ‘old’.
+/*
+datadir : 作用, 原来的 ancient dir, 保存 NODATA_ANCIENT_FLOCK;
+*/
 func newPrunedFreezer(datadir string, db ethdb.KeyValueStore, offset uint64) (*prunedfreezer, error) {
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
 		if info.Mode()&os.ModeSymlink != 0 {
@@ -70,6 +73,7 @@ func newPrunedFreezer(datadir string, db ethdb.KeyValueStore, offset uint64) (*p
 }
 
 // repair init frozen , compatible disk-ancientdb and pruner-block-tool.
+// 不保存 data, 但是仍然要保存一些 meta, 比如 frozen;
 func (f *prunedfreezer) repair(datadir string) error {
 	offset := atomic.LoadUint64(&f.frozen)
 	// compatible freezer
@@ -207,8 +211,9 @@ func (f *prunedfreezer) Sync() error {
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
 /*
+后台线程:
 
- */
+*/
 func (f *prunedfreezer) freeze() {
 	nfdb := &nofreezedb{KeyValueStore: f.db}
 
@@ -295,6 +300,12 @@ func (f *prunedfreezer) freeze() {
 			first    = f.frozen
 			ancients = make([]common.Hash, 0, limit-f.frozen)
 		)
+		/*
+			1) frozen 保存
+			2) ancients
+			3) ReadCanonicalHash 失败的原因 ?
+			frozen 38482394 limit: 3848 4497 ?
+		*/
 		for f.frozen <= limit {
 			// Retrieves all the components of the canonical block
 			hash := ReadCanonicalHash(nfdb, f.frozen)
