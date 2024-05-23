@@ -52,6 +52,7 @@ var (
 	headFinalizedBlockKey = []byte("LastFinalized")
 
 	// persistentStateIDKey tracks the id of latest stored state(for path-based only).
+	// pbss 下 latest
 	persistentStateIDKey = []byte("LastStateID")
 
 	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).

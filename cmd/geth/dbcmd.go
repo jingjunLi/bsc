@@ -1254,6 +1254,9 @@ func hbss2pbss(ctx *cli.Context) error {
 	defer db.Close()
 
 	// convert hbss trie node to pbss trie node
+	/*
+		PersistentStateID
+	*/
 	var lastStateID uint64
 	if stateDiskDb != nil {
 		lastStateID = rawdb.ReadPersistentStateID(stateDiskDb)
