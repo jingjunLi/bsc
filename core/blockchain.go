@@ -249,6 +249,10 @@ type txLookup struct {
 // canonical chain.
 /*
 BlockChain::db 与 BlockChain::triedb 的区别 ?
+blockchain 的主要功能是维护区块链的状态, 包括区块的验证,插入和状态查询. 表示一条基于 genesis 的规范链;
+将 blocks 导入到 block chain 的规则是由两阶段的 Validator 定义的;
+1) Processing of blocks ;
+2) The validation of the state
 */
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
@@ -512,8 +516,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 				diskRoot 的含义 ?
 				在状态恢复之前，如果丢失了头状态，请找出快照的 disk layer 指针（如果启用了快照）。确保 rewound点 低于 disk layer 。
 				1) 如果开启 Snapshot 从 Snapshot 读取;
-				2) 如果是 PathScheme, 从 triedb 获取;
+				SnapshotRootKey -> root hash
+				2) 如果是 PBSS, 从 triedb 获取;
 
+				---
+				1) 确认 pbss 转 hbss 之后的 state root, 可以通过 PBSS 的数据获取
+				2) 在rewind 逻辑中写死这个 hash, diskRoot != (common.Hash{}) 判断前, 将 diskRoot 设置为啥 ?
+				peer 问题也是validator prune导致的，新版本刚修复，更新后可以了??
+				---
+				1) snapshot 没有对应的状态, 可以进行 rebuild ?
 			*/
 			var diskRoot common.Hash
 			if bc.cacheConfig.SnapshotLimit > 0 {

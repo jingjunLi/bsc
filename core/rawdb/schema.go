@@ -33,9 +33,8 @@ var (
 
 	// headHeaderKey tracks the latest known header's hash.
 	/*
-		最近的区块头的hash; 问题: 1) 区块头 与 完整区块 是否是一一对应的 ?
+		最近的区块头的 hash; 问题: 1) 区块头 与 完整区块 是否是一一对应的 ?
 	*/
-	//
 	headHeaderKey = []byte("LastHeader")
 
 	// headBlockKey tracks the latest known full block's hash.
@@ -140,7 +139,6 @@ var (
 		2) storage trie value
 		---
 		1) storage trie value 的操作
-
 	*/
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits

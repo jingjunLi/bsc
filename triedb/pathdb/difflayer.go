@@ -42,6 +42,7 @@ diffLayer 相当于保存在内存中的缓存, 类似 journal; 所以即使丢�
 	nodes 是如何赋值的 ? 通过下面的调用方式 一路传下来:MergedNodeSet 转换而成;
 	(db *Database) Update -> (db *Database) Update -> (tree *layerTree) add(trienode.MergedNodeSet) -> (dl *diffLayer) update (nodes)
 3) parent & lock: lock 保护 parent ? 为什么只保护 parent, 存在并发读写 ?
+4) states:存储了diffLayer这一层改变的account在改变前它的数据是什么样的。这个数据用来构建freezer的数据时使用。这是和snapshot不同的地方。
 ---
 核心的功能:
 
