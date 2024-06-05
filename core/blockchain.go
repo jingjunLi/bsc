@@ -1303,9 +1303,6 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	rawdb.WriteHeadHeaderHash(bc.db.BlockStore(), block.Hash())
 	rawdb.WriteHeadBlockHash(bc.db.BlockStore(), block.Hash())
 
-	if block.NumberU64() == 2070000 {
-		panic("writeHeadBlock reach 2070000")
-	}
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
@@ -1324,6 +1321,9 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	headBlockGauge.Update(int64(block.NumberU64()))
 	justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(block.Header())))
 	finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(block.Header())))
+	if block.NumberU64() == 2061866 {
+		panic("writeHeadBlock reach 2061866")
+	}
 }
 
 // stopWithoutSaving stops the blockchain service. If any imports are currently in progress
