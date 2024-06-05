@@ -1303,6 +1303,9 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	rawdb.WriteHeadHeaderHash(bc.db.BlockStore(), block.Hash())
 	rawdb.WriteHeadBlockHash(bc.db.BlockStore(), block.Hash())
 
+	if block.NumberU64() == 2070000 {
+		panic("writeHeadBlock reach 2070000")
+	}
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
