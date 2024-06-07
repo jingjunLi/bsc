@@ -1299,13 +1299,13 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
-	rawdb.WriteCanonicalHash(bc.db.BlockStore(), block.Hash(), block.NumberU64())
-	rawdb.WriteHeadHeaderHash(bc.db.BlockStore(), block.Hash())
-	rawdb.WriteHeadBlockHash(bc.db.BlockStore(), block.Hash())
 
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
+	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadHeaderHash(batch, block.Hash())
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
 	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
