@@ -516,7 +516,7 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 		// Always keep the genesis block in active database
 		if blockNumber := first + uint64(i); blockNumber != 0 {
 			DeleteBlockWithoutNumber(batch, ancients[i], blockNumber)
-			DeleteCanonicalHash(batch, blockNumber)
+			//DeleteCanonicalHash(batch, blockNumber)
 		}
 	}
 	if err := batch.Write(); err != nil {
