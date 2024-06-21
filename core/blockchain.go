@@ -808,11 +808,16 @@ func (bc *BlockChain) getFinalizedNumber(header *types.Header) uint64 {
 /*
 loadLastState, 加载数据库里面的最新的我们知道的区块链状态. 这个方法假设已经获取到锁了.
 1) ReadHeadBlockHash -> HeadBlockHash
+headBlockKey(LastBlock) -> HeadBlockHash
 2) GetBlockByHash -> headBlock
+hash -> block
 */
 func (bc *BlockChain) loadLastState() error {
 	// Restore the last known head block
-	// 返回我们知道的最新的区块的 hash -> HeadBlockHash
+	/*
+		1) LastBlock -> HeadBlockHash
+		返回我们知道的最新的区块的 hash -> HeadBlockHash
+	*/
 	head := rawdb.ReadHeadBlockHash(bc.db.BlockStore())
 	if head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
@@ -821,7 +826,9 @@ func (bc *BlockChain) loadLastState() error {
 		return bc.Reset()
 	}
 	// Make sure the entire head block is available
-	// 根据 blockHash 来查找 block -> headBlock
+	/*
+		根据 blockHash 来查找 block -> headBlock
+	*/
 	headBlock := bc.GetBlockByHash(head)
 	if headBlock == nil {
 		// Corrupt or empty database, init from scratch
@@ -838,6 +845,9 @@ func (bc *BlockChain) loadLastState() error {
 
 	// Restore the last known head header
 	// ReadHeadHeaderHash -> HeadHeaderHash -> headHeader
+	/*
+		1) LastHeader -> HeadHeaderHash
+	*/
 	headHeader := headBlock.Header()
 	if head := rawdb.ReadHeadHeaderHash(bc.db.BlockStore()); head != (common.Hash{}) {
 		if header := bc.GetHeaderByHash(head); header != nil {
@@ -1180,6 +1190,9 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	)
 	/*
 		在重置区块链时，确保我们不会最终得到一个无状态的头块。注意，深度相等是允许的，这样可以使用 SetHead 作为链修复机制，而不会删除任何数据。
+		db 涉及的数据:
+		1) HeadBlockHash
+		2) HeadFastBlockHash
 	*/
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
@@ -1264,6 +1277,9 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		Rewind header chain, 删除之后的 所有 blocks ?
 		为什么要删除 ? 倒回到 header chain, 删除在此之前的所有块体
 		1) 根据 Ancients()(the ancient item numbers in the ancient store) 判断是否是 ancient 还是 db 内删除
+		涉及的数据类型:
+		1) hash->number
+		2) Body, BlobSidecars, Receipts
 	*/
 	delFn := func(db ethdb.KeyValueWriter, hash common.Hash, num uint64) {
 		// Ignore the error here since light client won't hit this path

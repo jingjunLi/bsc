@@ -155,6 +155,10 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	/*
 		这里的场景 ??
 		the head is rewound to the point with available state(trie) which is below the snapshot.
+		1) head 哪里传递
+		从 diskdb 中读取的 baseRoot 与当前的 root 不匹配, 会有什么问题 ?
+		2) root 哪里传递 ? -> "Loaded most recent local block"
+		---
 	*/
 	if head := snapshot.Root(); head != root {
 		log.Warn("Snapshot is not continuous with chain", "snaproot", head, "chainroot", root)

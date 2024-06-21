@@ -631,7 +631,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
 	}
 	if o.Type == dbPebble || existingDb == dbPebble {
-		log.Info("Using pebble as the backing database")
+		log.Info("Using pebble as the backing database", "OpenOptions", o)
 		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
 	}
 	if o.Type == dbLeveldb || existingDb == dbLeveldb {
@@ -639,7 +639,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 	}
 	// No pre-existing database, no user-requested one either. Default to Pebble.
-	log.Info("Defaulting to pebble as the backing database")
+	log.Info("Defaulting to pebble as the backing database", "OpenOptions", o)
 	return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
 }
 
