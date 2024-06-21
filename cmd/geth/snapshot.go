@@ -691,6 +691,7 @@ func traverseState(ctx *cli.Context) error {
 	accIter := trie.NewIterator(acctIt)
 	var contractDatas []ContractMeta
 	for accIter.Next() {
+		// EOA ?
 		accounts += 1
 		var acc types.StateAccount
 		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
@@ -705,6 +706,7 @@ func traverseState(ctx *cli.Context) error {
 			codes += 1
 		}
 
+		// COA
 		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
 			storageTrie, err := trie.NewStateTrie(id, triedb)
@@ -836,116 +838,127 @@ func traverseRawState(ctx *cli.Context) error {
 		caAccounts int
 		lastReport time.Time
 		start      = time.Now()
-		hasher     = crypto.NewKeccakState()
-		got        = make([]byte, 32)
+		//hasher     = crypto.NewKeccakState()
+		//got        = make([]byte, 32)
+
+		accountTrieKeySize, accountTrieValueSize, accountTrieKeyNum, accountTrieLeafKeySize, accountTrieLeafValueSize, accountTrieLeafKeyNum uint64
 	)
 	accIter, err := t.NodeIterator(nil)
 	if err != nil {
 		log.Error("Failed to open iterator", "root", root, "err", err)
 		return err
 	}
-	reader, err := triedb.Reader(root)
-	if err != nil {
-		log.Error("State is non-existent", "root", root)
-		return nil
-	}
-	var contractDatas []ContractMeta
+	//reader, err := triedb.Reader(root)
+	//if err != nil {
+	//	log.Error("State is non-existent", "root", root)
+	//	return nil
+	//}
+	//var contractDatas []ContractMeta
 	for accIter.Next(true) {
 		nodes += 1
+		accountTrieKeyNum += 1
 		node := accIter.Hash()
-
+		/*
+			没有统计 embedded node, 因为 embedded node 没有 own hash, 所以 embedded node 的 hash 为 common.Hash{} 空;
+			1) 可以统计 embedded node 的数量 ??
+		*/
 		// Check the present for non-empty hash node(embedded node doesn't
 		// have their own hash).
 		if node != (common.Hash{}) {
-			blob, _ := reader.Node(common.Hash{}, accIter.Path(), node)
-			if len(blob) == 0 {
-				log.Error("Missing trie node(account)", "hash", node)
-				return errors.New("missing account")
-			}
-			hasher.Reset()
-			hasher.Write(blob)
-			hasher.Read(got)
-			if !bytes.Equal(got, node.Bytes()) {
-				log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
-				return errors.New("invalid account node")
-			}
+			accountTrieValueSize += uint64(len(accIter.NodeBlob()))
+			accountTrieKeySize += accountTrieKeySize + uint64(1+len(accIter.Path()))
+			//blob, _ := reader.Node(common.Hash{}, accIter.Path(), node)
+			//if len(blob) == 0 {
+			//	log.Error("Missing trie node(account)", "hash", node)
+			//	return errors.New("missing account")
+			//}
+			//hasher.Reset()
+			//hasher.Write(blob)
+			//hasher.Read(got)
+			//if !bytes.Equal(got, node.Bytes()) {
+			//	log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
+			//	return errors.New("invalid account node")
+			//}
 		}
 		// If it's a leaf node, yes we are touching an account,
 		// dig into the storage trie further.
 		if accIter.Leaf() {
 			accounts += 1
+			accountTrieLeafKeyNum += 1
+			accountTrieLeafKeySize += accountTrieLeafKeySize + uint64(1+len(accIter.Path()))
+			accountTrieLeafValueSize += uint64(len(accIter.NodeBlob()))
 			var acc types.StateAccount
 			if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
 				log.Error("Invalid account encountered during traversal", "err", err)
 				return errors.New("invalid account")
 			}
 			if acc.Root != types.EmptyRootHash {
-				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
-				storageTrie, err := trie.NewStateTrie(id, triedb)
-				if err != nil {
-					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
-					return errors.New("missing storage trie")
-				}
-				storageIter, err := storageTrie.NodeIterator(nil)
-				if err != nil {
-					log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
-					return err
-				}
 				caAccounts++
-				var storageTrieKeySize, storageTrieValueSize, storageTrieLeafNodes, mptNodes int
-				for storageIter.Next(true) {
-					nodes += 1
-					mptNodes += 1
-					storageTrieValueSize += len(storageIter.NodeBlob())
-					node := storageIter.Hash()
-
-					// Check the presence for non-empty hash node(embedded node doesn't
-					// have their own hash).
-					if node != (common.Hash{}) {
-						storageTrieKeySize = storageTrieKeySize + 1 + common.HashLength + len(storageIter.Path())
-						blob, _ := reader.Node(common.BytesToHash(accIter.LeafKey()), storageIter.Path(), node)
-						if len(blob) == 0 {
-							log.Error("Missing trie node(storage)", "hash", node)
-							return errors.New("missing storage")
-						}
-						hasher.Reset()
-						hasher.Write(blob)
-						hasher.Read(got)
-						if !bytes.Equal(got, node.Bytes()) {
-							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
-							return errors.New("invalid storage node")
-						}
-					}
-					// Bump the counter if it's leaf node.
-					if storageIter.Leaf() {
-						slots += 1
-						storageTrieLeafNodes += 1
-					}
-					if time.Since(lastReport) > time.Second*8 {
-						log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-						lastReport = time.Now()
-					}
-				}
-				if storageIter.Error() != nil {
-					log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Error())
-					return storageIter.Error()
-				}
-				contractData := ContractMeta{
-					Owner:                  common.BytesToHash(accIter.LeafKey()).String(),
-					AccountRoot:            acc.Root.String(),
-					StorageTrieKeySize:     storageTrieKeySize,
-					StorageTrieValueSize:   storageTrieValueSize,
-					StorageTrieNodeNum:     mptNodes,
-					StorageTrieLeafNodeNum: storageTrieLeafNodes,
-					ContractCodeHash:       common.BytesToHash(acc.CodeHash).String(),
-				}
-				contractDatas = append(contractDatas, contractData)
-				// 将数据写入CSV文件
-				if len(contractDatas) > 10000 {
-					writeContractMetaToCSV(contractDatas, writer)
-					contractDatas = []ContractMeta{}
-					log.Info("Traversing state persist contractDatas", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-				}
+				//id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
+				//storageTrie, err := trie.NewStateTrie(id, triedb)
+				//if err != nil {
+				//	log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
+				//	return errors.New("missing storage trie")
+				//}
+				//storageIter, err := storageTrie.NodeIterator(nil)
+				//if err != nil {
+				//	log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
+				//	return err
+				//}
+				//var storageTrieKeySize, storageTrieValueSize, storageTrieLeafNodes, mptNodes int
+				//for storageIter.Next(true) {
+				//	nodes += 1
+				//	mptNodes += 1
+				//	storageTrieValueSize += len(storageIter.NodeBlob())
+				//	node := storageIter.Hash()
+				//
+				//	// Check the presence for non-empty hash node(embedded node doesn't
+				//	// have their own hash).
+				//	if node != (common.Hash{}) {
+				//		storageTrieKeySize = storageTrieKeySize + 1 + common.HashLength + len(storageIter.Path())
+				//		blob, _ := reader.Node(common.BytesToHash(accIter.LeafKey()), storageIter.Path(), node)
+				//		if len(blob) == 0 {
+				//			log.Error("Missing trie node(storage)", "hash", node)
+				//			return errors.New("missing storage")
+				//		}
+				//		hasher.Reset()
+				//		hasher.Write(blob)
+				//		hasher.Read(got)
+				//		if !bytes.Equal(got, node.Bytes()) {
+				//			log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
+				//			return errors.New("invalid storage node")
+				//		}
+				//	}
+				//	// Bump the counter if it's leaf node.
+				//	if storageIter.Leaf() {
+				//		slots += 1
+				//		storageTrieLeafNodes += 1
+				//	}
+				//	if time.Since(lastReport) > time.Second*8 {
+				//		log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+				//		lastReport = time.Now()
+				//	}
+				//}
+				//if storageIter.Error() != nil {
+				//	log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Error())
+				//	return storageIter.Error()
+				//}
+				//contractData := ContractMeta{
+				//	Owner:                  common.BytesToHash(accIter.LeafKey()).String(),
+				//	AccountRoot:            acc.Root.String(),
+				//	StorageTrieKeySize:     storageTrieKeySize,
+				//	StorageTrieValueSize:   storageTrieValueSize,
+				//	StorageTrieNodeNum:     mptNodes,
+				//	StorageTrieLeafNodeNum: storageTrieLeafNodes,
+				//	ContractCodeHash:       common.BytesToHash(acc.CodeHash).String(),
+				//}
+				//contractDatas = append(contractDatas, contractData)
+				//// 将数据写入CSV文件
+				//if len(contractDatas) > 10000 {
+				//	writeContractMetaToCSV(contractDatas, writer)
+				//	contractDatas = []ContractMeta{}
+				//	log.Info("Traversing state persist contractDatas", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+				//}
 			}
 			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
@@ -960,14 +973,17 @@ func traverseRawState(ctx *cli.Context) error {
 			}
 		}
 	}
-	writeContractMetaToCSV(contractDatas, writer)
-	contractDatas = []ContractMeta{}
+	//writeContractMetaToCSV(contractDatas, writer)
+	//contractDatas = []ContractMeta{}
 	if accIter.Error() != nil {
 		log.Error("Failed to traverse state trie", "root", root, "err", accIter.Error())
 		return accIter.Error()
 	}
+	// accountTrieKeySize, accountTrieValueSize, accountTrieKeyNum, accountTrieLeafKeySize, accountTrieLeafValueSize, accountTrieLeafKeyNum uint64
 	log.Info("State is complete", "accounts", accounts, "caAccounts", caAccounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 	log.Info("State is complete", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("State is complete Account Info", "accountTrieKeySize", accountTrieKeySize, "accountTrieValueSize", accountTrieValueSize,
+		"accountTrieKeyNum", accountTrieKeyNum, "accountTrieLeafKeySize", accountTrieLeafKeySize, "accountTrieLeafValueSize", accountTrieLeafValueSize, "accountTrieLeafKeyNum", accountTrieLeafKeyNum)
 	return nil
 }
 
