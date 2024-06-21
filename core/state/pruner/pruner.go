@@ -399,9 +399,11 @@ func (p *BlockPruner) backUpOldDb(name string, cache, handles int, namespace str
 	defer chainDb.Close()
 	log.Info("chainDB opened successfully")
 
+	/*
+		当前 ancient db 内 items 数量
+	*/
 	// Get the number of items in old ancient db.
-	// 当前 ancient db 内 items 数量
-	itemsOfAncient, err := chainDb.ItemAmountInAncient()
+	itemsOfAncient, err := chainDb.BlockStore().ItemAmountInAncient()
 	log.Info("the number of items in ancientDB is ", "itemsOfAncient", itemsOfAncient)
 
 	// If we can't access the freezer or it's empty, abort.
