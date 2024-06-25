@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -549,60 +548,60 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	// in ancientdb did not start with 0, no genesis block in ancientdb as well.
 
 	if kvgenesis, _ := db.Get(headerHashKey(0)); offset == 0 && len(kvgenesis) > 0 {
-		if frozen, _ := frdb.Ancients(); frozen > 0 {
-			// If the freezer already contains something, ensure that the genesis blocks
-			// match, otherwise we might mix up freezers across chains and destroy both
-			// the freezer and the key-value store.
-			frgenesis, err := frdb.Ancient(ChainFreezerHashTable, 0)
-			if err != nil {
-				printChainMetadata(db)
-				return nil, fmt.Errorf("failed to retrieve genesis from ancient %v", err)
-			} else if !bytes.Equal(kvgenesis, frgenesis) {
-				printChainMetadata(db)
-				return nil, fmt.Errorf("genesis mismatch: %#x (leveldb) != %#x (ancients)", kvgenesis, frgenesis)
-			}
-			// Key-value store and freezer belong to the same network. Ensure that they
-			// are contiguous, otherwise we might end up with a non-functional freezer.
-			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
-				// Subsequent header after the freezer limit is missing from the database.
-				// Reject startup if the database has a more recent head.
-				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
-					// Find the smallest block stored in the key-value store
-					// in range of [frozen, head]
-					var number uint64
-					for number = frozen; number <= head; number++ {
-						if present, _ := db.Has(headerHashKey(number)); present {
-							break
-						}
-					}
-					// We are about to exit on error. Print database metadata before exiting
-					printChainMetadata(db)
-					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
-						frozen-1, number, head)
-				}
-				// Database contains only older data than the freezer, this happens if the
-				// state was wiped and reinited from an existing freezer.
-			}
-			// Otherwise, key-value store continues where the freezer left off, all is fine.
-			// We might have duplicate blocks (crash after freezer write but before key-value
-			// store deletion, but that's fine).
-		} else {
-			// If the freezer is empty, ensure nothing was moved yet from the key-value
-			// store, otherwise we'll end up missing data. We check block #1 to decide
-			// if we froze anything previously or not, but do take care of databases with
-			// only the genesis block.
-			if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
-				// Key-value store contains more data than the genesis block, make sure we
-				// didn't freeze anything yet.
-				if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
-					printChainMetadata(db)
-					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
-				}
-				// Block #1 is still in the database, we're allowed to init a new freezer
-			}
-			// Otherwise, the head header is still the genesis, we're allowed to init a new
-			// freezer.
-		}
+		//if frozen, _ := frdb.Ancients(); frozen > 0 {
+		//	// If the freezer already contains something, ensure that the genesis blocks
+		//	// match, otherwise we might mix up freezers across chains and destroy both
+		//	// the freezer and the key-value store.
+		//	frgenesis, err := frdb.Ancient(ChainFreezerHashTable, 0)
+		//	if err != nil {
+		//		printChainMetadata(db)
+		//		return nil, fmt.Errorf("failed to retrieve genesis from ancient %v", err)
+		//	} else if !bytes.Equal(kvgenesis, frgenesis) {
+		//		printChainMetadata(db)
+		//		return nil, fmt.Errorf("genesis mismatch: %#x (leveldb) != %#x (ancients)", kvgenesis, frgenesis)
+		//	}
+		//	// Key-value store and freezer belong to the same network. Ensure that they
+		//	// are contiguous, otherwise we might end up with a non-functional freezer.
+		//	if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
+		//		// Subsequent header after the freezer limit is missing from the database.
+		//		// Reject startup if the database has a more recent head.
+		//		if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
+		//			// Find the smallest block stored in the key-value store
+		//			// in range of [frozen, head]
+		//			var number uint64
+		//			for number = frozen; number <= head; number++ {
+		//				if present, _ := db.Has(headerHashKey(number)); present {
+		//					break
+		//				}
+		//			}
+		//			// We are about to exit on error. Print database metadata before exiting
+		//			printChainMetadata(db)
+		//			return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
+		//				frozen-1, number, head)
+		//		}
+		//		// Database contains only older data than the freezer, this happens if the
+		//		// state was wiped and reinited from an existing freezer.
+		//	}
+		//	// Otherwise, key-value store continues where the freezer left off, all is fine.
+		//	// We might have duplicate blocks (crash after freezer write but before key-value
+		//	// store deletion, but that's fine).
+		//} else {
+		//	// If the freezer is empty, ensure nothing was moved yet from the key-value
+		//	// store, otherwise we'll end up missing data. We check block #1 to decide
+		//	// if we froze anything previously or not, but do take care of databases with
+		//	// only the genesis block.
+		//	if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
+		//		// Key-value store contains more data than the genesis block, make sure we
+		//		// didn't freeze anything yet.
+		//		if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
+		//			printChainMetadata(db)
+		//			return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
+		//		}
+		//		// Block #1 is still in the database, we're allowed to init a new freezer
+		//	}
+		//	// Otherwise, the head header is still the genesis, we're allowed to init a new
+		//	// freezer.
+		//}
 	}
 
 	// no prune ancient start success
