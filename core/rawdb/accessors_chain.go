@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -45,6 +46,9 @@ func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 		}
 		return nil
 	})
+
+	log.Info("ReadCanonicalHash", "key", headerHashKey(number), "key hex", hexutil.Encode(headerHashKey(number)),
+		"value", data, "value hex", hexutil.Encode(data))
 	return common.BytesToHash(data)
 }
 
@@ -348,6 +352,9 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		data, _ = db.BlockStoreReader().Get(headerKey(number, hash))
 		return nil
 	})
+	log.Info("ReadHeaderRLP", "blockhash", hash, "key", headerKey(number, hash),
+		"key hex", hexutil.Encode(headerKey(number, hash)),
+		"data", data, "value hex", hexutil.Encode(data))
 	return data
 }
 
@@ -365,6 +372,7 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 // ReadHeader retrieves the block header corresponding to the hash.
 func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
 	data := ReadHeaderRLP(db, hash, number)
+
 	if len(data) == 0 {
 		return nil
 	}
@@ -453,6 +461,9 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 		data, _ = db.BlockStoreReader().Get(blockBodyKey(number, hash))
 		return nil
 	})
+	log.Info("ReadBodyRLP", "blockhash", hash, "key", headerKey(number, hash),
+		"key hex", hexutil.Encode(headerKey(number, hash)),
+		"data", data, "value hex", hexutil.Encode(data))
 	return data
 }
 
