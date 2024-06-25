@@ -886,7 +886,7 @@ func traverseRawState(ctx *cli.Context) error {
 			accounts += 1
 			accountTrieLeafKeyNum += 1
 			accountTrieLeafKeySize += accountTrieLeafKeySize + uint64(1+len(accIter.Path()))
-			accountTrieLeafValueSize += uint64(len(accIter.NodeBlob()))
+			accountTrieLeafValueSize += uint64(len(accIter.LeafBlob()))
 			var acc types.StateAccount
 			if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
 				log.Error("Invalid account encountered during traversal", "err", err)
