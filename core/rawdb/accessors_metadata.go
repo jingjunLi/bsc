@@ -92,6 +92,7 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 // given genesis (block-)hash.
 func ReadGenesisStateSpec(db ethdb.KeyValueReader, blockhash common.Hash) []byte {
 	data, _ := db.Get(genesisStateSpecKey(blockhash))
+	log.Info("ReadGenesisStateSpec", "blockhash", blockhash, "key", genesisStateSpecKey(blockhash), "data", data)
 	return data
 }
 
