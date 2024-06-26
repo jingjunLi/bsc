@@ -367,6 +367,13 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db.BlockStoreReader(), number, hash) {
 		return true
 	}
+	log.Info("HasHeader", "number", number)
+
+	if has, _ := db.BlockStoreReader().HasAncient(ChainFreezerHeaderTable, number); has {
+		log.Info("HasHeader Has Ancient", "number", number)
+		return true
+	}
+
 	if has, err := db.BlockStoreReader().Has(headerKey(number, hash)); !has || err != nil {
 		return false
 	}
@@ -502,6 +509,12 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db.BlockStoreReader(), number, hash) {
 		return true
 	}
+	log.Info("HasBody", "number", number)
+	if has, _ := db.BlockStoreReader().HasAncient(ChainFreezerBodiesTable, number); has {
+		log.Info("HasBody ancient has", "number", number)
+		return true
+	}
+	log.Info("HasBody ancient don't has", "number", number)
 	if has, err := db.BlockStoreReader().Has(blockBodyKey(number, hash)); !has || err != nil {
 		return false
 	}
