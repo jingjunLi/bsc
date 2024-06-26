@@ -872,7 +872,7 @@ func DataTypeByKey(key []byte) DataType {
 				return StateDataType
 			}
 		}
-		for _, meta := range [][]byte{headHeaderKey, headFinalizedBlockKey, headBlockKey, headFastBlockKey} {
+		for _, meta := range [][]byte{headHeaderKey, headFinalizedBlockKey, headBlockKey, headFastBlockKey, offSetOfCurrentAncientFreezer} {
 			if bytes.Equal(key, meta) {
 				return BlockDataType
 			}
