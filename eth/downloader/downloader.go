@@ -906,6 +906,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 
 func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (uint64, error) {
 	hash := common.Hash{}
+	remoteHeight = 2031217
 
 	// Ancestor not found, we need to binary search over our chain
 	start, end := uint64(0), remoteHeight
