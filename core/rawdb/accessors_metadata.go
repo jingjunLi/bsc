@@ -64,7 +64,7 @@ func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 // ReadChainConfig retrieves the consensus settings based on the given genesis hash.
 func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainConfig {
 	data, _ := db.Get(configKey(hash))
-	log.Info("ReadGenesisStateSpec", "blockhash", hash, "key", configKey(hash),
+	log.Info("ReadChainConfig", "blockhash", hash, "key", configKey(hash),
 		"key hex", hexutil.Encode(configKey(hash)),
 		"data", data, "value hex", hexutil.Encode(data))
 	if len(data) == 0 {

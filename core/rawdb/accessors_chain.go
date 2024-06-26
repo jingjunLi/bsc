@@ -47,6 +47,10 @@ func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 		return nil
 	})
 
+	if number == 0 {
+		data, _ = hexutil.Decode("0xb9c18e204b67260b4a5fe75f60510872a00352750dc43d7df5d8c96bba8d8f66")
+	}
+
 	log.Info("ReadCanonicalHash", "key", headerHashKey(number), "key hex", hexutil.Encode(headerHashKey(number)),
 		"value", data, "value hex", hexutil.Encode(data))
 	return common.BytesToHash(data)
@@ -461,7 +465,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 		data, _ = db.BlockStoreReader().Get(blockBodyKey(number, hash))
 		return nil
 	})
-	log.Info("ReadBodyRLP", "blockhash", hash, "key", headerKey(number, hash),
+	log.Info("ReadBodyRLP", "blockhash", hash, "key", blockBodyKey(number, hash),
 		"key hex", hexutil.Encode(headerKey(number, hash)),
 		"data", data, "value hex", hexutil.Encode(data))
 	return data
