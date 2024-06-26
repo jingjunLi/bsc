@@ -847,8 +847,6 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (uint64, error) {
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
-	from = from - 90000
-
 	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
 	headers, hashes, err := d.fetchHeadersByNumber(p, uint64(from), count, skip, false)
 	if err != nil {
