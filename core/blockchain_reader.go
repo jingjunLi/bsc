@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -155,9 +156,11 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
+	log.Info("HasBlock", "hash", hash, "number", number)
 	if !bc.HasHeader(hash, number) {
 		return false
 	}
+	log.Info("HasBody", "hash", hash, "number", number)
 	return rawdb.HasBody(bc.db, hash, number)
 }
 
