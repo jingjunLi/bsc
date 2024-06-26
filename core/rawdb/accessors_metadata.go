@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 	"time"
 
@@ -64,9 +63,6 @@ func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 // ReadChainConfig retrieves the consensus settings based on the given genesis hash.
 func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainConfig {
 	data, _ := db.Get(configKey(hash))
-	log.Info("ReadChainConfig", "blockhash", hash, "key", configKey(hash),
-		"key hex", hexutil.Encode(configKey(hash)),
-		"data", data, "value hex", hexutil.Encode(data))
 	if len(data) == 0 {
 		return nil
 	}
@@ -96,9 +92,6 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 // given genesis (block-)hash.
 func ReadGenesisStateSpec(db ethdb.KeyValueReader, blockhash common.Hash) []byte {
 	data, _ := db.Get(genesisStateSpecKey(blockhash))
-	log.Info("ReadGenesisStateSpec", "blockhash", blockhash, "key", genesisStateSpecKey(blockhash),
-		"key hex", hexutil.Encode(genesisStateSpecKey(blockhash)),
-		"data", data, "value hex", hexutil.Encode(data))
 	return data
 }
 

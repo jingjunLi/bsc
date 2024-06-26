@@ -51,8 +51,6 @@ func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 		data, _ = hexutil.Decode("0xb9c18e204b67260b4a5fe75f60510872a00352750dc43d7df5d8c96bba8d8f66")
 	}
 
-	log.Info("ReadCanonicalHash", "key", "number", number, headerHashKey(number), "key hex", hexutil.Encode(headerHashKey(number)),
-		"value", data, "value hex", hexutil.Encode(data))
 	return common.BytesToHash(data)
 }
 
@@ -356,9 +354,6 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		data, _ = db.BlockStoreReader().Get(headerKey(number, hash))
 		return nil
 	})
-	log.Info("ReadHeaderRLP", "blockhash", hash, "number", number, "key", headerKey(number, hash),
-		"key hex", hexutil.Encode(headerKey(number, hash)),
-		"data", data, "value hex", hexutil.Encode(data))
 	return data
 }
 
@@ -367,17 +362,6 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db.BlockStoreReader(), number, hash) {
 		return true
 	}
-	log.Info("HasHeader", "number", number)
-
-	if data := ReadHeaderRLP(db, hash, number); data != nil {
-		log.Info("HasHeader Has Ancient", "number", number)
-		return true
-	}
-	//if has, _ := db.BlockStoreReader().HasAncient(ChainFreezerHeaderTable, number); has {
-	//	log.Info("HasHeader Has Ancient", "number", number)
-	//	return true
-	//}
-
 	if has, err := db.BlockStoreReader().Has(headerKey(number, hash)); !has || err != nil {
 		return false
 	}
@@ -475,9 +459,6 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 		data, _ = db.BlockStoreReader().Get(blockBodyKey(number, hash))
 		return nil
 	})
-	log.Info("ReadBodyRLP", "blockhash", hash, "number", number, "key", blockBodyKey(number, hash),
-		"key hex", hexutil.Encode(headerKey(number, hash)),
-		"data", data, "value hex", hexutil.Encode(data))
 	return data
 }
 
@@ -512,16 +493,6 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if isCanon(db.BlockStoreReader(), number, hash) {
 		return true
 	}
-	log.Info("HasBody", "number", number)
-	if data := ReadBodyRLP(db, hash, number); data != nil {
-		log.Info("HasBody ancient has", "number", number)
-		return true
-	}
-	//if has, _ := db.BlockStoreReader().HasAncient(ChainFreezerBodiesTable, number); has {
-	//	log.Info("HasBody ancient has", "number", number)
-	//	return true
-	//}
-	log.Info("HasBody ancient don't has", "number", number)
 	if has, err := db.BlockStoreReader().Has(blockBodyKey(number, hash)); !has || err != nil {
 		return false
 	}
