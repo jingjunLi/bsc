@@ -820,6 +820,7 @@ func AncientInspect(db ethdb.Database) error {
 
 func BlocksInspect(db ethdb.Database, start, end uint64) error {
 	for num := start; num < end; num++ {
+		log.Info("blocksInspect begin", "number", num)
 		hash := ReadCanonicalHash(db, num)
 		if hash == (common.Hash{}) {
 			return nil
