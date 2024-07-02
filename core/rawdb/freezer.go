@@ -511,39 +511,69 @@ func (f *Freezer) repair() error {
 // delete leveldb data that save to ancientdb, split from func freeze
 func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, frozen uint64, start time.Time) {
 	// Wipe out all data from the active database
-	batch := db.NewBatch()
-	for i := 0; i < len(ancients); i++ {
-		// Always keep the genesis block in active database
-		if blockNumber := first + uint64(i); blockNumber != 0 {
-			DeleteBlockWithoutNumber(batch, ancients[i], blockNumber)
-			DeleteCanonicalHash(batch, blockNumber)
-		}
-	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to delete frozen canonical blocks", "err", err)
-	}
-	batch.Reset()
+	log.Info("=========gcKvStore=============== delete start", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
+	var headHashes []common.Hash
+	{
+		batch := db.NewBatch()
+		for i := 0; i < len(ancients); i++ {
+			// Always keep the genesis block in active database
+			if blockNumber := first + uint64(i); blockNumber != 0 {
+				hash, _ := db.Get(headerHashKey(blockNumber))
+				headHashes = append(headHashes, common.BytesToHash(hash))
+				headHash, _ := db.Get(headerKey(blockNumber, headHashes[i]))
 
-	// Wipe out side chains also and track dangling side chians
-	var dangling []common.Hash
-	for number := first; number < frozen; number++ {
-		// Always keep the genesis block in active database
-		if number != 0 {
-			dangling = ReadAllHashes(db, number)
-			for _, hash := range dangling {
-				log.Trace("Deleting side chain", "number", number, "hash", hash)
-				DeleteBlock(batch, hash, number)
+				DeleteBlockWithoutNumber(batch, ancients[i], blockNumber)
+				DeleteCanonicalHash(batch, blockNumber)
+				log.Info("gcKvStore delete", "first", first, "frozen", frozen, "len(ancients)", len(ancients), "blockNumber", blockNumber,
+					"hash", common.BytesToHash(hash), "head hash", common.BytesToHash(headHash))
+			}
+		}
+		log.Info("gcKvStore batch write", "batch size", batch.ValueSize())
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to delete frozen canonical blocks", "err", err)
+		}
+		batch.Reset()
+	}
+
+	log.Info("=========gcKvStore=============== end", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
+	{
+		for i := 0; i < len(ancients); i++ {
+			// Always keep the genesis block in active database
+			if blockNumber := first + uint64(i); blockNumber != 0 {
+				headHash, _ := db.Get(headerKey(blockNumber, headHashes[i]))
+				hash, _ := db.Get(headerHashKey(blockNumber))
+				log.Info("gcKvStore delete after read", "first", first, "frozen", frozen, "len(ancients)",
+					len(ancients), "blockNumber", blockNumber, "hash", common.BytesToHash(hash), "head hash", common.BytesToHash(headHash))
 			}
 		}
 	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to delete frozen side blocks", "err", err)
+	var dangling []common.Hash
+	{
+		batch := db.NewBatch()
+		// Wipe out side chains also and track dangling side chians
+		log.Info("=========gcKvStore=============== side chain start", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
+
+		for number := first; number < frozen; number++ {
+			// Always keep the genesis block in active database
+			if number != 0 {
+				dangling = ReadAllHashes(db, number)
+				for _, hash := range dangling {
+					log.Info("Deleting side chain", "number", number, "hash", hash)
+					DeleteBlock(batch, hash, number)
+				}
+			}
+		}
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to delete frozen side blocks", "err", err)
+		}
+		batch.Reset()
 	}
-	batch.Reset()
+	log.Info("=========gcKvStore=============== side chain end", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
 
 	// Step into the future and delete and dangling side chains
 	if frozen > 0 {
 		tip := frozen
+		batch := db.NewBatch()
 		nfdb := &nofreezedb{KeyValueStore: db}
 		for len(dangling) > 0 {
 			drop := make(map[common.Hash]struct{})

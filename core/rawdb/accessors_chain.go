@@ -72,9 +72,16 @@ func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	defer it.Release()
 
 	for it.Next() {
+		if err := it.Error(); err != nil {
+			log.Info("ReadAllHashes xxxx", "err", err)
+			return nil
+		}
 		if key := it.Key(); len(key) == len(prefix)+32 {
 			hashes = append(hashes, common.BytesToHash(key[len(key)-32:]))
 		}
+	}
+	if err := it.Error(); err != nil {
+		log.Info("ReadAllHashes", "err", err)
 	}
 	return hashes
 }
@@ -158,7 +165,6 @@ func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	key := headerNumberKey(hash) // db?
 	enc := encodeBlockNumber(number)
-	log.Info("WriteHeaderNumber", "hash", hash, "number", number)
 	if err := db.Put(key, enc); err != nil {
 		log.Crit("Failed to store hash to number mapping", "err", err)
 	}
@@ -166,7 +172,6 @@ func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64)
 
 // DeleteHeaderNumber removes hash->number mapping.
 func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
-	log.Info("DeleteHeaderNumber", "hash", hash)
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
 		log.Crit("Failed to delete hash to number mapping", "err", err)
 	}
