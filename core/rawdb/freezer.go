@@ -519,7 +519,7 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 			DeleteBlockWithoutNumber(batch, ancients[i], blockNumber)
 			hash, _ := db.Get(headerHashKey(blockNumber))
 			DeleteCanonicalHash(batch, blockNumber)
-			log.Info("gcKvStore", "first", first, "frozen", frozen, "len(ancients)", len(ancients), "blockNumber", blockNumber, "hash", hash)
+			log.Info("gcKvStore", "first", first, "frozen", frozen, "len(ancients)", len(ancients), "blockNumber", blockNumber, "hash", common.BytesToHash(hash))
 		}
 	}
 	if err := batch.Write(); err != nil {
@@ -527,6 +527,7 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 	}
 	batch.Reset()
 
+	log.Info("=========gcKvStore=============== end", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
 	// Wipe out side chains also and track dangling side chians
 	var dangling []common.Hash
 	for number := first; number < frozen; number++ {
