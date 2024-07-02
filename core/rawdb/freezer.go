@@ -511,10 +511,12 @@ func (f *Freezer) repair() error {
 // delete leveldb data that save to ancientdb, split from func freeze
 func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, frozen uint64, start time.Time) {
 	// Wipe out all data from the active database
+	log.Info("gcKvStore", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
 	batch := db.NewBatch()
 	for i := 0; i < len(ancients); i++ {
 		// Always keep the genesis block in active database
 		if blockNumber := first + uint64(i); blockNumber != 0 {
+			log.Info("gcKvStore", "first", first, "frozen", frozen, "len(ancients)", len(ancients), "blockNumber", blockNumber)
 			DeleteBlockWithoutNumber(batch, ancients[i], blockNumber)
 			DeleteCanonicalHash(batch, blockNumber)
 		}
