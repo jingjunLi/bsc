@@ -189,6 +189,9 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
+/*
+indexTransactions
+*/
 func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
 	// short circuit for invalid range
 	if offset := db.AncientOffSet(); offset > from {
@@ -288,6 +291,10 @@ func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, inte
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
+/*
+删除 给定范围内(from-to) 的 txlookup
+通过 iterateTransactions 进行迭代, 调用 DeleteTxLookupEntries, 周期性的使用 WriteTxIndexTail 来标记 TxIndexTail
+*/
 func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
 	// short circuit for invalid range
 	if offset := db.AncientOffSet(); offset > from {

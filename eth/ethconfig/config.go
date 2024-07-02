@@ -111,6 +111,9 @@ type Config struct {
 	RangeLimit          bool
 
 	// Deprecated, use 'TransactionHistory' instead.
+	/*
+		TransactionHistory: 从 head 保留的 最大 blocks 的 tx indices
+	*/
 	TxLookupLimit      uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.

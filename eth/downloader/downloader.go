@@ -247,6 +247,9 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchai
 // In addition, during the state download phase of snap synchronisation the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
+/*
+1) CurrentBlock
+*/
 func (d *Downloader) Progress() ethereum.SyncProgress {
 	// Lock the current stats and return the progress
 	d.syncStatsLock.RLock()
@@ -841,7 +844,7 @@ func (d *Downloader) findAncestor(p *peerConnection, localHeight uint64, remoteH
 		floor = int64(localHeight - maxForkAncestry)
 	}
 	/*
-	findAncestor   floor=70870 local=160,870 remote=29,020,049 mode=full
+		findAncestor   floor=70870 local=160,870 remote=29,020,049 mode=full
 	*/
 	// if we have pruned too much history, reset the floor
 	if tail, err := d.blockchain.AncientTail(); err == nil && tail > uint64(floor) {
@@ -1749,6 +1752,9 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 }
 
 // reportSnapSyncProgress calculates various status reports and provides it to the user.
+/*
+msg="Syncing: chain download in progress" synced=100.00% chain="18.00 B" headers=2,072,492@6.00B bodies=2,072,391@6.00B receipts=2,072,391@6.00B eta=1.086s
+*/
 func (d *Downloader) reportSnapSyncProgress(force bool) {
 	// Initialize the sync start time if it's the first time we're reporting
 	if d.syncStartTime.IsZero() {

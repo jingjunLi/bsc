@@ -295,6 +295,9 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				backoff = true
 				continue
 			}
+			/*
+				1) first 位置的确定:Ancients()
+			*/
 			first, _ = f.Ancients()
 			last = *number - threshold
 			if last-first > freezerBatchLimit {

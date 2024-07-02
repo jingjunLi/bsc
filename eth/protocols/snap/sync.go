@@ -569,6 +569,9 @@ func (s *Syncer) Unregister(id string) error {
 // with the given root and reconstruct the nodes based on the snapshot leaves.
 // Previously downloaded segments will not be redownloaded of fixed, rather any
 // errors will be healed after the leaves are fully accumulated.
+/*
+state 有多大 ? 11GB ??
+*/
 func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	// Move the trie root from any previous value, revert stateless markers for
 	// any peers and initialize the syncer if it was not yet run
@@ -3079,6 +3082,10 @@ func (s *Syncer) reportSyncProgress(force bool) {
 }
 
 // reportHealProgress calculates various status reports and provides it to the user.
+/*
+Syncing: state healing in progress
+msg="Syncing: state healing in progress" accounts=1,923,704@135.26MiB slots=946,757@77.65MiB codes=0@0.00B nodes=11,775,964@987.31MiB pending=27942
+*/
 func (s *Syncer) reportHealProgress(force bool) {
 	// Don't report all the events, just occasionally
 	if !force && time.Since(s.logTime) < 8*time.Second {

@@ -1646,6 +1646,8 @@ const (
 // transaction and receipt data.
 /*
 尝试使用事务和收据数据完成已经存在的头链 ?? 什么意思
+
+现在的时候, 直接下载的 Receipt 可能会直接写入 ancient
 */
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts, ancientLimit uint64) (int, error) {
 	// We don't require the chainMu here since we want to maximize the
@@ -2066,6 +2068,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true)
+					/*
+						LastSafePointBlockKey: SafePointBlockNumber,
+						triedb commit 的位置 , 下次重启可以进行恢复;
+					*/
 					rawdb.WriteSafePointBlockNumber(bc.db, chosen)
 					bc.lastWrite = chosen
 					bc.gcproc = 0
@@ -2130,6 +2136,11 @@ func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
+/*
+1) writeBlockWithState
+是否 reorg
+3) status ==  CanonStatTy, 才是 Head
+*/
 func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
 		return NonStatTy, err
@@ -2273,7 +2284,6 @@ bc.validator.ValidateState
 2) writeState
 bc.writeBlockWithStat
 ---
-1) setHead 什么情况下 ?
 */
 func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
@@ -2320,7 +2330,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	// 3）创建一个插入迭代器：insertIterator，迭代器包含了一个验证器 Validator。
+	/*
+		3）创建一个插入迭代器：insertIterator，迭代器包含了一个验证器 Validator, 迭代 chain(types.Blocks) 内的内容
+	*/
 	it := newInsertIterator(chain, results, bc.validator)
 	block, err := it.next()
 
@@ -2364,7 +2376,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
 		/*
-
 		 */
 		for block != nil && bc.skipBlock(err, it) {
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
@@ -2377,6 +2388,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 		// Falls through to the block import
 	}
+	/*
+		switch 处理哪一步的 error ??
+	*/
 	switch {
 	// First block is pruned
 	case errors.Is(err, consensus.ErrPrunedAncestor):
@@ -2404,7 +2418,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		// If there are any still remaining, mark as ignored
 		return it.index, err
-
+	/*
+		1)
+	*/
 	// Some other error(except ErrKnownBlock) occurred, abort.
 	// ErrKnownBlock is allowed here since some known blocks
 	// still need re-execution to generate snapshots that are missing
@@ -2415,12 +2431,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		return it.index, err
 	}
 
+	/*
+		for 循环, 不断的 处理 it 内的 blocks:
+
+	*/
 	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during block processing")
 			break
 		}
+		/*
+			1) BadHashes 的判断, 如果是 bad hashes, 则 返回, 不允许的 hash.
+		*/
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBannedHash)
@@ -2432,6 +2455,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// just skip the block (we already validated it once fully (and crashed), since
 		// its header and body was already in the database). But if the corresponding
 		// snapshot layer is missing, forcibly rerun the execution to build it.
+		/*
+			Clique blocks
+		*/
 		if bc.skipBlock(err, it) {
 			logger := log.Debug
 			if bc.chainConfig.Clique == nil {
@@ -2481,7 +2507,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		// Enable prefetching to pull in trie node paths while processing transactions
 		/*
-			第一种写法可以保证在goroutine内部参数的值不会被修改，而第二种写法则更简洁，但需要注意外部变量的引用可能会导致并发访问问题。
+			第一种写法可以保证在 goroutine 内部参数的值不会被修改，而第二种写法则更简洁，但需要注意外部变量的引用可能会导致并发访问问题。
 		*/
 		statedb.StartPrefetcher("chain")
 		interruptCh := make(chan struct{})
@@ -2500,6 +2526,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 
 		// Process block using the parent state as reference point
+		/*
+			Execution 阶段
+		*/
 		if bc.pipeCommit {
 			statedb.EnablePipeCommit()
 		}
@@ -2507,6 +2536,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		pstart := time.Now()
 		statedb, receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		close(interruptCh) // state prefetch can be stopped
+		/*3) */
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			statedb.StopPrefetcher()
@@ -2516,6 +2546,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		// Validate the state using the default validator
 		vstart := time.Now()
+		/*
+			Validate 阶段
+			4)
+		*/
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			log.Error("validate state failed", "error", err)
 			bc.reportBlock(block, receipts, err)
@@ -2545,10 +2579,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		// Write the block to the chain and get the status.
 		/*
+			Commit 阶段 ?
 			1) AccountCommits
 			2) StorageCommits
 			3) SnapshotCommits
 			4) TrieDBCommits
+
+			setHead 的影响:
+			1) setHead 来源: insertChain 函数参数传递进来;
+			意义, 而不是具体的函数名,代码流程 ?
+			2) false -> writeBlockWithState
+			3) true -> writeBlockAndSetHead
+
 		*/
 		var (
 			wstart = time.Now()
@@ -2579,6 +2621,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		stats.processed++
 		stats.usedGas += usedGas
 
+		/*
+			stats.report 当前 import 的进度
+		*/
 		var snapDiffItems, snapBufItems common.StorageSize
 		if bc.snaps != nil {
 			snapDiffItems, snapBufItems, _ = bc.snaps.Size()
@@ -2900,6 +2945,9 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 // potential missing transactions and post an event about them.
 // Note the new head block won't be processed here, callers need to handle it
 // externally.
+/*
+reorg oldHead, newHead ?
+*/
 func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	var (
 		newChain    types.Blocks
@@ -3092,6 +3140,10 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 // SetCanonical rewinds the chain to set the new head block as the specified
 // block. It's possible that the state of the new head is missing, and it will
 // be recovered in this function as well.
+/*
+SetCanonical
+"Chain head was updated"
+*/
 func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	if !bc.chainmu.TryLock() {
 		return common.Hash{}, errChainStopped
@@ -3320,8 +3372,9 @@ func (bc *BlockChain) isCachedBadBlock(block *types.Block) bool {
 // reportBlock logs a bad block error.
 // bad block need not save receipts & sidecars.
 /*
-1) bc.validator.ValidateState
-2) bc.processor.Process
+只有四个地方调用:
+3) bc.processor.Process
+4) bc.validator.ValidateState 出错 , 会有 "validate state failed" 日志;
 */
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	rawdb.WriteBadBlock(bc.db, block)
@@ -3330,6 +3383,10 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 
 // summarizeBadBlock returns a string summarizing the bad block and other
 // relevant information.
+/*
+summarizeBadBlock
+PostState
+*/
 func summarizeBadBlock(block *types.Block, receipts []*types.Receipt, config *params.ChainConfig, err error) string {
 	var receiptString string
 	for i, receipt := range receipts {

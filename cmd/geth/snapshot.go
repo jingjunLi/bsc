@@ -782,6 +782,9 @@ func traverseRawState(ctx *cli.Context) error {
 		root = headBlock.Root()
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
+	/*
+		1) StateTrie
+	*/
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
@@ -807,12 +810,14 @@ func traverseRawState(ctx *cli.Context) error {
 		log.Error("State is non-existent", "root", root)
 		return nil
 	}
+	// 1) 遍历 mpt tree
 	for accIter.Next(true) {
 		nodes += 1
 		node := accIter.Hash()
 
 		// Check the present for non-empty hash node(embedded node doesn't
 		// have their own hash).
+		// 校验节点的 hash 值
 		if node != (common.Hash{}) {
 			blob, _ := reader.Node(common.Hash{}, accIter.Path(), node)
 			if len(blob) == 0 {
@@ -829,6 +834,7 @@ func traverseRawState(ctx *cli.Context) error {
 		}
 		// If it's a leaf node, yes we are touching an account,
 		// dig into the storage trie further.
+		// 遇到 leaf node, 表示遇到 真实 的 account,
 		if accIter.Leaf() {
 			accounts += 1
 			var acc types.StateAccount
@@ -836,6 +842,7 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Invalid account encountered during traversal", "err", err)
 				return errors.New("invalid account")
 			}
+			// 表示遇到 CA , contract account
 			if acc.Root != types.EmptyRootHash {
 				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
 				storageTrie, err := trie.NewStateTrie(id, triedb)
@@ -882,6 +889,7 @@ func traverseRawState(ctx *cli.Context) error {
 					return storageIter.Error()
 				}
 			}
+			// CodeHash 表示什么 ??
 			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 					log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))

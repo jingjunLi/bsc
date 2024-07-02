@@ -636,6 +636,9 @@ func (hc *HeaderChain) SetHeadWithTimestamp(time uint64, updateFn UpdateHeadBloc
 
 // setHead rewinds the local chain to a new head block or a head timestamp.
 // Everything above the new head will be deleted and the new one set.
+/*
+setHead 重新设置 head block
+*/
 func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
 	// Sanity check that there's no attempt to undo the genesis block. This is
 	// a fairly synthetic case where someone enables a timestamp based fork

@@ -104,6 +104,10 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 }
 
 // insertIterator is a helper to assist during chain import.
+/*
+chain 正在迭代的 所有的 blocks
+index 当前的 offset
+*/
 type insertIterator struct {
 	chain types.Blocks // Chain of blocks being iterated over
 

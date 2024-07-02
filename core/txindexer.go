@@ -38,6 +38,10 @@ func (progress TxIndexProgress) Done() bool {
 
 // txIndexer is the module responsible for maintaining transaction indexes
 // according to the configured indexing range by users.
+/*
+1) limit:[HEAD-N+1, HEAD] 范围内 tx index 的限制;
+0 表示 整条链的 tx 都做 index, N 表示 最近的 N blocks 做 index;
+*/
 type txIndexer struct {
 	// limit is the maximum number of blocks from head whose tx indexes
 	// are reserved:
@@ -76,6 +80,10 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 // run executes the scheduled indexing/unindexing task in a separate thread.
 // If the stop channel is closed, the task should be terminated as soon as
 // possible, the done channel will be closed once the task is finished.
+/*
+调度的 indexing/unindexing task, 后台线程来运行;
+(tail, head) 之间的位置
+*/
 func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, done chan struct{}) {
 	defer func() { close(done) }()
 
@@ -86,6 +94,10 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 	// The tail flag is not existent, it means the node is just initialized
 	// and all blocks in the chain (part of them may from ancient store) are
 	// not indexed yet, index the chain according to the configured limit.
+	/*
+		1) case 1: 刚初始时的场景;
+		tail 不存在, 表示 node 刚初始化, 还没有任何 index. 确定 IndexTransactions 的 (from, to) 范围
+	*/
 	if tail == nil {
 		from := uint64(0)
 		if indexer.limit != 0 && head >= indexer.limit {
@@ -96,6 +108,9 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 	}
 	// The tail flag is existent (which means indexes in [tail, head] should be
 	// present), while the whole chain are requested for indexing.
+	/*
+		2) case 2: 整条链都要做 index 的场景
+	*/
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
 			// It can happen when chain is rewound to a historical point which
@@ -111,6 +126,10 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 	}
 	// The tail flag is existent, adjust the index range according to configured
 	// limit and the latest chain head.
+	/*
+		3) case 3:
+		4) case 4: 如果都不需要 做 Index, 则调用 UnindexTransactions 清理一些 index
+	*/
 	if head-indexer.limit+1 < *tail {
 		// Reindex a part of missing indices and rewind index tail to HEAD-limit
 		rawdb.IndexTransactions(indexer.db, head-indexer.limit+1, *tail, stop, true)
@@ -122,6 +141,9 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 
 // loop is the scheduler of the indexer, assigning indexing/unindexing tasks depending
 // on the received chain event.
+/*
+
+ */
 func (indexer *txIndexer) loop(chain *BlockChain) {
 	defer close(indexer.closed)
 
@@ -139,6 +161,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 	// Launch the initial processing if chain is not empty (head != genesis).
 	// This step is useful in these scenarios that chain has no progress.
+	// HeadBlock
 	if head := rawdb.ReadHeadBlock(indexer.db); head != nil && head.Number().Uint64() != 0 {
 		stop = make(chan struct{})
 		done = make(chan struct{})

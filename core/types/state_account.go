@@ -31,6 +31,10 @@ import (
 /*
 main account trie, 账户状态 Account state, Root 指向 账户存储树, 全局的世界状态, 存储当前状态的 所有的 账户信息;
 Account storage trie: 存储的 合约信息 ??
+1) CodeHash:
+非空, 一定是 ca ?
+
+acc.Root != types.EmptyRootHash
 */
 type StateAccount struct {
 	Nonce    uint64

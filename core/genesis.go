@@ -74,6 +74,11 @@ type Genesis struct {
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 }
 
+/*
+ReadGenesis :
+1) CanonicalHash 0 ->
+2) stored
+*/
 func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	var genesis Genesis
 	stored := rawdb.ReadCanonicalHash(db, 0)

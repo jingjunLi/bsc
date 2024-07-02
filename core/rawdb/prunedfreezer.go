@@ -20,6 +20,9 @@ import (
 1) 用途 : 用于删除数据，只保留最近的数据，删除旧数据。
 2) 主要原理: 通过一个 frozen 字段记录下一个要删除的 blockNumber，然后通过读取 blockNumber 来删除数据。
 3) 适用场景: 适用于不需要保存所有数据，只需要保存最近数据的场景。
+---
+1) frozen 如何设置 ?
+ReadOffSetOfCurrentAncientFreezer 进行设置
 */
 type prunedfreezer struct {
 	db ethdb.KeyValueStore // Meta database
@@ -240,6 +243,11 @@ func (f *prunedfreezer) freeze() {
 			backoff = true
 			continue
 		}
+		/*
+			1) number: HeaderNumber
+			2) threshold: 90K
+			3) frozen: 上次 freeze 的位置
+		*/
 		number := ReadHeaderNumber(nfdb, hash)
 		threshold := atomic.LoadUint64(&f.threshold)
 
@@ -266,6 +274,7 @@ func (f *prunedfreezer) freeze() {
 			continue
 		}
 
+		// stableStabeNumber 41601998
 		stableStabeNumber := ReadSafePointBlockNumber(nfdb)
 		switch {
 		case stableStabeNumber < params.StableStateThreshold:
@@ -281,6 +290,10 @@ func (f *prunedfreezer) freeze() {
 		stableStabeNumber -= params.StableStateThreshold
 
 		// Seems we have data ready to be frozen, process in usable batches
+		/*
+			1) first
+			limit: *number - threshold, head-90K
+		*/
 		limit := *number - threshold
 		if limit > stableStabeNumber {
 			limit = stableStabeNumber

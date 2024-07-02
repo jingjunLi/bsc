@@ -83,6 +83,7 @@ func (it *Iterator) Prove() [][]byte {
 // NodeIterator is an iterator to traverse the trie pre-order.
 /*
 用于 前序遍历 trie
+1) Path()
 */
 type NodeIterator interface {
 	// Next moves the iterator to the next node. If the parameter is false, any child
@@ -99,6 +100,7 @@ type NodeIterator interface {
 	// grandparent if the immediate parent is an internal node with no hash.
 	Parent() common.Hash
 
+	// Path 返回到 current node 的 hex-encoded path
 	// Path returns the hex-encoded path to the current node.
 	// Callers must not retain references to the return value after calling Next.
 	// For leaf nodes, the last element of the path is the 'terminator symbol' 0x10.
@@ -108,6 +110,13 @@ type NodeIterator interface {
 	// If the node is an embedded node in its parent, nil is returned then.
 	NodeBlob() []byte
 
+	/*
+		1) Leaf() 返回是否是一个 leaf node.
+		2) 如果是 leaf node, 才能调用 LeafKey();
+		3) LeafBlob() & NodeBlob() 区别 ?
+		NodeBlob 如果是 embedded node 返回 nil
+		LeafBlob() leaf node 的内容;
+	*/
 	// Leaf returns true iff the current node is a leaf node.
 	Leaf() bool
 

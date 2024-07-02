@@ -72,6 +72,8 @@ Freezer 内存 将 append-only database 映射到 顺序的 flat files;
 type Freezer struct {
 	/*
 		1) frozen: 已经 frozen 到的 block number
+		1.1) 如何设置: NewFreezer 会自动进行计算
+
 		2) tail: freezer 内第一个存储的 item
 		3) offset: 当前 freezer 的起始 block number
 		所以通过 frozen-offset 就可以得到当前 freezer 的长度;
@@ -105,6 +107,7 @@ func NewChainFreezer(datadir string, namespace string, readonly bool, offset uin
 // additionTables indicates the new add tables for freezerDB, it has some special rules.
 /*
 创建 freezer 实例, 维护 immutable
+freezer.frozen += offset 最后操作, offset 是 1419221, 所以 frozen 不可能是 611997 ??
 */
 func NewFreezer(datadir string, namespace string, readonly bool, offset uint64, maxTableSize uint32, tables map[string]bool) (*Freezer, error) {
 	// Create the initial freezer object
@@ -525,7 +528,10 @@ func (f *Freezer) repair() error {
 }
 
 // delete leveldb data that save to ancientdb, split from func freeze
-// 删除 旧的 block 数据, 在 leveldb 内 准备保存到 ancientdb;
+/*
+删除 旧的 block 数据, 在 leveldb 内 准备保存到 ancient db
+first +  len(ancients)
+*/
 func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, frozen uint64, start time.Time) {
 	// Wipe out all data from the active database
 	batch := db.NewBatch()

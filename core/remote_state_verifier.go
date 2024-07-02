@@ -444,6 +444,15 @@ func (mode VerifyMode) NeedRemoteVerify() bool {
 	return mode == FullVerify || mode == InsecureVerify
 }
 
+/*
+NoTries
+VerifyMode (tries-verify-mode) 的几种设置参数:
+- local: 默认值，代表节点是个 fullnode，不会舍弃MPT数据。不传这个参数默认就是这个值
+- full: 舍弃MPT数据，只保留snapshot数据，区块验证由验证节点配合完成
+- insecure: 和full差不多，唯一的区别是可以容忍验证节点缺失diffhash
+- none: 完全不需要验证节点，不对区块做验证，有极小几率会和其他的peer状态不一致，因为不做状态的验证。性能是最高的。
+---
+*/
 func (mode VerifyMode) NoTries() bool {
 	return mode != LocalVerify
 }

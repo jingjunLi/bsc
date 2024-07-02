@@ -120,6 +120,10 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, extern *types.Header) (b
 }
 
 // ReorgNeededWithFastFinality compares justified block numbers firstly, backoff to compare tds when equal
+/*
+true:
+PoSA
+*/
 func (f *ForkChoice) ReorgNeededWithFastFinality(current *types.Header, header *types.Header) (bool, error) {
 	_, ok := f.chain.Engine().(consensus.PoSA)
 	if !ok {
