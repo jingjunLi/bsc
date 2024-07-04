@@ -75,6 +75,9 @@ func (f *prunedfreezer) repair(datadir string) error {
 			return err
 		}
 		items := table.items.Load()
+		if name == ChainFreezerBlobSidecarTable {
+			continue
+		}
 		if min > items {
 			min = items
 		}
