@@ -509,31 +509,28 @@ func (f *Freezer) repair() error {
 }
 
 // delete leveldb data that save to ancientdb, split from func freeze
-func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, frozen uint64, start time.Time) {
+func gcKvStore(db ethdb.KeyValueStore, ancients map[uint64]common.Hash, first uint64, frozen uint64, start time.Time) {
 	// Wipe out all data from the active database
 	log.Info("=========gcKvStore=============== delete start", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
 	var headHashes []common.Hash
-	{
-		batch := db.NewBatch()
-		for i := 0; i < len(ancients); i++ {
-			// Always keep the genesis block in active database
-			if blockNumber := first + uint64(i); blockNumber != 0 {
-				hash, _ := db.Get(headerHashKey(blockNumber))
-				headHashes = append(headHashes, common.BytesToHash(hash))
-				headHash, _ := db.Get(headerKey(blockNumber, headHashes[i]))
+	batch := db.NewBatch()
+	for number, hash := range ancients {
+		headHashes = append(headHashes, hash)
+		headHash, _ := db.Get(headerKey(number, hash))
 
-				DeleteBlockWithoutNumber(batch, ancients[i], blockNumber)
-				DeleteCanonicalHash(batch, blockNumber)
-				log.Info("gcKvStore delete", "first", first, "frozen", frozen, "len(ancients)", "ancient", ancients[i], len(ancients), "blockNumber", blockNumber,
-					"hash", common.BytesToHash(hash), "head hash", common.BytesToHash(headHash))
-			}
-		}
-		log.Info("gcKvStore batch write", "batch size", batch.ValueSize())
-		if err := batch.Write(); err != nil {
-			log.Crit("Failed to delete frozen canonical blocks", "err", err)
-		}
-		batch.Reset()
+		// Always keep the genesis block in active database
+		DeleteBlockWithoutNumber(batch, hash, number)
+		DeleteCanonicalHash(batch, number)
+		log.Info("gcKvStore delete", "first", first, "frozen", frozen, "len(ancients)", "ancient", ancients[i], len(ancients), "blockNumber", blockNumber,
+			"hash", hash, "head hash", common.BytesToHash(headHash))
+
 	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to delete frozen canonical blocks", "err", err)
+	}
+	batch.Reset()
+	log.Info("gcKvStore batch write", "batch size", batch.ValueSize())
+
 
 	log.Info("=========gcKvStore=============== end", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
 	{
@@ -611,7 +608,7 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 		"blocks", frozen - first, "elapsed", common.PrettyDuration(time.Since(start)), "number", frozen - 1,
 	}
 	if n := len(ancients); n > 0 {
-		context = append(context, []interface{}{"hash", ancients[n-1]}...)
+		context = append(context, []interface{}{"hash", ancients[uint64(len(ancients)-1)]}...)
 	}
 	log.Info("Deep froze chain segment", context...)
 }
