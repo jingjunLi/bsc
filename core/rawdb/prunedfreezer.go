@@ -293,7 +293,7 @@ func (f *prunedfreezer) freeze() {
 			if hash == (common.Hash{}) {
 				log.Error("Canonical hash missing, can't freeze", "number", f.frozen)
 			}
-			log.Trace("Deep froze ancient block", "number", f.frozen, "hash", hash)
+			log.Info("Deep froze ancient block", "number", f.frozen, "hash", hash)
 			// Inject all the components into the relevant data tables
 			if err := f.AppendAncient(f.frozen, nil, nil, nil, nil, nil); err != nil {
 				log.Error("Append ancient err", "number", f.frozen, "hash", hash, "err", err)

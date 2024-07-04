@@ -524,7 +524,7 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 
 				DeleteBlockWithoutNumber(batch, ancients[i], blockNumber)
 				DeleteCanonicalHash(batch, blockNumber)
-				log.Info("gcKvStore delete", "first", first, "frozen", frozen, "len(ancients)", len(ancients), "blockNumber", blockNumber,
+				log.Info("gcKvStore delete", "first", first, "frozen", frozen, "len(ancients)", "ancient", ancients[i], len(ancients), "blockNumber", blockNumber,
 					"hash", common.BytesToHash(hash), "head hash", common.BytesToHash(headHash))
 			}
 		}
