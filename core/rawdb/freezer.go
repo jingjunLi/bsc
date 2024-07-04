@@ -521,7 +521,7 @@ func gcKvStore(db ethdb.KeyValueStore, ancients map[uint64]common.Hash, first ui
 		// Always keep the genesis block in active database
 		DeleteBlockWithoutNumber(batch, hash, number)
 		DeleteCanonicalHash(batch, number)
-		log.Info("gcKvStore delete", "first", first, "frozen", frozen, "len(ancients)", "ancient", ancients[i], len(ancients), "blockNumber", blockNumber,
+		log.Info("gcKvStore delete", "first", first, "frozen", frozen, "len(ancients)", len(ancients), "blockNumber", number,
 			"hash", hash, "head hash", common.BytesToHash(headHash))
 
 	}
@@ -530,7 +530,6 @@ func gcKvStore(db ethdb.KeyValueStore, ancients map[uint64]common.Hash, first ui
 	}
 	batch.Reset()
 	log.Info("gcKvStore batch write", "batch size", batch.ValueSize())
-
 
 	log.Info("=========gcKvStore=============== end", "first", first, "frozen", frozen, "len(ancients)", len(ancients))
 	{

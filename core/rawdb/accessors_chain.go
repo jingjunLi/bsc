@@ -1067,7 +1067,6 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 
 // DeleteBadBlocks deletes all the bad blocks from the database
 func DeleteBadBlocks(db ethdb.KeyValueWriter) {
-	log.Info("DeleteBadBlocks")
 	if err := db.Delete(badBlockKey); err != nil {
 		log.Crit("Failed to delete bad blocks", "err", err)
 	}
