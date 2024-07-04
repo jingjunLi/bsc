@@ -895,6 +895,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 
 // CheckIfMultiDataBase check the state and block subdirectory of db, if subdirectory exists, return true
 func (n *Node) CheckIfMultiDataBase() bool {
+	return true
 	var (
 		stateExist = true
 		blockExist = true
