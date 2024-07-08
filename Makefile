@@ -25,6 +25,7 @@ all:
 test: all
 	$(GORUN) build/ci.go test -timeout 1h
 
+# 自动化构建 Docker 镜像，设置区块链环境，并使用 Truffle 运行测试。
 truffle-test:
 	docker build . -f ./docker/Dockerfile --target bsc-genesis -t bsc-genesis
 	docker build . -f ./docker/Dockerfile --target bsc -t bsc
