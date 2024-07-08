@@ -85,7 +85,7 @@ func TestCustomGenesis(t *testing.T) {
 		if err := os.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
 		}
-		runGeth(t, "--datadir", datadir, "init", json, "--multidatabase").WaitExit()
+		runGeth(t, "--datadir", datadir, "--multidatabase", "init", json).WaitExit()
 
 		// Query the custom genesis block
 		geth := runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
@@ -134,7 +134,7 @@ func TestCustomBackend(t *testing.T) {
 			return fmt.Errorf("failed to write genesis file: %v", err)
 		}
 		{ // Init
-			args := append(tt.initArgs, "--datadir", datadir, "init", json)
+			args := append(tt.initArgs, "--datadir", datadir, "--multidatabase", "init", json)
 			geth := runGeth(t, args...)
 			geth.ExpectRegexp(tt.initExpect)
 			geth.ExpectExit()

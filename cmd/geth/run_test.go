@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 }
 
 func initGeth(t *testing.T) string {
-	args := []string{"--networkid=42", "init", "./testdata/clique.json"}
+	args := []string{"--networkid=42", "--multidatabase", "init", "./testdata/clique.json"}
 	t.Logf("Initializing geth: %v ", args)
 	g := runGeth(t, args...)
 	datadir := g.Datadir
