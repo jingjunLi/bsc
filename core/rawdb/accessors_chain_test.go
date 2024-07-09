@@ -52,6 +52,7 @@ func TestHeaderStorage(t *testing.T) {
 	}
 	// Write and verify the header in the database
 	WriteHeader(db, header)
+
 	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header not found")
 	} else if entry.Hash() != header.Hash() {

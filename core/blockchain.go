@@ -1619,7 +1619,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			rawdb.DeleteBlockWithoutNumber(blockBatch, block.Hash(), block.NumberU64())
 		}
 		// Delete side chain hash-to-number mappings.
-		for _, nh := range rawdb.ReadAllHashesInRange(bc.db, first.NumberU64(), last.NumberU64()) {
+		for _, nh := range rawdb.ReadAllHashesInRange(bc.db.BlockStore(), first.NumberU64(), last.NumberU64()) {
 			if _, canon := canonHashes[nh.Hash]; !canon {
 				rawdb.DeleteHeader(blockBatch, nh.Hash, nh.Number)
 			}
