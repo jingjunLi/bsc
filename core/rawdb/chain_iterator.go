@@ -118,6 +118,9 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		hashesCh = make(chan *blockTxHashes, threads*2) // send hashes over hashesCh
 	)
 	// lookup runs in one instance
+	/*
+		lookup 不断的 从 [from, to) 范围内 读取  CanonicalBody, 读取的数据不正确解析不了 ?
+	*/
 	lookup := func() {
 		n, end := from, to
 		if reverse {
@@ -140,7 +143,10 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		}
 	}
 	// process runs in parallel
-	// 用途 ? 对 rlpCh 内容进行处理 DecodeBytes ?
+	/*
+		用途 ? 对 rlpCh 内容进行处理 DecodeBytes ?
+		process thread 不断的 从 rlpCh 拿取数据, 然后 当作 body 解析
+	*/
 	var nThreadsAlive atomic.Int32
 	nThreadsAlive.Store(int32(threads))
 	process := func() {

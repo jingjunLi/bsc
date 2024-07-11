@@ -348,6 +348,12 @@ func (db *Database) Disable() error {
 	return nil
 }
 
+/*
+Enable
+rawdb.ReadAccountTrieNode -> stored 映射不正确 ?
+
+
+*/
 // Enable activates database and resets the state tree with the provided persistent
 // state root once the state sync is finished.
 func (db *Database) Enable(root common.Hash) error {

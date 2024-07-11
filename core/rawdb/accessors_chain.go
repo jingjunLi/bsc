@@ -82,6 +82,10 @@ func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
 // both canonical and reorged forks included.
 /*
 number -> hashes
+存在两种映射:
+1) headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash 的映射;
+CanonicalHash
+2) headerPrefix + num (uint64 big endian) + hash -> header
 */
 func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	prefix := headerKeyPrefix(number)

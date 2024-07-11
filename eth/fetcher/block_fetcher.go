@@ -900,6 +900,9 @@ func (f *BlockFetcher) importHeaders(op *blockOrHeaderInject) {
 // importBlocks spawns a new goroutine to run a block insertion into the chain. If the
 // block's number is at the same height as the current import phase, it updates
 // the phase states accordingly.
+/*
+importBlocks
+*/
 func (f *BlockFetcher) importBlocks(op *blockOrHeaderInject) {
 	peer := op.origin
 	block := op.block

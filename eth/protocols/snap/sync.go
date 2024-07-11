@@ -397,6 +397,9 @@ type SyncPeer interface {
 	Log() log.Logger
 }
 
+/*
+Syncer Ethereum 账户和存储 trie syncer, 基于 snapshots 和 snap 协议.
+*/
 // Syncer is an Ethereum account and storage trie syncer based on snapshots and
 // the  snap protocol. It's purpose is to download all the accounts and storage
 // slots from remote peers and reassemble chunks of the state trie, on top of
@@ -565,13 +568,14 @@ func (s *Syncer) Unregister(id string) error {
 	return nil
 }
 
+/*
+Sync state 有多大 ? 11GB ??
+基于 state trie 进行迭代,
+*/
 // Sync starts (or resumes a previous) sync cycle to iterate over a state trie
 // with the given root and reconstruct the nodes based on the snapshot leaves.
 // Previously downloaded segments will not be redownloaded of fixed, rather any
 // errors will be healed after the leaves are fully accumulated.
-/*
-state 有多大 ? 11GB ??
-*/
 func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	// Move the trie root from any previous value, revert stateless markers for
 	// any peers and initialize the syncer if it was not yet run

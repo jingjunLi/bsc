@@ -499,6 +499,9 @@ KeyValueStore +AncientStore = ethdb.Database, 也相当于间接实现了所有 
 ---
 1) 开启 pruneAncientData -> newPrunedFreezer
 2) 关闭 pruneAncientData -> newChainFreezer
+
+isLastOffset false -> CurrentAncientFreezer
+2) LastAncientFreezer
 */
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, multiDatabase bool) (ethdb.Database, error) {
 	var offset uint64
@@ -537,6 +540,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		log.Error("pruneancient not take effect, disableFreezer or readonly be set")
 	}
 
+	// 这里 offset 给 chain freezer 使用 ?
 	if prunedFrozen := ReadFrozenOfAncientFreezer(db); prunedFrozen > offset {
 		offset = prunedFrozen
 	}

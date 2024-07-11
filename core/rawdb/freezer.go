@@ -469,6 +469,13 @@ func (f *Freezer) validate() error {
 }
 
 // repair truncates all data tables to the same length.
+/*
+在 prunedfreezer 场景下：
+1. 如果之前有 ancient 数据，这里获取了 items 是为了规整所有的表选择最小的 item，作为 frozen，
+此时用现在chainfreezer 的逻辑就行（多数一句，这两个目前的逻辑为什么不一样？ 因为这块社区代码有重构 之前table级别这些没有暴露 head tail，现在有了，但是 prunefreezer 这块没有改还是保留了老版本的方式，我认为在这种情况下可以和 chainfrezeer 保持一致）
+2. 如果之前没有ancient 数据（之前启动家了 --pruneancient） 会创建一个新的table，此时都是空为了设置
+frozen为0，后面 frozen+offset 才是最终的 frozen
+*/
 func (f *Freezer) repair() error {
 	var (
 		head = uint64(math.MaxUint64)
@@ -531,6 +538,11 @@ func (f *Freezer) repair() error {
 /*
 删除 旧的 block 数据, 在 leveldb 内 准备保存到 ancient db
 first +  len(ancients)
+1) Wipe out all data from the active database; 删除 [first, first+len(ancients)] 内
+DeleteBlock
+headerHashKey(number)
+---
+headerPrefix
 */
 func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, frozen uint64, start time.Time) {
 	// Wipe out all data from the active database
@@ -565,6 +577,9 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 	batch.Reset()
 
 	// Step into the future and delete and dangling side chains
+	/*
+		dangling
+	*/
 	if frozen > 0 {
 		tip := frozen
 		nfdb := &nofreezedb{KeyValueStore: db}

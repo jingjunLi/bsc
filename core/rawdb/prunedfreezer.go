@@ -75,8 +75,10 @@ func newPrunedFreezer(datadir string, db ethdb.KeyValueStore, offset uint64) (*p
 	return freezer, nil
 }
 
+/*
+不保存 data, 但是仍然要保存一些 meta, 比如 frozen;
+*/
 // repair init frozen , compatible disk-ancientdb and pruner-block-tool.
-// 不保存 data, 但是仍然要保存一些 meta, 比如 frozen;
 func (f *prunedfreezer) repair(datadir string) error {
 	offset := atomic.LoadUint64(&f.frozen)
 	// compatible freezer
@@ -200,6 +202,12 @@ func (f *prunedfreezer) TruncateTail(tail uint64) (uint64, error) {
 	return 0, errNotSupported
 }
 
+/*
+Sync
+在 prunedfreezer 进行的过程中会 周期性 保存 这两个进度:
+FrozenOfAncientFreezer
+CurrentAncientFreezer
+*/
 // Sync flushes meta data tables to disk.
 func (f *prunedfreezer) Sync() error {
 	WriteFrozenOfAncientFreezer(f.db, atomic.LoadUint64(&f.frozen))

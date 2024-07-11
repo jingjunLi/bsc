@@ -246,7 +246,6 @@ func WriteOffSetOfLastAncientFreezer(db ethdb.KeyValueWriter, offset uint64) {
 }
 
 // ReadFrozenOfAncientFreezer return freezer block number
-
 func ReadFrozenOfAncientFreezer(db ethdb.KeyValueReader) uint64 {
 	fozen, _ := db.Get(frozenOfAncientDBKey)
 	if fozen == nil {

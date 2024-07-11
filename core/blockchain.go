@@ -502,6 +502,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	head := bc.CurrentBlock()
 	if !bc.HasState(head.Root) {
 		if head.Number.Uint64() == 0 {
+			/*
+				1) head number == 0 ?
+
+			*/
 			// The genesis state is missing, which is only possible in the path-based
 			// scheme. This situation occurs when the initial state sync is not finished
 			// yet, or the chain head is rewound below the pivot point. In both scenarios,
@@ -1340,6 +1344,12 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	return rootNumber, bc.loadLastState()
 }
 
+/*
+SnapSyncCommitHead
+1) hash -> block 的映射 与 triedb.Enable 中不一致 ?
+
+
+*/
 // SnapSyncCommitHead sets the current head block to the one defined by the hash
 // irrelevant what the chain contents were prior.
 func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
@@ -1646,8 +1656,9 @@ const (
 // transaction and receipt data.
 /*
 尝试使用事务和收据数据完成已经存在的头链 ?? 什么意思
-
 现在的时候, 直接下载的 Receipt 可能会直接写入 ancient
+1) 写入 InsertReceiptChain →   rawdb.WriteAncientBlocks → writeAncientBlock
+核心的逻辑:
 */
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts, ancientLimit uint64) (int, error) {
 	// We don't require the chainMu here since we want to maximize the
@@ -1704,7 +1715,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 	// updateHead updates the head snap sync block if the inserted blocks are better
 	// and returns an indicator whether the inserted blocks are canonical.
-	// 1) updateHead 更新头部快照同步块，如果插入的块更好，并返回插入的块是否是规范的指示符。
+	/*
+		1) updateHead 更新头部快照同步块，如果插入的块更好，并返回插入的块是否是规范的指示符。
+	*/
 	updateHead := func(head *types.Block) bool {
 		if !bc.chainmu.TryLock() {
 			return false
@@ -1731,16 +1744,22 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	//
 	// this function only accepts canonical chain data. All side chain will be reverted
 	// eventually.
-	// writeAncient 将区块链和相应的收据链写入 ancient store。
+	/*
+		writeAncient 将区块链和相应的收据链 receipt 写入 ancient store。 仅接受 canonical chain data, 最终所有的 side chain 都会被 reverted
+	*/
 	writeAncient := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
 		first := blockChain[0]
 		last := blockChain[len(blockChain)-1]
 
+		/*
+			下面的逻辑会从 db 删除 blocks, 因此 对 genesis block 进行特殊处理
+			为什么 number 1? 并且 db ancients 内没有成员.
+		*/
 		// Ensure genesis is in ancients.
 		if first.NumberU64() == 1 {
 			if frozen, _ := bc.db.Ancients(); frozen == 0 {
 				td := bc.genesisBlock.Difficulty()
-				writeSize, err := rawdb.WriteAncientBlocks(bc.db, []*types.Block{bc.genesisBlock}, []types.Receipts{nil}, td)
+				writeSize, err := rawdb.WriteAncientBlocks(bc.db.BlockStore(), []*types.Block{bc.genesisBlock}, []types.Receipts{nil}, td)
 				if err != nil {
 					log.Error("Error writing genesis to ancients", "err", err)
 					return 0, err
@@ -1780,6 +1799,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return 0, errSideChainReceipts
 		}
 
+		/*
+			1) blockChain: 传入的 所有 blocks
+			ReadAllHashesInRange 也仅是删除 [first, last] 区间内的 side chain
+		*/
 		// Delete block data from the main database.
 		var (
 			canonHashes = make(map[common.Hash]struct{})
@@ -1881,6 +1904,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 
 	// Write downloaded chain data and corresponding receipt chain data
+	/*
+		1) writeAncient
+		2) writeLive
+	*/
 	if len(ancientBlocks) > 0 {
 		if n, err := writeAncient(ancientBlocks, ancientReceipts); err != nil {
 			if err == errInsertionInterrupted {

@@ -52,6 +52,9 @@ func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobSidecar) error
 }
 
 // IsDataAvailable it checks that the blobTx block has available blob data
+/*
+blobTx block 没有 可用的 blob data
+*/
 func IsDataAvailable(chain consensus.ChainHeaderReader, block *types.Block) (err error) {
 	defer func(start time.Time) {
 		daCheckTimer.Update(time.Since(start))
@@ -88,6 +91,10 @@ func IsDataAvailable(chain consensus.ChainHeaderReader, block *types.Block) (err
 		}
 	}
 	// alloc block's blobTx
+	/*
+		1) block.Sidecars() 数据的获取
+		2) blobTxs: 遍历 block.Transactions()
+	*/
 	blobTxs := make([]*types.Transaction, 0, len(sidecars))
 	blobTxIndexes := make([]uint64, 0, len(sidecars))
 	for i, tx := range block.Transactions() {

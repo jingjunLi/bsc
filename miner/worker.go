@@ -258,6 +258,7 @@ type worker struct {
 chainSideCh和新交易事件txCh。
 以及定义了内部一系列的信号，如 newWork 信号、task信号等。根据信号，执行不同的工作，在各种信号综合作用下协同作业。
 在创建worker 时，将在 worker 内开启四个 goroutine 来分别监听不同信号。
+1) mainLoop
 */
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	recentMinedBlocks, _ := lru.New(recentMinedCacheLimit)
@@ -530,8 +531,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 // the received event. It can support two modes: automatically generate task and
 // submit it or return task according to given parameters for various proposes.
 /*
-channel 变了:
-1) automatically generate task
+负责生成和提交 sealing work 基于接收到的 event;
+支持两种模式, channel 变了:
+1) automatically generate task;
 2) submit it or return task according to given parameters for various proposes
 */
 func (w *worker) mainLoop() {
@@ -544,6 +546,10 @@ func (w *worker) mainLoop() {
 	}()
 
 	for {
+		/*
+			监听 newWork 、tx、chainSide 信号。newWork 表示将开始挖采下一个新区块。
+			1) newWorkCh
+		*/
 		select {
 		// 一旦收到信号，立即开始挖矿
 		case req := <-w.newWorkCh:
@@ -1217,6 +1223,8 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 // and submit them to the sealer.
 /*
 重新开始下一个区块的挖矿的第一个环节“构建新区块”。这个是整个挖矿业务处理的一个核心，值得关注。
+commitWork 基于 parent block 生成 新的 sealing tasks, 将他们提交给 sealer;
+txsCh:
 */
 func (w *worker) commitWork(interruptCh chan int32, timestamp int64) {
 	// Abort committing if node is still syncing

@@ -54,6 +54,10 @@ type ValidationOptions struct {
 //
 // This check is public to allow different transaction pools to check the basic
 // rules without duplicating code and running the risk of missed updates.
+/*
+用于检查交易是否符合共识规则, 但不检查与状态相关的验证（余额、nonce 等）。
+这个检查是公开的，以便不同的交易池可以检查基本规则，而不需要重复代码并避免错过更新。
+*/
 func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types.Signer, opts *ValidationOptions) error {
 	// Ensure transactions not implemented by the calling pool are rejected
 	if opts.Accept&(1<<tx.Type()) == 0 {
@@ -65,6 +69,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return fmt.Errorf("%w: transaction size %v, limit %v", ErrOversizedData, tx.Size(), opts.MaxSize)
 	}
 	// Ensure only transactions that have been enabled are accepted
+	// Berlin fork 之后才支持 更多类型的 TxType
 	if !opts.Config.IsBerlin(head.Number) && tx.Type() != types.LegacyTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Berlin", core.ErrTxTypeNotSupported, tx.Type())
 	}
@@ -206,6 +211,9 @@ type ValidationOptionsWithState struct {
 //
 // This check is public to allow different transaction pools to check the stateful
 // rules without duplicating code and running the risk of missed updates.
+/*
+ValidateTransactionWithState:
+*/
 func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState) error {
 	// Ensure the transaction adheres to nonce ordering
 	from, err := signer.Sender(tx) // already validated (and cached), but cleaner to check
@@ -219,6 +227,11 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 	}
 	// Ensure the transaction doesn't produce a nonce gap in pools that do not
 	// support arbitrary orderings
+	// 这里什么原因 ?
+	/*
+		err="nonce too high: tx nonce 638, gapped nonce 623"
+		from 是本地, gap 是 ?
+	*/
 	if opts.FirstNonceGap != nil {
 		if gap := opts.FirstNonceGap(from); gap < tx.Nonce() {
 			return fmt.Errorf("%w: tx nonce %v, gapped nonce %v", core.ErrNonceTooHigh, tx.Nonce(), gap)

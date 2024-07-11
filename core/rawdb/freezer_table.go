@@ -92,6 +92,8 @@ func (i *indexEntry) bounds(end *indexEntry) (startOffset, endOffset, fileId uin
 /*
 a single chained data table within the freezer (e.g. blocks) ?
 freezerTable 表示 chained data table, 单个 data file; 1) snappy encoded snappy 压缩;
+1) itemHidden
+2) items 哪里设置 ?
 */
 type freezerTable struct {
 	items      atomic.Uint64 // Number of items stored in the table (including items removed from tail)

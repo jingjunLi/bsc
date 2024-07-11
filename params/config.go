@@ -25,6 +25,13 @@ import (
 )
 
 // Genesis hashes to enforce below configs on.
+/*
+RialtoGenesisHash
+RialtoChainConfig
+
+used to test hard fork upgrade, following https://github.com/bnb-chain/bsc-genesis-contract/blob/master/genesis.json
+
+*/
 var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 
@@ -201,7 +208,10 @@ var (
 		},
 	}
 
-	// used to test hard fork upgrade, following https://github.com/bnb-chain/bsc-genesis-contract/blob/master/genesis.json
+	// RialtoChainConfig used to test hard fork upgrade, following https://github.com/bnb-chain/bsc-genesis-contract/blob/master/genesis.json
+	/*
+		测试时用的 配置.
+	*/
 	RialtoChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(714),
 		HomesteadBlock:      big.NewInt(0),
@@ -494,6 +504,23 @@ type ChainConfig struct {
 	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
 
+	/*
+		https://ethereum.org/en/history/ Ethereum 的历史, 所有的升级
+
+		1) ByzantiumBlock
+		2017年10月16日，以太坊从第4370000号区块起顺利完成了代号为Byzantium的硬分叉。 Byzantium是Metropolis升级计划中的第一步，为之后的Constantinople硬分叉做好了铺垫。
+		2) ConstantinopleBlock
+		以太坊君士坦丁堡版本启用区块高度，主网在2019年3月1日成功出块。 Constantinople (君士坦丁堡) 包含一大波以太坊改进提案（EIP）， 涉及核心协议规范、客户端 API以及合约标准。
+		3) PetersburgBlock
+		4) BerlinBlock
+		https://blog.ethereum.org/2021/03/08/ethereum-berlin-upgrade-announcement
+		Berlin硬分叉在2021年4月15日于区块高度12244000上激活。Berlin硬分叉引入了几项改进，包括：
+
+		EIP-2565: 降低了ModExp（EIP-198）的Gas成本，使得以太坊上的某些密码学操作更加便宜。
+		EIP-2929: 增加了对某些状态访问的Gas成本，以抵御针对以太坊网络的特定DoS攻击。
+		EIP-2718: 引入了交易类型封装（Transaction Envelope），使得将来引入新的交易类型变得更加容易。
+		EIP-2930: 增加了带有访问列表的交易类型，这有助于减轻EIP-2929引入的Gas成本增加的影响。
+	*/
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 	PetersburgBlock     *big.Int `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
@@ -509,6 +536,15 @@ type ChainConfig struct {
 
 	// Fork scheduling was switched from blocks to timestamps here
 
+	/*
+		hard fork 从之前的 blocks 切换到 timestamps ??
+
+		CancunTime:
+		坎昆升级包含一系列对以太坊执行的改进，旨在提高可扩展性，同时进行 Deneb 共识升级。
+		值得注意的是，这包括 EIP-4844，称为 Proto-Danksharding，它显着降低了第 2 层汇总的数据存储成本。这是通过引入数据“blob”来实现的，
+		该数据“blob”使汇总能够在短时间内将数据发布到主网。这样可以显著降低第 2 层汇总用户的交易费用。
+
+	*/
 	ShanghaiTime   *uint64 `json:"shanghaiTime,omitempty"`   // Shanghai switch time (nil = no fork, 0 = already on shanghai)
 	KeplerTime     *uint64 `json:"keplerTime,omitempty"`     // Kepler switch time (nil = no fork, 0 = already activated)
 	FeynmanTime    *uint64 `json:"feynmanTime,omitempty"`    // Feynman switch time (nil = no fork, 0 = already activated)
