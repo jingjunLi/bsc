@@ -40,6 +40,8 @@ type prunedfreezer struct {
 // newNoDataFreezer creates a chain freezer that deletes data enough ‘old’.
 /*
 datadir : 作用, 原来的 ancient dir, 保存 NODATA_ANCIENT_FLOCK;
+
+offset
 */
 func newPrunedFreezer(datadir string, db ethdb.KeyValueStore, offset uint64) (*prunedfreezer, error) {
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
@@ -77,12 +79,17 @@ func newPrunedFreezer(datadir string, db ethdb.KeyValueStore, offset uint64) (*p
 
 /*
 不保存 data, 但是仍然要保存一些 meta, 比如 frozen;
+
+1) 第一次 开启 prune ancient ?
+
+
 */
 // repair init frozen , compatible disk-ancientdb and pruner-block-tool.
 func (f *prunedfreezer) repair(datadir string) error {
 	offset := atomic.LoadUint64(&f.frozen)
 	// compatible freezer
 	min := uint64(math.MaxUint64)
+	// all table head, min(head)
 	for name, disableSnappy := range chainFreezerNoSnappy {
 		table, err := newFreezerTable(datadir, name, disableSnappy, false)
 		if err != nil {
@@ -95,12 +102,17 @@ func (f *prunedfreezer) repair(datadir string) error {
 		table.Close()
 	}
 	log.Info("Read ancientdb item counts", "items", min)
+	// min  min(head)
 	offset += min
 
-	if frozen := ReadFrozenOfAncientFreezer(f.db); frozen > offset {
-		offset = frozen
-	}
+	/// 1) frozen 进度 > min(head)
+	// min(head) -> FrozenOfAncientFreezer & OffSetOfCurrentAncientFreezer
+	//
+	//if frozen := ReadFrozenOfAncientFreezer(f.db); frozen > offset {
+	//	offset = frozen
+	//}
 
+	//
 	atomic.StoreUint64(&f.frozen, offset)
 	if err := f.Sync(); err != nil {
 		return nil

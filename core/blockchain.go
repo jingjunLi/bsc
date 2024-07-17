@@ -489,7 +489,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// If Geth is initialized with an external ancient store, re-initialize the
 	// missing chain indexes and chain flags. This procedure can survive crash
 	// and can be resumed in next restart since chain flags are updated in last step.
-	// ?
 	if bc.empty() {
 		rawdb.InitDatabaseFromFreezer(bc.db)
 	}
@@ -504,7 +503,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		if head.Number.Uint64() == 0 {
 			/*
 				1) head number == 0 ?
-
 			*/
 			// The genesis state is missing, which is only possible in the path-based
 			// scheme. This situation occurs when the initial state sync is not finished
@@ -517,6 +515,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			// disk layer point of snapshot(if it's enabled). Make sure the
 			// rewound point is lower than disk layer.
 			/*
+				Head state
 				diskRoot 的含义 ?
 				在状态恢复之前，如果丢失了头状态，请找出快照的 disk layer 指针（如果启用了快照）。确保 rewound点 低于 disk layer 。
 				1) 如果开启 Snapshot 从 Snapshot 读取;
@@ -532,10 +531,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			*/
 			var diskRoot common.Hash
 			if bc.cacheConfig.SnapshotLimit > 0 {
+				// 这个是老的 , 走到这里是有问题的 ?
 				diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 			}
 			if bc.triedb.Scheme() == rawdb.PathScheme && !bc.NoTries() {
 				recoverable, _ := bc.triedb.Recoverable(diskRoot)
+				// 强制 都到这里 ?
 				if !bc.HasState(diskRoot) && !recoverable {
 					diskRoot = bc.triedb.Head()
 				}
@@ -1075,6 +1076,10 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 		start  = time.Now() // Timestamp the rewinding is restarted
 		logged = time.Now() // Timestamp last progress log was printed
 	)
+	/*
+		rewind 的 block number 与什么有关 ?
+		1) head 依次往 前 去查找, 直至找到一个 block 具有 hasState
+	*/
 	// Rewind the head block tag until an available state is found.
 	for {
 		logger := log.Trace
@@ -1095,6 +1100,7 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 			beyondRoot = true
 			log.Info("Disable the search for unattainable state", "root", root)
 		}
+		// 查找成功 ? snapshot 具有, 并且 pbss 具有可以恢复 ?
 		// Check if the associated state is available or recoverable if
 		// the requested root has already been crossed.
 		if beyondRoot && (bc.HasState(head.Root) || bc.stateRecoverable(head.Root)) {
@@ -2967,14 +2973,19 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 	return logs
 }
 
+/*
+reorg oldHead, newHead ?
+
+invalid new chain ?
+
+入参 2 个 blocks, old & new chain 重建 blocks, 插入到 canonical chain 内.
+
+*/
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
 // Note the new head block won't be processed here, callers need to handle it
 // externally.
-/*
-reorg oldHead, newHead ?
-*/
 func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	var (
 		newChain    types.Blocks
@@ -3011,6 +3022,9 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	if newBlock == nil {
 		return errInvalidNewChain
 	}
+	/*
+		两者没有共同的祖先 ?
+	*/
 	// Both sides of the reorg are at the same number, reduce both until the common
 	// ancestor is found
 	for {

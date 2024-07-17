@@ -1471,6 +1471,12 @@ func (d *Downloader) processFullSyncContent(ttd *big.Int, beaconMode bool) error
 	}
 }
 
+/*
+importBlockResults -> InsertChain
+
+invalid new chain
+msg="Downloaded item processing failed" number=111020 hash=0x3ca711f8606cc50e2c5bb451e96ffacc574da8ba3b6dd4fb4346f8fa3e40dae7 err="invalid new chain"
+*/
 func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	// Check for any early termination requests
 	if len(results) == 0 {

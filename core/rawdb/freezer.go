@@ -536,9 +536,14 @@ func (f *Freezer) repair() error {
 
 // delete leveldb data that save to ancientdb, split from func freeze
 /*
+1) Wipe out all data from the active database; 删除 [first, first+len(ancients)] 内
+2) Wipe out side chains also and track dangling side chians
+删除 [first, frozen) 范围内的 block
+3) Step into the future and delete and dangling side chains
+删除 [frozen, Head] 区间内的 dangling side chain
+----
 删除 旧的 block 数据, 在 leveldb 内 准备保存到 ancient db
 first +  len(ancients)
-1) Wipe out all data from the active database; 删除 [first, first+len(ancients)] 内
 DeleteBlock
 headerHashKey(number)
 ---
@@ -559,7 +564,11 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 	}
 	batch.Reset()
 
+	/*
+		2) 删除 [first, frozen) 范围内的 block
+	*/
 	// Wipe out side chains also and track dangling side chians
+
 	var dangling []common.Hash
 	for number := first; number < frozen; number++ {
 		// Always keep the genesis block in active database
@@ -576,10 +585,14 @@ func gcKvStore(db ethdb.KeyValueStore, ancients []common.Hash, first uint64, fro
 	}
 	batch.Reset()
 
-	// Step into the future and delete and dangling side chains
 	/*
 		dangling
+		drop[hash] map 表示已经删除的 hash
+
+		先读取 frozen 对应的 hashes, 然后将其 Header 读取出来, for 循环 tip 一直增加, 一直删除 到最新的 head block
 	*/
+	// Step into the future and delete and dangling side chains
+
 	if frozen > 0 {
 		tip := frozen
 		nfdb := &nofreezedb{KeyValueStore: db}
