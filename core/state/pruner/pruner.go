@@ -600,6 +600,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		}
 		// Use the bottom-most diff layer as the target
 		root = layers[len(layers)-1].Root()
+		log.Info("root nil", "root", root, "layer", layers[len(layers)-1])
 	}
 	// if the separated state db has been set, use this db to prune data
 	var trienodedb ethdb.Database
@@ -625,6 +626,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		// as the pruning target.
 		var found bool
 		for i := len(layers) - 2; i >= 2; i-- {
+			log.Info("layer not exist", "root", layers[i].Root(), "layer", layers[i])
 			if rawdb.HasLegacyTrieNode(trienodedb, layers[i].Root()) {
 				root = layers[i].Root()
 				found = true
