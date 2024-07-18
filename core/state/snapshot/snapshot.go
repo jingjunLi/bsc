@@ -389,7 +389,11 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	defer t.lock.Unlock()
 
 	t.layers[snap.root] = snap
+	log.Debug("Snapshot updated", "blockRoot", blockRoot)
 	number := rawdb.ReadHeaderNumber(t.diskdb, blockRoot)
+	if number == nil {
+		return nil
+	}
 	block := rawdb.ReadBlock(t.diskdb, blockRoot, *number)
 	log.Debug("Snapshot updated", "blockRoot", blockRoot, "block", block, "number", *number)
 	return nil
@@ -478,10 +482,13 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 		rebloom(persisted.root)
 	}
+	log.Debug("Snapshot capped", "root", root)
 	number := rawdb.ReadHeaderNumber(t.diskdb, root)
+	if number == nil {
+		return nil
+	}
 	block := rawdb.ReadBlock(t.diskdb, root, *number)
 	log.Debug("Snapshot capped", "blockRoot", root, "block", block, "number", *number)
-	log.Debug("Snapshot capped", "root", root)
 	return nil
 }
 
