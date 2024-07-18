@@ -179,7 +179,7 @@ type Config struct {
 // cheap iteration of the account/storage tries for sync aid.
 type Tree struct {
 	config   Config                   // Snapshots configurations
-	diskdb   ethdb.KeyValueStore      // Persistent database to store the snapshot
+	diskdb   ethdb.Database           // Persistent database to store the snapshot
 	triedb   *triedb.Database         // In-memory cache to access the trie through
 	layers   map[common.Hash]snapshot // Collection of all known layers
 	lock     sync.RWMutex
@@ -205,7 +205,7 @@ type Tree struct {
 //     state trie.
 //   - otherwise, the entire snapshot is considered invalid and will be recreated on
 //     a background thread.
-func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash, cap int, withoutTrie bool) (*Tree, error) {
+func New(config Config, diskdb ethdb.Database, triedb *triedb.Database, root common.Hash, cap int, withoutTrie bool) (*Tree, error) {
 	snap := &Tree{
 		config:   config,
 		diskdb:   diskdb,
@@ -389,7 +389,12 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	defer t.lock.Unlock()
 
 	t.layers[snap.root] = snap
-	log.Debug("Snapshot updated", "blockRoot", blockRoot)
+	number := rawdb.ReadHeaderNumber(t.diskdb, blockRoot)
+	block := rawdb.ReadBlock(t.diskdb, blockRoot, *number)
+	if block == nil {
+		return nil
+	}
+	log.Debug("Snapshot updated", "blockRoot", blockRoot, "block", block)
 	return nil
 }
 
@@ -476,6 +481,12 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 		rebloom(persisted.root)
 	}
+	number := rawdb.ReadHeaderNumber(t.diskdb, root)
+	block := rawdb.ReadBlock(t.diskdb, root, *number)
+	if block == nil {
+		return nil
+	}
+	log.Debug("Snapshot capped", "blockRoot", root, "block", block)
 	log.Debug("Snapshot capped", "root", root)
 	return nil
 }
