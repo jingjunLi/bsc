@@ -483,6 +483,14 @@ func pruneBlock(ctx *cli.Context) error {
 	return nil
 }
 
+/*
+geth snapshot prune-state <state-root> will prune historical state data with the help of the state snapshot.
+All trie nodes and contract codes that do not belong to the specified version state will be deleted from the database. After pruning, only
+two version states are available: genesis and the specific one.
+The default pruning target is the HEAD-127 state.
+WARNING: it's only supported in hash mode(--state.scheme=hash)
+
+*/
 // Deprecation: this command should be deprecated once the hash-based
 // scheme is deprecated.
 func pruneState(ctx *cli.Context) error {

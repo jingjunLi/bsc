@@ -33,6 +33,10 @@ import (
 )
 
 var (
+	/*
+		aggregatorMemoryLimit 是底层差异层的最大大小，该层聚合来自上层的写入，直到它被刷新到磁盘层。
+		注意，增加这个限制可能会大幅增加每个差异层中存储的布隆过滤器的大小。在不完全理解所有影响的情况下，不要这么做。
+	*/
 	// aggregatorMemoryLimit is the maximum size of the bottom-most diff layer
 	// that aggregates the writes from above until it's flushed into the disk
 	// layer.
@@ -104,6 +108,7 @@ func init() {
 2) storage tries;
 
 diff layer 的目标是向 journal 一样, 记录 最近对 state 的修改, 但是它不能变成 semi-immutable state 状态;
+1) root snapshot diff 属于的 ??
 */
 type diffLayer struct {
 	origin *diskLayer // Base disk layer to directly use on bloom misses

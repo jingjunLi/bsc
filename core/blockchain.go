@@ -270,6 +270,7 @@ type BlockChain struct {
 	db ethdb.Database // Low level persistent database to store final content in
 	/*
 		BlockChain::snaps 加速 trie 访问
+		什么时候使用 ?
 	*/
 	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
 	triegc        *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
@@ -519,11 +520,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 				Head state
 				diskRoot 的含义 ?
 				在状态恢复之前，如果丢失了头状态，请找出快照的 disk layer 指针（如果启用了快照）。确保 rewound点 低于 disk layer 。
-				1) 如果开启 Snapshot 从 Snapshot 读取;
-				SnapshotRootKey -> root hash
-				2) 如果是 PBSS, 从 triedb 获取;
-
-				---
 				1) 确认 pbss 转 hbss 之后的 state root, 可以通过 PBSS 的数据获取
 				2) 在rewind 逻辑中写死这个 hash, diskRoot != (common.Hash{}) 判断前, 将 diskRoot 设置为啥 ?
 				peer 问题也是validator prune导致的，新版本刚修复，更新后可以了??
@@ -532,9 +528,16 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			*/
 			var diskRoot common.Hash
 			if bc.cacheConfig.SnapshotLimit > 0 {
+				/*
+					1) 如果开启 Snapshot 从 Snapshot 读取; SnapshotRootKey -> root hash
+				*/
 				// 这个是老的 , 走到这里是有问题的 ?
 				diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 			}
+			/*
+				2) 如果是 PBSS, 并且 1) 中的可用, 则使用 1) 的 diskRoot;
+				 如果 1) 的不可用 recoverable false, 则从 triedb.Head() 读取 diskRoot
+			*/
 			if bc.triedb.Scheme() == rawdb.PathScheme && !bc.NoTries() {
 				recoverable, _ := bc.triedb.Recoverable(diskRoot)
 				// 强制 都到这里 ?
@@ -2081,6 +2084,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		triedb.Reference(block.Root(), common.Hash{}) // metadata reference to keep trie alive
 		bc.triegc.Push(block.Root(), -int64(block.NumberU64()))
 
+		/*
+
+		 */
 		// Flush limits are not considered for the first TriesInMemory blocks.
 		current := block.NumberU64()
 		if current <= TriesInMemory {
@@ -2146,10 +2152,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		wg2.Wait()
 		return nil
 	}
-	// Commit all cached state changes into underlying memory database.
 	/*
 		这里的 state.Commit 会将 trie 的数据写入到 leveldb/pebble 中
 	*/
+	// Commit all cached state changes into underlying memory database.
 	_, diffLayer, err := state.Commit(block.NumberU64(), bc.tryRewindBadBlocks, tryCommitTrieDB)
 	if err != nil {
 		return err

@@ -165,8 +165,8 @@ children 和 parents 如何理解 ?
 1) flushPrev 的处理 ?
 */
 type cachedNode struct {
-	node      []byte                   // Encoded node blob, immutable
-	parents   uint32                   // Number of live nodes referencing this one
+	node    []byte // Encoded node blob, immutable
+	parents uint32 // Number of live nodes referencing this one
 	// 什么时候设置 ?
 	external  map[common.Hash]struct{} // The set of external children
 	flushPrev common.Hash              // Previous node in the flush-list
@@ -569,8 +569,8 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 
 // commit is the private locked version of Commit.
 /*
-
- */
+hash ->node
+*/
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
 	// If the node does not exist, it's a previously committed node
 	node, ok := db.dirties[hash]

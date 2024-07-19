@@ -184,6 +184,13 @@ func DeleteStorageTrieNode(db ethdb.KeyValueWriter, accountHash common.Hash, pat
 	}
 }
 
+/*
+hash -> LegacyTrieNode 的映射
+1) WriteLegacyTrieNode -> WriteTrieNode snapsync 的 trienode 保存
+2) (db *Database) Cap; triedb 层 database 的接口
+3) (db *Database) Commit
+*/
+
 // ReadLegacyTrieNode retrieves the legacy trie node with the given
 // associated node hash.
 func ReadLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {

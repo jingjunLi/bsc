@@ -66,19 +66,18 @@ type revision struct {
 // must be created with new root and updated database for accessing post-
 // commit states.
 /*
-以太坊协议中的 StateDB 用于存储 Merkle trie 中的任何内容。StateDB 负责缓存和存储嵌套状态。 这是检索的通用查询接口：
+以太坊协议中的 StateDB 结构用于存储 Merkle trie 中的任何数据。StateDB 负责缓存和存储嵌套状态。它是检索以下内容的一般查询接口：
 1) Contracts
 2) Accounts
-一旦状态被提交，stateDB 中缓存的 tries（包括账户trie、存储tries）将不再起作用。 必须使用新的根 和 更新的数据库创建新的状态实例，以访问提交后状态。
-从程序设计角度，StateDB 有多种用途：
+一旦状态提交，缓存在 StateDB 中的tries（包括账户树和存储tries）将不再起作用。必须使用新的根和更新的数据库创建新的状态实例，以访问提交后的状态。
 
+从程序设计角度，StateDB 有多种用途：
 1. 维护账户状态到世界状态的映射。
 2. 支持修改、回滚、提交状态。
 3. 支持持久化状态到数据库中。
 4. 是状态进出默克尔树的媒介。
 
-实际上 StateDB 充当**状态（数据）**、**Trie(树)**、**LevelDB（存储）**的协调者。
-主要是 Contracts 和 Accounts.
+实际上 StateDB 充当**状态（数据）**、**Trie(树)**、**LevelDB（存储）**的协调者。主要是 Contracts 和 Accounts.
 -----
 1) 上层哪里使用到 StateDB ?
 */
@@ -1578,14 +1577,15 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 /*
 Commit 将状态写入底层内存 trie 数据库。 一旦状态被提交，stateDB 中缓存的tries（包括账户trie、存储tries）将不再起作用。
 必须使用新的根和更新的数据库创建新的状态实例，以访问提交后状态。
+
 1. IntermediateRoot()
 2. Write updated account codes to db
 3. Commit all stateObject trie
 4. Commit trie
 5) 如果开启 Snapshot-> Tree::cap
 
-handleDestruction 作用 ?
 ---
+handleDestruction 作用 ?
 StateDB::Commit 作用 ?
 */
 func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFuncs ...func() error) (common.Hash, *types.DiffLayer, error) {
@@ -1810,7 +1810,11 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		},
 		// Commit all stateObject trie, 更新 snapshot.Tree
 		/*
-			1) 是否开启 snapshotting, 如果开启 则 调用 s.snaps.Update 将 Destructs Accounts Storages 保存到 snaps 中
+			1) 是否开启 snapshotting, 如果不开启 不执行下面的逻辑;
+			2) 如果开启 则 调用 s.snaps.Update 将 Destructs Accounts Storages 保存到 snaps 中
+			2.1) SnapToDiffLayer
+			snaps.Update
+			snaps.Cap
 		*/
 		func() error {
 			// If snapshotting is enabled, update the snapshot tree with this new version
@@ -1826,8 +1830,10 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 				diffLayer.Destructs, diffLayer.Accounts, diffLayer.Storages = s.SnapToDiffLayer()
 				// Only update if there's a state transition (skip empty Clique blocks)
 				/*
-					snap.Root() != expectedRoot 如何理解 ?
-					a state transition ? 如何理解 ?
+					snap.Root() != expectedRoot 如何理解 ??? root 变化了, 则发生了状态转换
+					1) 发生了 state transition 状态转换
+					状态转换（state transition）指的是以太坊状态从一个状态变更到另一个状态。状态的改变可以是由于区块的交易执行导致账户余额、存储等数据的更新。
+					在这段代码中，状态转换的检测方法是比较快照根哈希是否发生变化。
 				*/
 				if parent := s.snap.Root(); parent != s.expectedRoot {
 					err := s.snaps.Update(s.expectedRoot, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, verified)
@@ -1836,6 +1842,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 						log.Warn("Failed to update snapshot tree", "from", parent, "to", s.expectedRoot, "err", err)
 					}
 
+					// 开启一个新的 goroutine 以异步方式限制快照树的层数，保证在内存中的 diff 层数不超过指定的限制。如果操作失败，记录警告日志。
 					// Keep n diff layers in the memory
 					// - head layer is paired with HEAD state
 					// - head-1 layer is paired with HEAD-1 state
@@ -1851,7 +1858,11 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		},
 	}
 	/*
+	 上面定义了两个 匿名函数
+	 commmitTrie
+	 commitFuncs 是一个数组: 1)Write updated account codes to db; 2) Commit all stateObject trie, 更新 snapshot.Tree
 	 commitFuncs 是一个函数数组，里面有两个函数，分别是：
+	 并行的执行 这三个函数 ?
 	*/
 	if s.pipeCommit {
 		go commmitTrie()
@@ -1867,6 +1878,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 			commitRes <- tmpFunc()
 		}()
 	}
+	// 获取结果,
 	for i := 0; i < len(commitFuncs); i++ {
 		r := <-commitRes
 		if r != nil {

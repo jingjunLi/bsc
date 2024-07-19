@@ -93,6 +93,7 @@ type backend interface {
 // relevant with trie nodes and node preimages.
 /*
 Database 封装了底层的 backend, 负责与 trie nodes 和 node preimages 交互;
+核心的接口:
 */
 type Database struct {
 	config    *Config        // Configuration for trie database

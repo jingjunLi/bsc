@@ -191,6 +191,9 @@ type Config struct {
 1) Ethereum state snapshot tree
 包含 一个 持久化 base layer(后端是 kv store),
 state snapshot 的用途是: 1) 直接访问 account 和 storage 数据, 避免多层 trie 查询; 2) 有序, 便宜的 account/storage trie 迭代, 用于同步辅助
+
+2) capLimit 来自 bc.cacheConfig.TriesInMemory, 表示最近的 capLimit layers 在内存, 默认 128.
+
 */
 type Tree struct {
 	config   Config                   // Snapshots configurations
@@ -203,6 +206,13 @@ type Tree struct {
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
 }
+
+/*
+New 基于 kv store(memory layers 从 journal 获取) 加载已存在的 snapshot
+如果 snapshot 丢失 或者 disk layer 损坏() ,snapshot 会进行重建.
+如果 内存的 layers 不匹配 disk layer, 或者 journal 丢失:
+1)
+*/
 
 // New attempts to load an already existing snapshot from a persistent key-value
 // store (with a number of memory layers from a journal), ensuring that the head
@@ -385,6 +395,12 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	return ret
 }
 
+/*
+如果可以链接到现有的旧父层，Update 会将一个新的快照添加到树中。插入磁盘层（所有层的起源）是不允许的。
+根据 blockRoot, destructs, accounts, storage, verified 调用
+新创建一个 diffLayer ?
+*/
+
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
 func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) error {
@@ -409,6 +425,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	defer t.lock.Unlock()
 
 	t.layers[snap.root] = snap
+
 	log.Debug("Snapshot updated", "blockRoot", blockRoot)
 	return nil
 }
@@ -416,6 +433,15 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 func (t *Tree) CapLimit() int {
 	return t.capLimit
 }
+
+/*
+Cap 从 a head block hash 开始 遍历, 直至 到 layers 允许的地方;
+Cap 函数从头区块哈希向下遍历快照树，直到超过允许的层数。所有超过允许数量的层都将向下扁平化。
+注意，最终的差异层数通常会比请求的数量多一层。这是因为最底层的差异层是累加器，它可能会或可能不会溢出并级联到磁盘。
+由于只有在裁剪后才能确定这一层是否保留，如果我们希望确保至少保留请求数量的差异层，我们需要忽略这一层的计数。
+1) layers: CapLimit
+核心实现在 t.cap
+*/
 
 // Cap traverses downwards the snapshot tree from a head block hash until the
 // number of allowed layers are crossed. All layers beyond the permitted number
@@ -426,9 +452,6 @@ func (t *Tree) CapLimit() int {
 // which may or may not overflow and cascade to disk. Since this last layer's
 // survival is only known *after* capping, we need to omit it from the count if
 // we want to ensure that *at least* the requested number of diff layers remain.
-/*
-Cap 从 a head block hash 开始 遍历, 直至 到 layers 允许的地方;
-*/
 func (t *Tree) Cap(root common.Hash, layers int) error {
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
@@ -515,7 +538,13 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 // survival is only known *after* capping, we need to omit it from the count if
 // we want to ensure that *at least* the requested number of diff layers remain.
 /*
+Cap 从 a head block hash 开始 遍历, 直至 到 layers 允许的地方;
+Cap 函数从头区块哈希向下遍历快照树，直到超过允许的层数。所有超过允许数量的层都将向下扁平化。
+注意，最终的差异层数通常会比请求的数量多一层。这是因为最底层的差异层是累加器，它可能会或可能不会溢出并级联到磁盘。
+由于只有在裁剪后才能确定这一层是否保留，如果我们希望确保至少保留请求数量的差异层，我们需要忽略这一层的计数。
+
 the final diff layer
+最近的 layers 在内存, 其余持久化 ?
 */
 func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	// Dive until we run out of layers or reach the persistent database

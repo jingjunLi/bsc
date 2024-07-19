@@ -608,6 +608,9 @@ func (p *BlockPruner) AncientDbReplacer() error {
 Prune : 删除所有的 历史 state 节点, 属于特定 state version;
 如果用户没有指定 state version, 使用 bottom-most snapshot diff layer;
 1) stateBloomRoot
+
+triesInMemory 的影响 ? 对 snapshot 保存的影响 ?
+
 */
 func (p *Pruner) Prune(root common.Hash) error {
 	// If the state bloom filter is already committed previously,
@@ -625,8 +628,13 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// target. The reason for picking it is:
 	// - in most of the normal cases, the related state is available
 	// - the probability of this layer being reorg is very low
+	/*
+	 */
 	var layers []snapshot.Snapshot
 	if root == (common.Hash{}) {
+		/*
+			1) len(layers) != int(p.triesInMemory)
+		*/
 		// Retrieve all snapshot layers from the current HEAD.
 		// In theory there are n difflayers + 1 disk layer present,
 		// so n diff layers are expected to be returned.
@@ -647,10 +655,12 @@ func (p *Pruner) Prune(root common.Hash) error {
 	} else {
 		trienodedb = p.db
 	}
+	/*
+		确保根确实存在; 弱假设 root 的存在可以表明 root 的存在 整个 trie 。
+	*/
 	// Ensure the root is really present. The weak assumption
 	// is the presence of root can indicate the presence of the
 	// entire trie.
-	// 确保根确实存在; 弱假设 root 的存在可以表明 root 的存在 整个 trie 。
 	if !rawdb.HasLegacyTrieNode(trienodedb, root) {
 		// The special case is for clique based networks(goerli
 		// and some other private networks), it's possible that two
@@ -663,6 +673,13 @@ func (p *Pruner) Prune(root common.Hash) error {
 		// Note HEAD and HEAD-1 is ignored. Usually there is the associated
 		// state available, but we don't want to use the topmost state
 		// as the pruning target.
+		/*
+			特殊的 case(goerli 和一些私有网络) 两个连续的 blocks 具有相同的 root , 这种 case snapshot difflayer 不会被创建.
+			HEAD-127 与 head-127 layer 不对应 ?
+			find the bottom-most snapshot layer with state available.
+			1) found false 的场景; HasLegacyTrieNode
+			snapshot 中存在 layers, 但是这些 layers 的 root 都没有 保存在 triedb 内 ??
+		*/
 		var found bool
 		for i := len(layers) - 2; i >= 2; i-- {
 			if rawdb.HasLegacyTrieNode(trienodedb, layers[i].Root()) {
