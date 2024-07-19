@@ -626,7 +626,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		// as the pruning target.
 		var found bool
 		for i := len(layers) - 2; i >= 2; i-- {
-			log.Info("layer not exist", "root", layers[i].Root(), "layer Parent", layers[i].Parent())
+			log.Info("layer not exist", "root", layers[i].Root(), "layer Parent", layers[i].Parent().Root())
 			if rawdb.HasLegacyTrieNode(trienodedb, layers[i].Root()) {
 				root = layers[i].Root()
 				found = true
