@@ -101,6 +101,12 @@ type StateDB struct {
 	snaps *snapshot.Tree    // Nil if snapshot is not available
 	snap  snapshot.Snapshot // Nil if snapshot is not available
 
+	/*
+		originalRoot: is the pre-state root, before any changes were made.
+		expectedRoot: The state root in the block header; block header 内的值, 理论上和 stateRoot 一致 ??
+		stateRoot: The calculation result of IntermediateRoot
+		commmitTrie 的时候进行计算;
+	*/
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
 	originalRoot common.Hash
@@ -1834,6 +1840,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 					1) 发生了 state transition 状态转换
 					状态转换（state transition）指的是以太坊状态从一个状态变更到另一个状态。状态的改变可以是由于区块的交易执行导致账户余额、存储等数据的更新。
 					在这段代码中，状态转换的检测方法是比较快照根哈希是否发生变化。
+					s.snap.Root() 是什么 ? 哪里会变化 ?
 				*/
 				if parent := s.snap.Root(); parent != s.expectedRoot {
 					err := s.snaps.Update(s.expectedRoot, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, verified)

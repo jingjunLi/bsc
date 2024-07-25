@@ -311,6 +311,10 @@ func (db *Database) Reference(root common.Hash, parent common.Hash) error {
 	return nil
 }
 
+/*
+Dereference 删除已存在的 reference,
+*/
+
 // Dereference removes an existing reference from a root node. It's only
 // supported by hash-based database and will return an error for others.
 func (db *Database) Dereference(root common.Hash) error {

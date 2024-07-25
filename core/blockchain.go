@@ -2058,6 +2058,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	/*
 		tryCommitTrieDB
+		显示的 gc 操作,
 	*/
 	tryCommitTrieDB := func() error {
 		bc.commitLock.Lock()
