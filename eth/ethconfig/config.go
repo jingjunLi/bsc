@@ -192,12 +192,6 @@ type Config struct {
 	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64
 
-	// OverrideCancun (TODO: remove after the fork)
-	OverrideCancun *uint64 `toml:",omitempty"`
-
-	// OverrideHaber (TODO: remove after the fork)
-	OverrideHaber *uint64 `toml:",omitempty"`
-
 	// OverrideBohr (TODO: remove after the fork)
 	OverrideBohr *uint64 `toml:",omitempty"`
 

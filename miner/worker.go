@@ -1427,7 +1427,13 @@ LOOP:
 				bestWork = bestBid.env
 				from = bestBid.bid.Builder
 
-				log.Debug("BidSimulator: bid win", "block", bestWork.header.Number.Uint64(), "bid", bestBid.bid.Hash())
+				log.Info("[BUILDER BLOCK]",
+					"block", bestWork.header.Number.Uint64(),
+					"builder", from,
+					"blockReward", weiToEtherStringF6(bestBid.packedBlockReward),
+					"validatorReward", weiToEtherStringF6(bestBid.packedValidatorReward),
+					"bid", bestBid.bid.Hash().TerminalString(),
+				)
 			}
 		}
 	}
