@@ -20,6 +20,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -194,7 +195,7 @@ func NewInspector(tr *Trie, db Database, stateRootHash common.Hash, blockNum uin
 // Run statistics, external call
 /*
 为什么 hash 模式, 需要执行 (db *Database) Cap ??
- */
+*/
 func (s *Inspector) Run() {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
@@ -320,8 +321,8 @@ func (s *Inspector) PrintProgress(t *Trie) {
 }
 
 /*
-	1) "" 空字符串对应 AccountTrie ??
-	展示 contract trie 的结果:
+1) "" 空字符串对应 AccountTrie ??
+展示 contract trie 的结果:
 */
 func (s *Inspector) DisplayResult() {
 	// display root hash
