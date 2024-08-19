@@ -226,6 +226,7 @@ revert
 ---
 limit: 配置的 TrieDirtyLimit, 256MB
 nodes: 核心存储的对象, dirty node set;
+owner (common.Hash) -> map[string]*trienode.Node
 */
 type nodecache struct {
 	layers uint64                                    // The number of diff layers aggregated inside

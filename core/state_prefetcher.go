@@ -27,6 +27,15 @@ import (
 const prefetchThread = 3
 const checkInterval = 10
 
+/*
+statePrefetcher 是一个基本的 Prefetcher，它在任意状态之上盲目地执行区块，目的是在主区块处理器开始执行之前，从磁盘中预取可能有用的状态数据。
+1) 功能
+statePrefetcher 的主要功能是在执行区块之前，从磁盘中预先加载（预取）状态数据。这样，当主区块处理器实际开始执行时，可以减少磁盘I/O操作，提高执行效率。这种预取操作是在任意状态之上盲目执行区块的，也就是说它并不依赖于特定的状态，而是广泛地加载可能会使用到的数据。
+2) 适用场景
+该结构体和预取功能适用于需要在处理区块时提高效率的场景，特别是在区块链系统中，预取状态数据可以减少延迟，提高整体性能。
+通过这种预取机制，可以显著减少处理区块时的瓶颈，提高区块链网络的吞吐量和响应速度。
+*/
+
 // statePrefetcher is a basic Prefetcher, which blindly executes a block on top
 // of an arbitrary state with the goal of prefetching potentially useful state
 // data from disk before the main block processor start executing.

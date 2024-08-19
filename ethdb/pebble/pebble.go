@@ -53,6 +53,10 @@ const (
 	degradationWarnInterval = time.Minute
 )
 
+/*
+Meter 统计的都是两个 metrics 的差值, 而不是一个累计值 ?
+*/
+
 // Database is a persistent key-value store based on the pebble storage engine.
 // Apart from basic data storage functionality it also supports batch writes and
 // iterating over the keyspace in binary-alphabetical order.

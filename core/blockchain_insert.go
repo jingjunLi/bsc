@@ -63,6 +63,10 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		}
 		end := chain[index]
 
+		/*
+			usedGas/elapsed 平均 每秒使用的 gas 量
+		*/
+
 		// Assemble the log context and send it to the logger
 		mgasps := float64(st.usedGas) * 1000 / float64(elapsed)
 		context := []interface{}{
