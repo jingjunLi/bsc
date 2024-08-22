@@ -526,6 +526,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	if isLastOffset {
 		offset = ReadOffSetOfLastAncientFreezer(db)
 	} else {
+		//
 		offset = ReadOffSetOfCurrentAncientFreezer(db)
 	}
 

@@ -94,6 +94,11 @@ a single chained data table within the freezer (e.g. blocks) ?
 freezerTable 表示 chained data table, 单个 data file; 1) snappy encoded snappy 压缩;
 1) itemHidden
 2) items 哪里设置 ?
+items 值与 offset 有关联 ?
+引入offset 后, table的items 语义也是统一的, 即是相对于 offset的值
+区别是, prune之前 offset 值是0, prune block后非0
+
+
 */
 type freezerTable struct {
 	items      atomic.Uint64 // Number of items stored in the table (including items removed from tail)
