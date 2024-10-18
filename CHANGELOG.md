@@ -1,4 +1,43 @@
 # Changelog
+## v1.4.15
+### BUGFIX
+* [\#2680](https://github.com/bnb-chain/bsc/pull/2680) txpool: apply miner's gasceil to txpool
+* [\#2688](https://github.com/bnb-chain/bsc/pull/2688) txpool: set default GasCeil from 30M to 0
+* [\#2696](https://github.com/bnb-chain/bsc/pull/2696) miner: limit block size to eth protocol msg size
+* [\#2684](https://github.com/bnb-chain/bsc/pull/2684) eth: Add sidecars when available to broadcasted current block
+
+### FEATURE
+* [\#2672](https://github.com/bnb-chain/bsc/pull/2672) faucet: with mainnet balance check, 0.002BNB at least
+* [\#2678](https://github.com/bnb-chain/bsc/pull/2678) beaconserver: simulated beacon api server for op-stack
+* [\#2687](https://github.com/bnb-chain/bsc/pull/2687) faucet: support customized token
+* [\#2698](https://github.com/bnb-chain/bsc/pull/2698) faucet: add example for custimized token
+* [\#2706](https://github.com/bnb-chain/bsc/pull/2706) faucet: update DIN token faucet support
+
+### IMPROVEMENT
+* [\#2677](https://github.com/bnb-chain/bsc/pull/2677) log: add some p2p log
+* [\#2679](https://github.com/bnb-chain/bsc/pull/2679) build(deps): bump actions/download-artifact in /.github/workflows
+* [\#2662](https://github.com/bnb-chain/bsc/pull/2662) metrics: add some extra feature flags as node stats
+* [\#2675](https://github.com/bnb-chain/bsc/pull/2675) fetcher: Sleep after marking block as done when requeuing
+* [\#2695](https://github.com/bnb-chain/bsc/pull/2695) CI: nancy ignore CVE-2024-8421
+* [\#2689](https://github.com/bnb-chain/bsc/pull/2689) consensus/parlia: wait more time when processing huge blocks
+
+## v1.4.14
+
+### BUGFIX
+* [\#2643](https://github.com/bnb-chain/bsc/pull/2643)core: fix cache for receipts
+* [\#2656](https://github.com/bnb-chain/bsc/pull/2656)ethclient: fix BlobSidecars api
+* [\#2657](https://github.com/bnb-chain/bsc/pull/2657)fix: update prunefreezer’s offset when pruneancient and the dataset has pruned block
+
+### FEATURE
+* [\#2661](https://github.com/bnb-chain/bsc/pull/2661)config: setup Mainnet 2 hardfork date: HaberFix & Bohr
+
+### IMPROVEMENT
+* [\#2578](https://github.com/bnb-chain/bsc/pull/2578)core/systemcontracts: use vm.StateDB in UpgradeBuildInSystemContract
+* [\#2649](https://github.com/bnb-chain/bsc/pull/2649)internal/debug: remove memsize
+* [\#2655](https://github.com/bnb-chain/bsc/pull/2655)internal/ethapi: make GetFinalizedHeader monotonically increasing
+* [\#2658](https://github.com/bnb-chain/bsc/pull/2658)core: improve readability of the fork choice logic
+* [\#2665](https://github.com/bnb-chain/bsc/pull/2665)faucet: bump and resend faucet transaction if it has been pending for a while
+
 ## v1.4.13
 
 ### BUGFIX

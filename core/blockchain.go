@@ -100,6 +100,8 @@ var (
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
 	blockReorgDropMeter = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
 
+	blockRecvTimeDiffGauge = metrics.NewRegisteredGauge("chain/block/recvtimediff", nil)
+
 	errStateRootVerificationFailed = errors.New("state root verification failed")
 	errInsertionInterrupted        = errors.New("insertion is interrupted")
 	errChainStopped                = errors.New("blockchain is stopped")
@@ -2049,7 +2051,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		bc.hc.tdCache.Add(block.Hash(), externTd)
 		bc.blockCache.Add(block.Hash(), block)
-		bc.receiptsCache.Add(block.Hash(), receipts)
+		bc.cacheReceipts(block.Hash(), receipts, block)
 		if bc.chainConfig.IsCancun(block.Number(), block.Time()) {
 			bc.sidecarsCache.Add(block.Hash(), block.Sidecars())
 		}
@@ -2354,6 +2356,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		return 0, nil
 	}
 
+	if len(chain) > 0 {
+		blockRecvTimeDiffGauge.Update(time.Now().Unix() - int64(chain[0].Time()))
+	}
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	// 1）恢复所有区块中所有交易的签名者。
 	signer := types.MakeSigner(bc.chainConfig, chain[0].Number(), chain[0].Time())
@@ -2666,8 +2671,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if err != nil {
 			return it.index, err
 		}
-
-		bc.cacheReceipts(block.Hash(), receipts, block)
 
 		// Update the metrics touched during block commit
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
