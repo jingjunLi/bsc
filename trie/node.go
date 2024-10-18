@@ -41,17 +41,22 @@ node的结构，可以看到node分为4种类型，
 2) shortNode 对应了黄皮书里面的扩展节点和叶子节点
 (通过shortNode.Val的类型来判断当前节点是叶子节点还是扩展节点)。
 区别是看Val字段指向的是 valueNode 还是其他类型的 node, 保存的是 ???
-2.1) 扩展结点
+2.1) 扩展节点
 通过 shortNode.Val 指向下一个 node; hashNode ?
-2.2) 叶子结点
+2.2) 叶子节点
 shortNode.Val 为 valueNode;
-3) valueNode: 用于存储数据（存在于fullNode或者叶子结点shortNode中）
+3) valueNode: 用于存储数据（存在于fullNode或者叶子节点shortNode中）
 4) hashNode: 用于实现节点的折叠 ? 如何理解 ?
 ----
 shortNode
-1) 扩展结点 :
+1) 扩展节点 :
 1.1) Val字段存储的是其孩子节点在数据库中存储的索引值（其实该索引值也是孩子节点的哈希值）；
 1.2) Val字段存储的是其孩子节点的引用
+---
+hashNode 与 valueNode 都是[]byte的别名，长度都是32字节，但储存的内容有很大不同：
+1、valueNode储存的是真正value值的hash值，hashNode储存的则是fullNode和shortNode的hash值；
+2、valueNode由叶子节点持有，也可以由fullNode的节点持有，储存在children数组的最后一个位置；
+3、hashNode由每一个fullNode和shortNode所持有。
 */
 type (
 	fullNode struct {
@@ -85,6 +90,10 @@ func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 /*
 节点哈希：若该字段不为空，则当需要进行哈希计算时，可以跳过计算过程而直接使用上次计算的结果（当节点变脏时，该字段被置空）；
 脏标志：当一个节点被修改时，该标志位被置为1；
+dirty 主要的引用:
+(n *fullNode) cache()
+(n *shortNode) cache()
+为什么 hashNode & valueNode 没有 ? 因为 hashNode & valueNode 不在 mpt 路径上, 而是在 shortNode & fullNode 的 val 字段内.
 */
 type nodeFlag struct {
 	hash  hashNode // cached hash of the node (may be nil)

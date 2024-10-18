@@ -59,6 +59,10 @@ type leaf struct {
 	Parent common.Hash // the hash of parent node
 }
 
+/*
+
+ */
+
 // NodeSet contains a set of nodes collected during the commit operation.
 // Each node is keyed by path. It's not thread-safe to use.
 type NodeSet struct {

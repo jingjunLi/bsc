@@ -49,24 +49,41 @@ func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *
 }
 
 // Commit collapses a node down into a hash node.
-// 调用方 : trie.Commit
+// 调用方 : trie.Commit 什么用途 ?
 func (c *committer) Commit(n node) hashNode {
 	return c.commit(nil, n).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
 /*
+commit 将节点折叠为哈希节点并返回它。 这里是一个递归的调用过程.
+collapsed 是 mpt 树提交的过程, value 是存储的子节点的 hash.
 
- */
+1) 将 node 进行 copy , 命名为 collapsed
+2) collapsed 节点 对应的 字段 存储的都是 子节点的 hash
+2.1) shortNode
+
+(c *committer) store
+*/
 func (c *committer) commit(path []byte, n node) node {
 	// if this path is clean, use available cached data
+	// 1. 首先是对该节点进行脏位的判断，若当前节点未被修改，则直接返回该节点的哈希值，调用结束
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
 		return hash
 	}
 	// Commit children, then parent, and remove the dirty flag.
+	/*
+		2. 该节点为脏节点，对该节点进行哈希重计算。首先是对当前节点的孩子节点进行哈希计算，对孩子节点的哈希计算是利用递归地对节点进行处理完成。
+		这一步骤的目的是将孩子节点的信息各自转换成一个哈希值进行表示；。
+		3. 对当前节点进行哈希计算。哈希计算利用sha256哈希算法对当前节点的RLP编码进行哈希计算；
+	*/
 	switch cn := n.(type) {
 	case *shortNode:
+		/*
+			3.2 对于叶子／扩展节点来说，该节点的RLP编码就是对其Key，Value字段进行编码。
+			同样在第二步中，若Value指代的是另外一个节点的引用，则已经被转换成了一个哈希值（在第二步中，Key已经被转换成了HP编码）；
+		*/
 		// Commit child
 		collapsed := cn.copy()
 
@@ -84,6 +101,9 @@ func (c *committer) commit(path []byte, n node) node {
 		}
 		return collapsed
 	case *fullNode:
+		/*
+			3.1 对于分支节点来说，该节点的RLP编码就是对其孩子列表的内容进行编码，且在第二步中，所有的孩子节点所有已经被转换成了一个哈希值；
+		*/
 		hashedKids := c.commitChildren(path, cn)
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
@@ -135,6 +155,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 // is enabled, leaf nodes will be tracked in the modified nodeset as well.
 /*
 对 node n 做 hash, 然后将其添加到 nodeset;
+将当前节点的数据存入数据库，存储的格式为[节点哈希值，节点的RLP编码](hash mode 保存方式, pbss 已经优化 ???)。 ???
 */
 func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
@@ -145,7 +166,6 @@ func (c *committer) store(path []byte, n node) node {
 	// usually is leaf node). But small value (less than 32bytes) is not
 	// our target (leaves in account trie only).
 	/*
-
 	 */
 	if hash == nil {
 		// The node is embedded in its parent, in other words, this node

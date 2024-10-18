@@ -20,6 +20,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"runtime"
 	"sort"
 	"sync"
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -1096,10 +1096,14 @@ func (s *StateDB) WaitPipeVerification() error {
 	return nil
 }
 
+/*
+Update changes from journal to StatesObjectsPending and StatesObjectsDirty and empty journal.
+Finalise finalises the state by removing the destructed objects and clears the journal as well as the refunds.
+*/
+
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-/* */
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
@@ -1589,8 +1593,8 @@ Commit 将状态写入底层内存 trie 数据库。 一旦状态被提交，sta
 3. Commit all stateObject trie
 4. Commit trie
 5) 如果开启 Snapshot-> Tree::cap
-
 ---
+
 handleDestruction 作用 ?
 StateDB::Commit 作用 ?
 */
@@ -1622,6 +1626,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		snapUpdated = make(chan struct{})
 	}
 
+	// 匿名函数, 下面会调用
 	commmitTrie := func() error {
 		/*
 			commitErr 主要流程:
@@ -1781,8 +1786,20 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		return commitErr
 	}
 
+	/*
+	 匿名函数, 下面会调用
+	 2) commitFuncs
+	 commitFuncs 是一个函数数组，里面有两个函数，分别是：
+	 1) Write updated account codes to db;
+	 2) Commit all stateObject trie, 更新 snapshot.Tree
+	*/
 	commitFuncs := []func() error{
 		// Write updated account codes to db
+		/*
+			将 code 持久化到 db 内, 每 ethdb.IdealBatchSize (100K) Write 一次
+			common.BytesToHash(obj.CodeHash()) -> obj.code
+			疑问: 为什么便利 stateObjectsDirty & stateObjects
+		*/
 		func() error {
 			codeWriter := s.db.DiskDB().NewBatch()
 			for addr := range s.stateObjectsDirty {
@@ -1817,6 +1834,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		// Commit all stateObject trie, 更新 snapshot.Tree
 		/*
 			1) 是否开启 snapshotting, 如果不开启 不执行下面的逻辑;
+				是否开启 EnabledExpensive, 开启才会有 更多的 耗时统计;
 			2) 如果开启 则 调用 s.snaps.Update 将 Destructs Accounts Storages 保存到 snaps 中
 			2.1) SnapToDiffLayer
 			snaps.Update
@@ -1866,9 +1884,8 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 	}
 	/*
 	 上面定义了两个 匿名函数
-	 commmitTrie
-	 commitFuncs 是一个数组: 1)Write updated account codes to db; 2) Commit all stateObject trie, 更新 snapshot.Tree
-	 commitFuncs 是一个函数数组，里面有两个函数，分别是：
+	 1) commmitTrie
+
 	 并行的执行 这三个函数 ?
 	*/
 	if s.pipeCommit {

@@ -189,15 +189,29 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 2) key: 输入要查找的数据的 hash
 3) pos: 当前hash匹配到第几位
 
+didResolve 如何理解 ?
+
 起始输入参数: t.root, key, 0
+---
+从根节点开始搜寻与搜索路径内容一致的路径；
+1. 若当前节点为叶子节点，存储的内容是数据项的内容，且搜索路径的内容与叶子节点的key一致，则表示找到该节点；反之则表示该节点在树中不存在。
+2. 若当前节点为扩展节点，且存储的内容是哈希索引，则利用哈希索引从数据库中加载该节点，再将搜索路径作为参数，对新解析出来的节点递归地调用查找函数。
+3. 若当前节点为扩展节点，存储的内容是另外一个节点的引用，且当前节点的key是搜索路径的前缀，则将搜索路径减去当前节点的key，将剩余的搜索路径作为参数，对其子节点递归地调用查找函数；若当前节点的key不是搜索路径的前缀，表示该节点在树中不存在。
+4. 若当前节点为分支节点，若搜索路径为空，则返回分支节点的存储内容；反之利用搜索路径的第一个字节选择分支节点的孩子节点，将剩余的搜索路径作为参数递归地调用查找函数。
 */
 func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	switch n := (origNode).(type) {
 	case nil:
 		return nil, nil, false, nil
 	case valueNode:
+		// 1. 若当前节点为叶子节点，存储的内容是数据项的内容，且搜索路径的内容与叶子节点的key一致，则表示找到该节点；反之则表示该节点在树中不存在。
+		// 走到这里, 有可能是 找到了, 然后上层递归的返回 valueNode ???
 		return n, n, false, nil
 	case *shortNode:
+		// 叶子节点 / 扩展节点
+		/*
+			搜索路径的内容与叶子节点的key 是否一致 ? 如果不一致, key 不存在: 直接返回 value(nil), didResolve false ?
+		*/
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
 			return nil, n, false, nil
@@ -209,6 +223,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		}
 		return value, n, didResolve, err
 	case *fullNode:
+		// 4. 若当前节点为分支节点，若搜索路径为空，则返回分支节点的存储内容；反之利用搜索路径的第一个字节选择分支节点的孩子节点，将剩余的搜索路径作为参数递归地调用查找函数。
 		value, newnode, didResolve, err = t.get(n.Children[key[pos]], key, pos+1)
 		if err == nil && didResolve {
 			n = n.copy()
@@ -216,6 +231,17 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		}
 		return value, n, didResolve, err
 	case hashNode:
+		/*
+			hashNode ??  其调用方 是 扩展节点
+			通过 shortNode.Val 指向下一个 node;
+
+			1) didResolve 为 true 表示, 则递归调用的上层 都为 true.
+			从 底层存储读取 key 对应的 -> value, 读取 成功.
+			持久化 并且 ?? 将另外一个节点的引用 读取出来, 继续查找.
+
+			3. 若当前节点为扩展节点，存储的内容是另外一个节点的引用，且当前节点的key是搜索路径的前缀，则将搜索路径减去当前节点的key，将剩余的搜索路径作为参数，
+				对其子节点递归地调用查找函数；若当前节点的key不是搜索路径的前缀，表示该节点在树中不存在。
+		*/
 		child, err := t.resolveAndTrack(n, key[:pos])
 		if err != nil {
 			return nil, n, true, err
@@ -378,16 +404,29 @@ func (t *Trie) update(key, value []byte) error {
 没有了 ??
 Trie 树的 cache 管理。 还记得Trie树的结构里面有两个参数， 一个是cachegen,一个是cachelimit。这两个参数就是cache控制的参数。
 Trie 树每一次调用 Commit 方法，会导致当前的cachegen增加1。
+---
+插入操作也是基于查找过程完成的，一个插入过程为：
+
+ 1. 根据4.1中描述的查找步骤，首先找到与新插入节点拥有最长相同路径前缀的节点，记为Node；
+ 2. 若该Node为分支节点：
+    剩余的搜索路径不为空，则将新节点作为一个叶子节点插入到对应的孩子列表中；
+    剩余的搜索路径为空（完全匹配），则将新节点的内容存储在分支节点的第17个孩子节点项中（Value）；
+ 3. 若该节点为叶子／扩展节点：
+    3.1 剩余的搜索路径与当前节点的key一致，则把当前节点Val更新即可；
+    3.2 剩余的搜索路径与当前节点的key不完全一致，则将叶子／扩展节点的孩子节点替换成分支节点，将新节点与当前节点key的共同前缀作为当前节点的key，
+    将新节点与当前节点的孩子节点作为两个孩子插入到分支节点的孩子列表中，同时当前节点转换成了一个扩展节点（若新节点与当前节点没有共同前缀，则直接用生成的分支节点替换当前节点）；
+ 4. 若插入成功，则将被修改节点的dirty标志置为true，hash标志置空（之前的结果已经不可能用），且将节点的诞生标记更新为现在；
 */
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	/*
-		在 insert 方法的开头，检查键的长度是否为零，如果是，则表示在当前节点处结束。在这种情况下，如果当前节点是一个 valueNode 类型的节点，则直接比较其值与要插入的值是否相等，
-		如果相等则不做任何修改，否则替换为要插入的值。
+		在 insert 方法的开头，检查键的长度是否为零，如果是，则表示在当前节点处结束。
+		在这种情况下，如果当前节点是一个 valueNode 类型的节点，则直接比较其值与要插入的值是否相等，如果相等则不做任何修改，否则替换为要插入的值。
 	*/
 	if len(key) == 0 {
 		if v, ok := n.(valueNode); ok {
 			return !bytes.Equal(v, value.(valueNode)), value, nil
 		}
+		//  4. 若插入成功，则将被修改节点的dirty标志置为true，hash标志置空（之前的结果已经不可能用），且将节点的诞生标记更新为现在；
 		return true, value, nil
 	}
 	switch n := n.(type) {
@@ -395,14 +434,18 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		matchlen := prefixLen(key, n.Key)
 		// If the whole key matches, keep this short node as is
 		// and only update the value.
+		// 3.1 剩余的搜索路径与当前节点的key一致，则把当前节点Val更新即可；
 		if matchlen == len(n.Key) {
+			// 找到了 ??
 			dirty, nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
 			if !dirty || err != nil {
 				return false, n, err
 			}
+			//  4. 若插入成功，则将被修改节点的dirty标志置为true，hash标志置空（之前的结果已经不可能用），且将节点的诞生标记更新为现在；
 			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
 		}
 		// Otherwise branch out at the index where they differ.
+		// 3.2 剩余的搜索路径与当前节点的key不完全一致，则将叶子／扩展节点的孩子节点替换成分支节点，将新节点与当前节点key的共同前缀作为当前节点的key，
 		branch := &fullNode{flags: t.newFlag()}
 		var err error
 		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
@@ -423,9 +466,15 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		t.tracer.onInsert(append(prefix, key[:matchlen]...))
 
 		// Replace it with a short node leading up to the branch.
+		//  4. 若插入成功，则将被修改节点的dirty标志置为true，hash标志置空（之前的结果已经不可能用），且将节点的诞生标记更新为现在；
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
 
 	case *fullNode:
+		/*
+			若该Node为分支节点：
+			剩余的搜索路径不为空，则将新节点作为一个叶子节点插入到对应的孩子列表中；
+			剩余的搜索路径为空（完全匹配），则将新节点的内容存储在分支节点的第17个孩子节点项中（Value）；
+		*/
 		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
 		if !dirty || err != nil {
 			return false, n, err
@@ -640,6 +689,10 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	return n, nil
 }
 
+/*
+根据指定的 node hash 和 path prefix 从底层存储 loads node.
+*/
+
 // resolveAndTrack loads node from the underlying store with the given node hash
 // and path prefix and also tracks the loaded node blob in tracer treated as the
 // node's original value. The rlp-encoded blob is preferred to be loaded from
@@ -671,10 +724,28 @@ func (t *Trie) Hash() common.Hash {
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
 /*
-Commit 搜集 trie 内所有的 dirty nodes, 并使用对应的 node hash 进行替换;
-所有收集的 nodes(包含 dirty leaves) 封装到 nodeset, 并返回;
+Commit函数提供将内存中的MPT数据持久化到数据库的功能. MPT具有快速计算所维护数据集哈希标识以快速状态回滚的能力，也都是在该函数中实现的。
+在commit完成后，所有变脏的树节点会重新进行哈希计算，并且将新内容写入数据库；最终新的根节点哈希将被作为MPT的最新状态被返回。
+
+一次MPT树提交是一个递归调用的过程，在介绍MPT提交过程之前，我们首先介绍单个节点是如何进行哈希计算和存储的。
+单节点
+
+1. 首先是对该节点进行脏位的判断，若当前节点未被修改，则直接返回该节点的哈希值，调用结束
+（此外，若当前节点既未被修改，同时存在于内存的时间又”过长“，则将以该节点为根节点的子树从内存中驱除）； --- 在哪 ??
+2. 该节点为脏节点，对该节点进行哈希重计算。首先是对当前节点的孩子节点进行哈希计算，对孩子节点的哈希计算是利用递归地对节点进行处理完成。这一步骤的目的是将孩子节点的信息各自转换成一个哈希值进行表示；。
+3. 对当前节点进行哈希计算。哈希计算利用sha256哈希算法对当前节点的RLP编码进行哈希计算；
+	3.1 对于分支节点来说，该节点的RLP编码就是对其孩子列表的内容进行编码，且在第二步中，所有的孩子节点所有已经被转换成了一个哈希值；
+	3.2 对于叶子／扩展节点来说，该节点的RLP编码就是对其Key，Value字段进行编码。同样在第二步中，若Value指代的是另外一个节点的引用，则已经被转换成了一个哈希值（在第二步中，Key已经被转换成了HP编码）；
+4. 将当前节点的数据存入数据库，存储的格式为[节点哈希值，节点的RLP编码]。
+	---- Commit 过程利用 (c *committer) store 存储到 NodeSet 中, 后面再利用 pbss 的 Update 进行持久化 ?? MergedNodeSet
+5. 将自身的dirty标志置为false，并将计算所得的哈希值进行缓存；
+
+---
+Commit 搜集 trie 内所有的 dirty nodes, 并使用对应的 node hash 进行替换; 所有收集的 nodes(包含 dirty leaves) 封装到 nodeset, 并返回;
 返回值:
 1) NodeSet:
+---
+1) (t *Trie) Hash() : 计算所有 dirty nodes 的 hash;
 */
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	defer t.tracer.reset()
@@ -712,7 +783,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 		t.root = hashedNode
 		return rootHash, nil, nil
 	}
-	// 初始化 NodeSet
+	// 初始化 NodeSet, nodes 记录 Commit 过程更新的 nodes
 	nodes := trienode.NewNodeSet(t.owner)
 	for _, path := range t.tracer.deletedNodes() {
 		nodes.AddNode([]byte(path), trienode.NewDeleted())
