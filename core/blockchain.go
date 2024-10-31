@@ -1776,6 +1776,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if bc.chainConfig.IsCancun(block.Number(), block.Time()) {
 			bc.sidecarsCache.Add(block.Hash(), block.Sidecars())
 		}
+		log.Info("block batch write finish")
 		wg.Done()
 	}()
 
@@ -1789,6 +1790,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			return nil
 		}
 
+		log.Info("trie db write start")
 		triedb := bc.stateCache.TrieDB()
 		// If we're running an archive node, always flush
 		if bc.cacheConfig.TrieDirtyDisabled {
@@ -1857,9 +1859,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}()
 		}
 		wg2.Wait()
+
 		return nil
 	}
 	// Commit all cached state changes into underlying memory database.
+
 	_, diffLayer, err := state.Commit(block.NumberU64(), tryCommitTrieDB)
 	if err != nil {
 		return err
@@ -1880,6 +1884,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 		go bc.cacheDiffLayer(diffLayer, diffLayerCh)
 	}
+
 	wg.Wait()
 	return nil
 }
@@ -2219,6 +2224,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		bc.updateHighestVerifiedHeader(block.Header())
 
 		// Enable prefetching to pull in trie node paths while processing transactions
+
 		statedb.StartPrefetcher("chain")
 		interruptCh := make(chan struct{})
 		// For diff sync, it may fallback to full sync, so we still do prefetch
@@ -2238,6 +2244,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// Process block using the parent state as reference point
 		statedb.SetExpectedStateRoot(block.Root())
 		pstart := time.Now()
+
 		statedb, receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		close(interruptCh) // state prefetch can be stopped
 		if err != nil {
