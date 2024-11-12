@@ -398,8 +398,6 @@ func (it *BBoltIterator) Next() bool {
 		it.firstKey = false
 		if k != nil && string(k) != "" {
 			existNext = true
-		} else {
-			log.Info("key invalid")
 		}
 	} else {
 		err := it.db.View(func(tx *bbolt.Tx) error {

@@ -665,12 +665,7 @@ func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 func (iter *pebbleIterator) Next() bool {
 	if iter.moved {
 		iter.moved = false
-		flag := iter.iter.Valid()
-		log.Info("iterator get first key", "key:", string(iter.iter.Key()))
-		if !flag {
-			log.Info("key invalid")
-		}
-		return flag
+		return iter.iter.Valid()
 	}
 	flag := iter.iter.Next()
 	log.Info("iterator get next key", "key:", string(iter.iter.Key()))
