@@ -1776,7 +1776,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if bc.chainConfig.IsCancun(block.Number(), block.Time()) {
 			bc.sidecarsCache.Add(block.Hash(), block.Sidecars())
 		}
-		log.Info("block batch write finish")
 		wg.Done()
 	}()
 
@@ -1790,7 +1789,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			return nil
 		}
 
-		log.Info("trie db write start")
 		triedb := bc.stateCache.TrieDB()
 		// If we're running an archive node, always flush
 		if bc.cacheConfig.TrieDirtyDisabled {
