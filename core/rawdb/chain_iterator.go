@@ -195,7 +195,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	}
 	var (
 		hashesCh = iterateTransactions(db, from, to, true, interrupt)
-		batch    = db.NewBatch()
+		batch    = db.BlockStore().NewBatch()
 		start    = time.Now()
 		logged   = start.Add(-7 * time.Second)
 
@@ -293,10 +293,11 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 		return
 	}
 	var (
-		hashesCh = iterateTransactions(db, from, to, false, interrupt)
-		batch    = db.NewBatch()
-		start    = time.Now()
-		logged   = start.Add(-7 * time.Second)
+		hashesCh   = iterateTransactions(db, from, to, false, interrupt)
+		blockBatch = db.BlockStore().NewBatch()
+		batch      = db.NewBatch()
+		start      = time.Now()
+		logged     = start.Add(-7 * time.Second)
 
 		// we expect the first number to come in to be [from]. Therefore, setting
 		// nextNum to from means that the queue gap-evaluation will work correctly
@@ -319,7 +320,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			}
 			delivery := queue.PopItem()
 			nextNum = delivery.number + 1
-			DeleteTxLookupEntries(batch, delivery.hashes)
+			DeleteTxLookupEntries(blockBatch, delivery.hashes)
 			txs += len(delivery.hashes)
 			blocks++
 
@@ -346,6 +347,10 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	// be flushed anyway.
 	WriteTxIndexTail(batch, nextNum)
 	if err := batch.Write(); err != nil {
+		log.Crit("Failed writing batch to db", "error", err)
+		return
+	}
+	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed writing batch to db", "error", err)
 		return
 	}
