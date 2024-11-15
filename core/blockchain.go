@@ -1280,7 +1280,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
-	bc.dbWg.Add(2)
+	bc.dbWg.Add(1)
 	defer bc.dbWg.Wait()
 	go func() {
 		start := time.Now()
