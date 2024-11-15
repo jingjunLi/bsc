@@ -194,10 +194,10 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		return
 	}
 	var (
-		hashesCh = iterateTransactions(db, from, to, true, interrupt)
-		batch    = db.BlockStore().NewBatch()
-		start    = time.Now()
-		logged   = start.Add(-7 * time.Second)
+		hashesCh   = iterateTransactions(db, from, to, true, interrupt)
+		blockBatch = db.BlockStore().NewBatch()
+		start      = time.Now()
+		logged     = start.Add(-7 * time.Second)
 
 		// Since we iterate in reverse, we expect the first number to come
 		// in to be [to-1]. Therefore, setting lastNum to means that the
@@ -223,17 +223,17 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			// Next block available, pop it off and index it
 			delivery := queue.PopItem()
 			lastNum = delivery.number
-			WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
+			WriteTxLookupEntries(blockBatch, delivery.number, delivery.hashes)
 			blocks++
 			txs += len(delivery.hashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
-			if batch.ValueSize() > ethdb.IdealBatchSize {
-				WriteTxIndexTail(batch, lastNum) // Also write the tail here
-				if err := batch.Write(); err != nil {
+			if blockBatch.ValueSize() > ethdb.IdealBatchSize {
+				WriteTxIndexTail(blockBatch, lastNum) // Also write the tail here
+				if err := blockBatch.Write(); err != nil {
 					log.Crit("Failed writing batch to db", "error", err)
 					return
 				}
-				batch.Reset()
+				blockBatch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
@@ -245,8 +245,8 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	// Flush the new indexing tail and the last committed data. It can also happen
 	// that the last batch is empty because nothing to index, but the tail has to
 	// be flushed anyway.
-	WriteTxIndexTail(batch, lastNum)
-	if err := batch.Write(); err != nil {
+	WriteTxIndexTail(blockBatch, lastNum)
+	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed writing batch to db", "error", err)
 		return
 	}
