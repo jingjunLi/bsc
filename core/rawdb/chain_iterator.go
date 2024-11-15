@@ -295,7 +295,6 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	var (
 		hashesCh   = iterateTransactions(db, from, to, false, interrupt)
 		blockBatch = db.BlockStore().NewBatch()
-		batch      = db.NewBatch()
 		start      = time.Now()
 		logged     = start.Add(-7 * time.Second)
 
@@ -328,12 +327,12 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			// A batch counts the size of deletion as '1', so we need to flush more
 			// often than that.
 			if blocks%1000 == 0 {
-				WriteTxIndexTail(batch, nextNum)
-				if err := batch.Write(); err != nil {
+				WriteTxIndexTail(blockBatch, nextNum)
+				if err := blockBatch.Write(); err != nil {
 					log.Crit("Failed writing batch to db", "error", err)
 					return
 				}
-				batch.Reset()
+				blockBatch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
@@ -345,11 +344,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	// Flush the new indexing tail and the last committed data. It can also happen
 	// that the last batch is empty because nothing to unindex, but the tail has to
 	// be flushed anyway.
-	WriteTxIndexTail(batch, nextNum)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed writing batch to db", "error", err)
-		return
-	}
+	WriteTxIndexTail(blockBatch, nextNum)
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed writing batch to db", "error", err)
 		return
