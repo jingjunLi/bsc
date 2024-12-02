@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -25,6 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -246,6 +249,25 @@ func (dl *diffLayer) Stale() bool {
 	return dl.stale.Load()
 }
 
+// isStale returns whether this layer has become stale or if it's still live.
+func (dl *diffLayer) isStale() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.stale.Load()
+}
+
+// markStale sets the stale flag as true.
+func (dl *diffLayer) markStale() {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	if dl.stale.Load() {
+		panic("triedb diff layer is stale")
+	}
+	dl.stale.Store(true)
+}
+
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
 func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
@@ -293,10 +315,27 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		return nil, ErrSnapshotStale
 	}
 
-	{ // fastpath
+	var lookupData []byte
+	var err error
+	{
+		// fastpath
 		targetLayer := globalLookup.lookupAccount(hash, dl.root)
 		if targetLayer != nil {
-			return targetLayer.AccountRLP(hash)
+			lookupData, err = targetLayer.AccountRLP(hash)
+			if err != nil {
+				log.Info("globalLookup.lookupAccount err", "hash", hash, "root", dl.root, "err", err)
+			}
+			if len(lookupData) == 0 { // can be both nil and []byte{}
+				log.Info("globalLookup.lookupAccount data nil", "hash", hash, "root", dl.root)
+			}
+			if err == nil && len(lookupData) != 0 {
+				account := new(types.SlimAccount)
+				if err := rlp.DecodeBytes(lookupData, account); err != nil {
+					panic(err)
+				}
+			}
+
+			log.Info("globalLookup.lookupAccount", "hash", hash, "root", dl.root, "res", lookupData, "targetLayer", targetLayer)
 		}
 	}
 	// Check the bloom filter first whether there's even a point in reaching into
@@ -318,7 +357,11 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		return origin.AccountRLP(hash)
 	}
 	// The bloom filter hit, start poking in the internal maps
-	return dl.accountRLP(hash, 0)
+	data, err := dl.accountRLP(hash, 0)
+	if !bytes.Equal(data, lookupData) {
+		log.Info("real account", "data", data, "lookupData", lookupData)
+	}
+	return data, err
 }
 
 // accountRLP is an internal version of AccountRLP that skips the bloom filter
@@ -373,11 +416,30 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		return nil, ErrSnapshotStale
 	}
 
-	{ // fastpath
+	var lookupData []byte
+	var err error
+	{
+		// fastpath
 		targetLayer := globalLookup.lookupStorage(accountHash, storageHash, dl.root)
 		if targetLayer != nil {
-			return targetLayer.Storage(accountHash, storageHash)
+			lookupData, err = targetLayer.Storage(accountHash, storageHash)
+			if err != nil {
+				log.Info("globalLookup.lookupAccount err", "accountHash", accountHash, "storageHash", storageHash, "err", err)
+			}
+			if len(lookupData) == 0 { // can be both nil and []byte{}
+				log.Info("globalLookup.lookupAccount data nil", "accountHash", accountHash, "storageHash", storageHash)
+			}
+			if err == nil && len(lookupData) != 0 {
+				account := new(types.SlimAccount)
+				if err := rlp.DecodeBytes(lookupData, account); err != nil {
+					panic(err)
+				}
+			}
+
+			//return targetLayer.Storage(accountHash, storageHash)
 		}
+		log.Info("globalLookup.lookupAccount", "accountHash", accountHash, "storageHash", storageHash, "res", lookupData)
+
 	}
 
 	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
@@ -397,7 +459,11 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		return origin.Storage(accountHash, storageHash)
 	}
 	// The bloom filter hit, start poking in the internal maps
-	return dl.storage(accountHash, storageHash, 0)
+	data, err := dl.storage(accountHash, storageHash, 0)
+	if !bytes.Equal(data, lookupData) {
+		log.Info("real storage", "data", data, "lookupData", lookupData)
+	}
+	return data, err
 }
 
 // storage is an internal version of Storage that skips the bloom filter checks

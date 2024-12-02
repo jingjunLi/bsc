@@ -114,33 +114,6 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	}
 }
 
-func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
-	var (
-		root    = topDiffLayer.Root()
-		current = topDiffLayer
-	)
-
-	for {
-		parent := current.Parent()
-		if parent == nil {
-			break // finished
-		}
-		if _, ok := parent.(*diskLayer); ok {
-			break // finished
-		}
-		subset, ok := l.descendants[parent.Root()]
-		if !ok {
-			panic("parent root is not exist in descendant mapping")
-		}
-		subset[root] = struct{}{}
-		current = parent
-	}
-}
-
-func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
-	delete(l.descendants, bottomDiffLayer.Root())
-}
-
 // removeLayer traverses all the dirty state within the given diff layer and
 // unlinks them from the lookup set.
 func (l *Lookup) removeLayer(diff *diffLayer) error {
@@ -212,7 +185,35 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	return nil
 }
 
+func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
+	var (
+		root    = topDiffLayer.Root()
+		current = topDiffLayer
+	)
+
+	for {
+		parent := current.Parent()
+		if parent == nil {
+			break // finished
+		}
+		if _, ok := parent.(*diskLayer); ok {
+			break // finished
+		}
+		subset, ok := l.descendants[parent.Root()]
+		if !ok {
+			panic("parent root is not exist in descendant mapping")
+		}
+		subset[root] = struct{}{}
+		current = parent
+	}
+}
+
+func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
+	delete(l.descendants, bottomDiffLayer.Root())
+}
+
 func (l *Lookup) lookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
+	//log.Info("lookupAccount", "acc", accountAddrHash, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()]
 	if !exists {
 		return nil

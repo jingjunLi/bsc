@@ -181,6 +181,10 @@ type Tree struct {
 	lock     sync.RWMutex
 	capLimit int
 
+	base        *diskLayer
+	descendants map[common.Hash]map[common.Hash]struct{}
+	lookup      *Lookup
+
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
 
@@ -232,6 +236,7 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 	{
 		// TODO:
 		globalLookup = newLookup(head)
+		log.Info("init globalLookup success")
 	}
 
 	// Existing snapshot loaded, seed all the layers
@@ -433,6 +438,8 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		// Replace the entire snapshot tree with the flat base
 		t.layers = map[common.Hash]snapshot{base.root: base}
 		// TODO:
+		//t.descendants = make(map[common.Hash]map[common.Hash]struct{})
+		//t.lookup = newLookup(base)
 
 		return nil
 	}
@@ -446,19 +453,28 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			children[parent] = append(children[parent], root)
 		}
 	}
-	var remove func(root common.Hash)
-	remove = func(root common.Hash) {
+	clearDiff := func(snap snapshot) {
+		diff, ok := snap.(*diffLayer)
+		if !ok {
+			return
+		}
+		diff.markStale()
+		globalLookup.removeDescendant(snap)
+		globalLookup.removeLayer(diff)
+	}
+	var remove func(root common.Hash, snap snapshot)
+	remove = func(root common.Hash, snap snapshot) {
 		delete(t.layers, root)
 		// TODO:
-
+		clearDiff(snap)
 		for _, child := range children[root] {
-			remove(child)
+			remove(child, snap)
 		}
 		delete(children, root)
 	}
 	for root, snap := range t.layers {
 		if snap.Stale() {
-			remove(root)
+			remove(root, snap)
 		}
 	}
 	// If the disk layer was modified, regenerate all the cumulative blooms
@@ -536,6 +552,23 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
+
+	var (
+		replaced snapshot
+	)
+	clearDiff := func(snap snapshot) {
+		diff, ok := snap.(*diffLayer)
+		if !ok {
+			return
+		}
+		diff.markStale()
+		globalLookup.removeDescendant(snap)
+		globalLookup.removeLayer(diff)
+	}
+
+	//TODO:check it?
+	replaced = diff.parent
+
 	// If the bottom-most layer is larger than our memory cap, persist to disk
 	bottom := diff.parent.(*diffLayer)
 
@@ -545,6 +578,8 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 	t.layers[base.root] = base
 	diff.parent = base
+
+	clearDiff(replaced)
 	return base
 }
 
