@@ -98,7 +98,7 @@ var (
 // global
 var (
 	// descendants map[common.Hash]map[common.Hash]struct{}
-	globalLookup *Lookup
+	GlobalLookup *Lookup
 
 	// TODO: global layer tree maybe a choice
 )
@@ -207,6 +207,7 @@ type Tree struct {
 //   - otherwise, the entire snapshot is considered invalid and will be recreated on
 //     a background thread.
 func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash, cap int, withoutTrie bool) (*Tree, error) {
+	log.Info("New snapshot")
 	snap := &Tree{
 		config:   config,
 		diskdb:   diskdb,
@@ -235,8 +236,8 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 
 	{
 		// TODO:
-		globalLookup = newLookup(head)
-		log.Info("init globalLookup success")
+		GlobalLookup = newLookup(head)
+		log.Info("init GlobalLookup success")
 	}
 
 	// Existing snapshot loaded, seed all the layers
@@ -385,8 +386,8 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 
 	t.layers[snap.root] = snap
 	{ // update lookup, which in the tree lock guard.
-		globalLookup.addLayer(snap)
-		globalLookup.addDescendant(snap)
+		GlobalLookup.addLayer(snap)
+		GlobalLookup.addDescendant(snap)
 	}
 	log.Debug("Snapshot updated", "blockRoot", blockRoot)
 	return nil
@@ -459,8 +460,8 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			return
 		}
 		diff.markStale()
-		globalLookup.removeDescendant(snap)
-		globalLookup.removeLayer(diff)
+		GlobalLookup.removeDescendant(snap)
+		GlobalLookup.removeLayer(diff)
 	}
 	var remove func(root common.Hash, snap snapshot)
 	remove = func(root common.Hash, snap snapshot) {
@@ -562,8 +563,8 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 			return
 		}
 		diff.markStale()
-		globalLookup.removeDescendant(snap)
-		globalLookup.removeLayer(diff)
+		GlobalLookup.removeDescendant(snap)
+		GlobalLookup.removeLayer(diff)
 	}
 
 	//TODO:check it?
@@ -805,12 +806,16 @@ func (t *Tree) Rebuild(root common.Hash) {
 			panic(fmt.Sprintf("unknown layer type: %T", layer))
 		}
 	}
+
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
 	t.layers = map[common.Hash]snapshot{
 		root: generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root),
 	}
+	// TODO : check it ??
+	GlobalLookup = newLookup(t.layers[root])
+	log.Info("init GlobalLookup success")
 }
 
 // AccountIterator creates a new account iterator for the specified root hash and
