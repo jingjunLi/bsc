@@ -482,7 +482,7 @@ func (dl *diffLayer) flatten() snapshot {
 	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
-	log.Info("Layer flattening stale", "layer", parent, "destructs", len(dl.destructSet), "accounts", len(dl.accountData), "storage", len(dl.storageData))
+	log.Info("Layer flattening stale", "layer", parent, "destructs", len(dl.destructSet))
 	// Overwrite all the updated accounts blindly, merge the sorted list
 	for hash := range dl.destructSet {
 		parent.destructSet[hash] = struct{}{}

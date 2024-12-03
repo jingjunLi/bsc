@@ -460,7 +460,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			return
 		}
 		//diff.markStale()
-		log.Info("Layer clearing descendant 11", "layer", diff, "destructs", len(diff.destructSet), "accounts", len(diff.accountData), "storage", len(diff.storageData))
+		log.Info("Layer clearing descendant 11", "layer", diff, "destructs", len(diff.destructSet))
 		GlobalLookup.removeDescendant(snap)
 		GlobalLookup.removeLayer(diff)
 	}

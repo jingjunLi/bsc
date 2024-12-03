@@ -122,7 +122,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	defer func(now time.Time) {
 		lookupRemoveLayerTimer.UpdateSince(now)
 	}(time.Now())
-	log.Info("Layer removing", "layer", diff, "destructs", len(diff.destructSet), "accounts", len(diff.accountData), "storage", len(diff.storageData))
+	log.Info("Layer removing", "layer", diff)
 
 	diffRoot := diff.Root()
 	for accountHash, _ := range diff.accountData {
