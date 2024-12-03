@@ -95,16 +95,18 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		if targetLayer != nil {
 			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
 			if err != nil {
-				//log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
+				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
 			}
 			if len(lookupData) == 0 { // can be both nil and []byte{}
-				//log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
+				log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
 			}
 			if err == nil && len(lookupData) != 0 {
 				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
 					panic(err)
 				}
 				// lookupDone = true
+			} else {
+				log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 			}
 
 			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
@@ -159,12 +161,14 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 		if targetLayer != nil {
 			lookupData, err = targetLayer.Storage(addrHash, slotHash)
 			if err != nil {
-				// log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
+				log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
 			}
 			if len(lookupData) == 0 { // can be both nil and []byte{}
-				// log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
+				log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
 			}
 			if err == nil && len(lookupData) != 0 {
+			} else {
+				log.Info("GlobalLookup.lookupStorage", "addrHash", addrHash, "slotHash", slotHash, "res", lookupData)
 			}
 			//return targetLayer.Storage(accountHash, storageHash)
 		}

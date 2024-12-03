@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
@@ -244,6 +245,7 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 	//log.Info("lookupAccount", "acc", accountAddrHash, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()]
 	if !exists {
+		log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
@@ -255,6 +257,7 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 			return list[i]
 		}
 	}
+	log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head)
 	return nil
 }
 
@@ -262,6 +265,7 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 	//log.Info("lookupStorage", "addr", accountAddrHash, "slot", slot, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()+slot.String()]
 	if !exists {
+		log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
@@ -272,5 +276,6 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 			return list[i]
 		}
 	}
+	log.Info("LookupStorage not isDescendant", "acc", accountAddrHash, "head", head)
 	return nil
 }
