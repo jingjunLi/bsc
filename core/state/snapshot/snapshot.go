@@ -562,7 +562,8 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		if !ok {
 			return
 		}
-		diff.markStale()
+		// TODO: fix: already stale
+		//diff.markStale()
 		GlobalLookup.removeDescendant(snap)
 		GlobalLookup.removeLayer(diff)
 	}

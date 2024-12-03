@@ -159,10 +159,10 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 		if targetLayer != nil {
 			lookupData, err = targetLayer.Storage(addrHash, slotHash)
 			if err != nil {
-				log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
+				// log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
 			}
 			if len(lookupData) == 0 { // can be both nil and []byte{}
-				log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
+				// log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
 			}
 			if err == nil && len(lookupData) != 0 {
 			}
