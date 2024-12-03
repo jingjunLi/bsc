@@ -459,7 +459,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		if !ok {
 			return
 		}
-		diff.markStale()
+		//diff.markStale()
 		GlobalLookup.removeDescendant(snap)
 		GlobalLookup.removeLayer(diff)
 	}
