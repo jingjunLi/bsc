@@ -460,6 +460,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			return
 		}
 		//diff.markStale()
+		log.Info("Layer clearing descendant 11", "layer", diff, "destructs", len(diff.destructSet), "accounts", len(diff.accountData), "storage", len(diff.storageData))
 		GlobalLookup.removeDescendant(snap)
 		GlobalLookup.removeLayer(diff)
 	}
@@ -554,22 +555,23 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
 
-	var (
-		replaced snapshot
-	)
-	clearDiff := func(snap snapshot) {
-		diff, ok := snap.(*diffLayer)
-		if !ok {
-			return
-		}
-		// TODO: fix: already stale
-		//diff.markStale()
-		GlobalLookup.removeDescendant(snap)
-		GlobalLookup.removeLayer(diff)
-	}
+	//var (
+	//	replaced snapshot
+	//)
+	//clearDiff := func(snap snapshot) {
+	//	diff, ok := snap.(*diffLayer)
+	//	if !ok {
+	//		return
+	//	}
+	//	// TODO: fix: already stale
+	//	//diff.markStale()
+	//	log.Info("Layer clearing descendant in cap", "layer", diff, "destructs", len(diff.destructSet), "accounts", len(diff.accountData), "storage", len(diff.storageData))
+	//	GlobalLookup.removeDescendant(snap)
+	//	GlobalLookup.removeLayer(diff)
+	//}
 
 	//TODO:check it?
-	replaced = diff.parent
+	//replaced = diff.parent
 
 	// If the bottom-most layer is larger than our memory cap, persist to disk
 	bottom := diff.parent.(*diffLayer)
@@ -581,7 +583,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	t.layers[base.root] = base
 	diff.parent = base
 
-	clearDiff(replaced)
+	//clearDiff(replaced)
 	return base
 }
 

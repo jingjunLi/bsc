@@ -103,6 +103,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupAddLayerTimer.UpdateSince(now)
 	}(time.Now())
+	log.Info("Layer adding", "layer", diff, "destructs", len(diff.destructSet), "accounts", len(diff.accountData), "storage", len(diff.storageData))
 
 	for accountHash, _ := range diff.accountData {
 		l.state2LayerRoots[accountHash.String()] = append(l.state2LayerRoots[accountHash.String()], diff)
@@ -121,6 +122,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	defer func(now time.Time) {
 		lookupRemoveLayerTimer.UpdateSince(now)
 	}(time.Now())
+	log.Info("Layer removing", "layer", diff, "destructs", len(diff.destructSet), "accounts", len(diff.accountData), "storage", len(diff.storageData))
 
 	diffRoot := diff.Root()
 	for accountHash, _ := range diff.accountData {

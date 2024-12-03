@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
@@ -481,6 +482,7 @@ func (dl *diffLayer) flatten() snapshot {
 	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
+	log.Info("Layer flattening stale", "layer", parent, "destructs", len(dl.destructSet), "accounts", len(dl.accountData), "storage", len(dl.storageData))
 	// Overwrite all the updated accounts blindly, merge the sorted list
 	for hash := range dl.destructSet {
 		parent.destructSet[hash] = struct{}{}
