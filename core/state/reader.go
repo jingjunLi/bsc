@@ -17,8 +17,11 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"maps"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -78,7 +81,36 @@ func newStateReader(root common.Hash, snaps *snapshot.Tree) (*stateReader, error
 //
 // The returned account might be nil if it's not existent.
 func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) {
-	ret, err := r.snap.Account(crypto.HashData(r.buff, addr.Bytes()))
+	var lookupData []byte
+	var err error
+	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
+	lookupAccount := new(types.SlimAccount)
+
+	log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
+	// var lookupDone bool
+	{
+		// fastpath
+		root := r.snap.Root()
+		targetLayer := snapshot.GlobalLookup.LookupAccount(accountAddrHash, root)
+		if targetLayer != nil {
+			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
+			if err != nil {
+				//log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
+			}
+			if len(lookupData) == 0 { // can be both nil and []byte{}
+				//log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
+			}
+			if err == nil && len(lookupData) != 0 {
+				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
+					panic(err)
+				}
+				// lookupDone = true
+			}
+
+			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
+		}
+	}
+	ret, err := r.snap.Account(accountAddrHash)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +129,12 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	if acct.Root == (common.Hash{}) {
 		acct.Root = types.EmptyRootHash
 	}
+
+	if ret.Nonce != lookupAccount.Nonce ||
+		!bytes.Equal(ret.Root, lookupAccount.Root) {
+		log.Info("stateReader Account not same real account", "real data", ret, "lookupData", lookupAccount)
+	}
+
 	return acct, nil
 }
 
@@ -110,12 +148,39 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
 	addrHash := crypto.HashData(r.buff, addr.Bytes())
 	slotHash := crypto.HashData(r.buff, key.Bytes())
+
+	var lookupData []byte
+	var err error
+	// var lookupDone bool
+	// log.Info("stateReader Storage 11", "addr", addr, "key", key, "addrHash", addrHash, "slotHash", slotHash)
+	{
+		// fastpath
+		targetLayer := snapshot.GlobalLookup.LookupStorage(addrHash, slotHash, r.snap.Root())
+		if targetLayer != nil {
+			lookupData, err = targetLayer.Storage(addrHash, slotHash)
+			if err != nil {
+				log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
+			}
+			if len(lookupData) == 0 { // can be both nil and []byte{}
+				log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
+			}
+			if err == nil && len(lookupData) != 0 {
+			}
+			//return targetLayer.Storage(accountHash, storageHash)
+		}
+		// log.Info("GlobalLookup.lookupStorage", "addrHash", addrHash, "slotHash", slotHash, "res", lookupData)
+	}
+
 	ret, err := r.snap.Storage(addrHash, slotHash)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	if len(ret) == 0 {
 		return common.Hash{}, nil
+	}
+
+	if !bytes.Equal(ret, lookupData) {
+		log.Info("stateReader Storage not same real storage", "data", ret, "lookupData", lookupData)
 	}
 	// Perform the rlp-decode as the slot value is RLP-encoded in the state
 	// snapshot.

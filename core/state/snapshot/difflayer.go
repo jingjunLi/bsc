@@ -17,7 +17,6 @@
 package snapshot
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -26,8 +25,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -315,29 +312,6 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		return nil, ErrSnapshotStale
 	}
 
-	var lookupData []byte
-	var err error
-	{
-		// fastpath
-		targetLayer := globalLookup.lookupAccount(hash, dl.root)
-		if targetLayer != nil {
-			lookupData, err = targetLayer.AccountRLP(hash)
-			if err != nil {
-				log.Info("globalLookup.lookupAccount err", "hash", hash, "root", dl.root, "err", err)
-			}
-			if len(lookupData) == 0 { // can be both nil and []byte{}
-				log.Info("globalLookup.lookupAccount data nil", "hash", hash, "root", dl.root)
-			}
-			if err == nil && len(lookupData) != 0 {
-				account := new(types.SlimAccount)
-				if err := rlp.DecodeBytes(lookupData, account); err != nil {
-					panic(err)
-				}
-			}
-
-			log.Info("globalLookup.lookupAccount", "hash", hash, "root", dl.root, "res", lookupData, "targetLayer", targetLayer)
-		}
-	}
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
 	hit := dl.diffed.ContainsHash(accountBloomHash(hash))
@@ -358,9 +332,7 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// The bloom filter hit, start poking in the internal maps
 	data, err := dl.accountRLP(hash, 0)
-	if !bytes.Equal(data, lookupData) {
-		log.Info("real account", "data", data, "lookupData", lookupData)
-	}
+
 	return data, err
 }
 
@@ -416,32 +388,6 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		return nil, ErrSnapshotStale
 	}
 
-	var lookupData []byte
-	var err error
-	{
-		// fastpath
-		targetLayer := globalLookup.lookupStorage(accountHash, storageHash, dl.root)
-		if targetLayer != nil {
-			lookupData, err = targetLayer.Storage(accountHash, storageHash)
-			if err != nil {
-				log.Info("globalLookup.lookupAccount err", "accountHash", accountHash, "storageHash", storageHash, "err", err)
-			}
-			if len(lookupData) == 0 { // can be both nil and []byte{}
-				log.Info("globalLookup.lookupAccount data nil", "accountHash", accountHash, "storageHash", storageHash)
-			}
-			if err == nil && len(lookupData) != 0 {
-				account := new(types.SlimAccount)
-				if err := rlp.DecodeBytes(lookupData, account); err != nil {
-					panic(err)
-				}
-			}
-
-			//return targetLayer.Storage(accountHash, storageHash)
-		}
-		log.Info("globalLookup.lookupAccount", "accountHash", accountHash, "storageHash", storageHash, "res", lookupData)
-
-	}
-
 	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
 	if !hit {
 		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
@@ -460,9 +406,7 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	}
 	// The bloom filter hit, start poking in the internal maps
 	data, err := dl.storage(accountHash, storageHash, 0)
-	if !bytes.Equal(data, lookupData) {
-		log.Info("real storage", "data", data, "lookupData", lookupData)
-	}
+
 	return data, err
 }
 
