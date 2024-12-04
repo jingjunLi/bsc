@@ -208,6 +208,7 @@ func diffAncestors(layer Snapshot) map[common.Hash]struct{} {
 }
 
 func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
+	log.Info("addDescendant", "addDescendant", topDiffLayer.Root())
 	//var (
 	//	root    = topDiffLayer.Root()
 	//	current = topDiffLayer
@@ -241,6 +242,7 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 }
 
 func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
+	log.Info("removeDescendant", "addDescendant", bottomDiffLayer.Root())
 	delete(l.descendants, bottomDiffLayer.Root())
 }
 
