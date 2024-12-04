@@ -86,7 +86,7 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
 	lookupAccount := new(types.SlimAccount)
 
-	// log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
+	log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
 	// var lookupDone bool
 	{
 		// fastpath
@@ -108,7 +108,6 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 			} else {
 				log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 			}
-
 			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 		}
 	}

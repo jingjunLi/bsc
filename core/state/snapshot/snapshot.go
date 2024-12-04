@@ -187,7 +187,6 @@ type Tree struct {
 
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
-
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -385,7 +384,8 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	defer t.lock.Unlock()
 
 	t.layers[snap.root] = snap
-	{ // update lookup, which in the tree lock guard.
+	{
+		// update lookup, which in the tree lock guard.
 		GlobalLookup.addLayer(snap)
 		GlobalLookup.addDescendant(snap)
 	}
@@ -809,7 +809,6 @@ func (t *Tree) Rebuild(root common.Hash) {
 			panic(fmt.Sprintf("unknown layer type: %T", layer))
 		}
 	}
-
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")

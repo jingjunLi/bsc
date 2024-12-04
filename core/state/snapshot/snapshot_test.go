@@ -20,7 +20,9 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -262,6 +264,8 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 			base.root: base,
 		},
 	}
+	fmt.Println("Creating")
+	GlobalLookup = newLookup(base)
 	// The lowest difflayer
 	snaps.Update(common.HexToHash("0xa1"), common.HexToHash("0x01"), nil, setAccount("0xa1"), nil)
 	snaps.Update(common.HexToHash("0xa2"), common.HexToHash("0xa1"), nil, setAccount("0xa2"), nil)
@@ -303,6 +307,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	// Now, merge the a-chain
 	snaps.Cap(common.HexToHash("0xa3"), 0)
 
+	fmt.Println("after cap", "descendants", GlobalLookup.descendants)
 	// At this point, a2 got merged into a1. Thus, a1 is now modified, and as a1 is
 	// the parent of b2, b2 should no longer be able to iterate into parent.
 
@@ -333,6 +338,9 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 // TestSnaphots tests the functionality for retrieving the snapshot
 // with given head root and the desired depth.
 func TestSnaphots(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	//fmt.Println(t.dump(false))
+
 	// setAccount is a helper to construct a random account entry and assign it to
 	// an account slot in a snapshot
 	setAccount := func(accKey string) map[common.Hash][]byte {
@@ -356,17 +364,49 @@ func TestSnaphots(t *testing.T) {
 			base.root: base,
 		},
 	}
+	GlobalLookup = newLookup(base)
 	// Construct the snapshots with 129 layers, flattening whatever's above that
 	var (
 		last = common.HexToHash("0x01")
 		head common.Hash
 	)
-	for i := 0; i < 129; i++ {
+	for i := 0; i < 135; i++ {
 		head = makeRoot(uint64(i + 2))
 		snaps.Update(head, last, nil, setAccount(fmt.Sprintf("%d", i+2)), nil)
 		last = head
 		snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 	}
+
+	{
+		var lookupData []byte
+		var err error
+		accountAddrHash := common.HexToHash("30")
+		lookupAccount := new(types.SlimAccount)
+
+		// fastpath
+		root := head
+		targetLayer := GlobalLookup.LookupAccount(accountAddrHash, root)
+		if targetLayer != nil {
+			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
+			if err != nil {
+				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
+			}
+			if len(lookupData) == 0 { // can be both nil and []byte{}
+				log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
+			}
+			if err == nil && len(lookupData) != 0 {
+				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
+					panic(err)
+				}
+				// lookupDone = true
+			} else {
+				log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
+			}
+
+			log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
+		}
+	}
+
 	var cases = []struct {
 		headRoot     common.Hash
 		limit        int

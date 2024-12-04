@@ -89,6 +89,7 @@ func newLookup(head Snapshot) *Lookup {
 }
 
 func (l *Lookup) isDescendant(state common.Hash, ancestor common.Hash) bool {
+	log.Info("isDescendant", "descendants size", len(l.descendants), "descendants subset", l.descendants[ancestor], "ancestor", ancestor)
 	subset := l.descendants[ancestor]
 	if subset == nil {
 		return false
@@ -244,10 +245,10 @@ func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
 }
 
 func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
-	//log.Info("lookupAccount", "acc", accountAddrHash, "head", head)
+	log.Info("lookupAccount", "acc", accountAddrHash, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()]
 	if !exists {
-		//log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
+		log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
@@ -255,6 +256,7 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.
 	for i := len(list) - 1; i >= 0; i-- {
+		log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
 		if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
 			return list[i]
 		}
@@ -264,10 +266,10 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 }
 
 func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) Snapshot {
-	//log.Info("lookupStorage", "addr", accountAddrHash, "slot", slot, "head", head)
+	log.Info("lookupStorage", "addr", accountAddrHash, "slot", slot, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()+slot.String()]
 	if !exists {
-		//log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
+		log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
