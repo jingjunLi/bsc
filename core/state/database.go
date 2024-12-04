@@ -193,7 +193,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	// is optional and may be partially useful if it's not fully
 	// generated.
 	if db.snap != nil {
-		sr, err := newStateReader(stateRoot, db.snap)
+		sr, err := newStateReader(stateRoot, db.snap, db)
 		if err == nil {
 			readers = append(readers, sr) // snap reader is optional
 		}

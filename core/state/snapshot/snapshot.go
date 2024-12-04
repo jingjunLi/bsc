@@ -492,7 +492,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 		rebloom(persisted.root)
 	}
-	log.Debug("Snapshot capped", "root", root)
+	log.Info("Snapshot capped", "root", root)
 	return nil
 }
 
@@ -950,4 +950,20 @@ func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize, preimag
 		}
 	}
 	return size, 0, 0
+}
+
+func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
+	tree.lock.RLock()
+	defer tree.lock.RUnlock()
+
+	targetLayer := GlobalLookup.LookupAccount(accountAddrHash, head)
+	return targetLayer
+}
+
+func (tree *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) Snapshot {
+	tree.lock.RLock()
+	defer tree.lock.RUnlock()
+
+	targetLayer := GlobalLookup.LookupAccount(accountAddrHash, head)
+	return targetLayer
 }

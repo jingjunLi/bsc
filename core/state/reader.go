@@ -58,12 +58,13 @@ type Reader interface {
 // stateReader is a wrapper over the state snapshot and implements the Reader
 // interface. It provides an efficient way to access flat state.
 type stateReader struct {
+	db   *CachingDB
 	snap snapshot.Snapshot
 	buff crypto.KeccakState
 }
 
 // newStateReader constructs a flat state reader with on the specified state root.
-func newStateReader(root common.Hash, snaps *snapshot.Tree) (*stateReader, error) {
+func newStateReader(root common.Hash, snaps *snapshot.Tree, db *CachingDB) (*stateReader, error) {
 	snap := snaps.Snapshot(root)
 	if snap == nil {
 		return nil, errors.New("snapshot is not available")
@@ -71,6 +72,7 @@ func newStateReader(root common.Hash, snaps *snapshot.Tree) (*stateReader, error
 	return &stateReader{
 		snap: snap,
 		buff: crypto.NewKeccakState(),
+		db:   db,
 	}, nil
 }
 
@@ -91,7 +93,8 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	{
 		// fastpath
 		root := r.snap.Root()
-		targetLayer := snapshot.GlobalLookup.LookupAccount(accountAddrHash, root)
+		targetLayer := r.db.snap.LookupAccount(accountAddrHash, root)
+		//targetLayer := snapshot.GlobalLookup.LookupAccount()
 		if targetLayer != nil {
 			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
 			if err != nil {
@@ -156,7 +159,8 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	// log.Info("stateReader Storage 11", "addr", addr, "key", key, "addrHash", addrHash, "slotHash", slotHash)
 	{
 		// fastpath
-		targetLayer := snapshot.GlobalLookup.LookupStorage(addrHash, slotHash, r.snap.Root())
+		//targetLayer := snapshot.GlobalLookup.LookupStorage(addrHash, slotHash, r.snap.Root())
+		targetLayer := r.db.snap.LookupStorage(addrHash, slotHash, r.snap.Root())
 		if targetLayer != nil {
 			lookupData, err = targetLayer.Storage(addrHash, slotHash)
 			if err != nil {

@@ -370,7 +370,7 @@ func TestSnaphots(t *testing.T) {
 		last = common.HexToHash("0x01")
 		head common.Hash
 	)
-	for i := 0; i < 135; i++ {
+	for i := 0; i < 150; i++ {
 		head = makeRoot(uint64(i + 2))
 		snaps.Update(head, last, nil, setAccount(fmt.Sprintf("%d", i+2)), nil)
 		last = head
@@ -380,7 +380,7 @@ func TestSnaphots(t *testing.T) {
 	{
 		var lookupData []byte
 		var err error
-		accountAddrHash := common.HexToHash("30")
+		accountAddrHash := common.HexToHash("50")
 		lookupAccount := new(types.SlimAccount)
 
 		// fastpath
