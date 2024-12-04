@@ -90,7 +90,6 @@ var storageDiffCounter int
 //
 // The returned account might be nil if it's not existent.
 func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) {
-	var lookupData []byte
 	var err error
 	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
 	lookupAccount := new(types.SlimAccount)
@@ -102,19 +101,9 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		//log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
 		targetLayer := r.db.snap.LookupAccount(accountAddrHash, root)
 		if targetLayer != nil {
-			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
+			lookupAccount, err = targetLayer.Account(accountAddrHash)
 			if err != nil {
 				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
-			}
-			if len(lookupData) == 0 { // can be both nil and []byte{}
-				log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
-			}
-			if err == nil && len(lookupData) != 0 {
-				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
-					panic(err)
-				}
-			} else {
-				//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 			}
 			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 		}
