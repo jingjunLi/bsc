@@ -104,19 +104,9 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		//log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
 		targetLayer := r.db.snap.LookupAccount(accountAddrHash, root)
 		if targetLayer != nil {
-			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
+			lookupAccount, err = targetLayer.Account(accountAddrHash)
 			if err != nil {
 				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
-			}
-			if len(lookupData) == 0 {
-				// can be both nil and []byte{}
-				lookupAccount = nil
-				//log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
-			}
-			if err == nil && len(lookupData) != 0 {
-				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
-					panic(err)
-				}
 			}
 			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 		}
@@ -128,7 +118,7 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	if ret == nil {
 		if lookupAccount != nil {
 			accountDiffCounter++
-			log.Info("stateReader Account not same real account", "real data", ret, "lookupData", lookupAccount)
+			log.Info("stateReader Account not same real account 11", "real data", ret, "lookupData", lookupAccount)
 		}
 		return nil, nil
 	}
@@ -148,7 +138,7 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	if lookupAccount == nil || (ret.Nonce != lookupAccount.Nonce ||
 		!bytes.Equal(ret.Root, lookupAccount.Root)) {
 		accountDiffCounter++
-		log.Info("stateReader Account not same real account", "real data", ret, "lookupData", lookupAccount)
+		log.Info("stateReader Account not same real account 22", "real data", ret, "lookupData", lookupAccount)
 	} else {
 		accountSameCounter++
 	}
@@ -200,14 +190,14 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	if len(ret) == 0 {
 		if len(lookupData) != 0 {
 			storageDiffCounter++
-			log.Info("stateReader Storage not same real account", "real data", ret, "lookupData", lookupData)
+			log.Info("stateReader Storage not same real account 11", "real data", ret, "lookupData", lookupData)
 		}
 		return common.Hash{}, nil
 	}
 
 	if !bytes.Equal(ret, lookupData) {
 		storageDiffCounter++
-		log.Info("stateReader Storage not same real storage", "data", ret, "lookupData", lookupData)
+		log.Info("stateReader Storage not same real storage 22", "data", ret, "lookupData", lookupData)
 	} else {
 		storageSameCounter++
 	}
