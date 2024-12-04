@@ -794,7 +794,6 @@ func (t *Tree) Rebuild(root common.Hash) {
 			layer.stopGeneration()
 			layer.markStale()
 			layer.Release()
-			t.base = layer
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
@@ -809,10 +808,12 @@ func (t *Tree) Rebuild(root common.Hash) {
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
+	disk := generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root)
 	t.layers = map[common.Hash]snapshot{
-		root: generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root),
+		root: disk,
 	}
 	// TODO : check it ??
+	t.base = disk
 	t.lookup = newLookup(t.layers[root])
 	log.Info("init GlobalLookup success")
 }
