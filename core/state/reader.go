@@ -111,7 +111,7 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 			if len(lookupData) == 0 {
 				// can be both nil and []byte{}
 				lookupAccount = nil
-				log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
+				//log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
 			}
 			if err == nil && len(lookupData) != 0 {
 				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
