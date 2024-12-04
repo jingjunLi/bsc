@@ -92,7 +92,6 @@ var storageDiffCounter int
 //
 // The returned account might be nil if it's not existent.
 func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) {
-	var lookupData []byte
 	var err error
 	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
 	lookupAccount := new(types.SlimAccount)
