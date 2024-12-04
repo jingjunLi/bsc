@@ -128,15 +128,17 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		acct.Root = types.EmptyRootHash
 	}
 
-	if ret.Nonce != lookupAccount.Nonce ||
-		!bytes.Equal(ret.Root, lookupAccount.Root) {
+	if lookupAccount == nil || (ret.Nonce != lookupAccount.Nonce ||
+		!bytes.Equal(ret.Root, lookupAccount.Root)) {
 		accountDiffCounter++
 		log.Info("stateReader Account not same real account", "real data", ret, "lookupData", lookupAccount)
 	} else {
 		accountSameCounter++
 	}
 
-	log.Info("stateReader Account", "accountSameCounter", accountSameCounter, "accountDiffCounter", accountDiffCounter)
+	if (accountDiffCounter+accountSameCounter)%1000 == 0 {
+		log.Info("stateReader Account", "accountSameCounter", accountSameCounter, "accountDiffCounter", accountDiffCounter)
+	}
 
 	return acct, nil
 }
@@ -164,11 +166,11 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 				log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
 			}
 			if len(lookupData) == 0 { // can be both nil and []byte{}
-				log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
+				//log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
 			}
 			if err == nil && len(lookupData) != 0 {
 			} else {
-				log.Info("GlobalLookup.lookupStorage", "addrHash", addrHash, "slotHash", slotHash, "res", lookupData)
+				//log.Info("GlobalLookup.lookupStorage", "addrHash", addrHash, "slotHash", slotHash, "res", lookupData)
 			}
 			//return targetLayer.Storage(accountHash, storageHash)
 		}
@@ -189,7 +191,9 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	} else {
 		storageSameCounter++
 	}
-	log.Info("stateReader Storage", "storageSameCounter", storageSameCounter, "storageDiffCounter", storageDiffCounter)
+	if (storageDiffCounter+storageSameCounter)%1000 == 0 {
+		log.Info("stateReader Storage", "storageSameCounter", storageSameCounter, "storageDiffCounter", storageDiffCounter)
+	}
 
 	// Perform the rlp-decode as the slot value is RLP-encoded in the state
 	// snapshot.
