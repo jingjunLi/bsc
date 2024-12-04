@@ -77,6 +77,12 @@ func newStateReader(root common.Hash, snaps *snapshot.Tree, db *CachingDB) (*sta
 	}, nil
 }
 
+var accountSameCounter int
+var accountDiffCounter int
+
+var storageSameCounter int
+var storageDiffCounter int
+
 // Account implements Reader, retrieving the account specified by the address.
 //
 // An error will be returned if the associated snapshot is already stale or
@@ -135,8 +141,13 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 
 	if ret.Nonce != lookupAccount.Nonce ||
 		!bytes.Equal(ret.Root, lookupAccount.Root) {
+		accountDiffCounter++
 		log.Info("stateReader Account not same real account", "real data", ret, "lookupData", lookupAccount)
+	} else {
+		accountSameCounter++
 	}
+
+	log.Info("stateReader Account", "accountSameCounter", accountSameCounter, "accountDiffCounter", accountDiffCounter)
 
 	return acct, nil
 }
@@ -184,8 +195,13 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	}
 
 	if !bytes.Equal(ret, lookupData) {
+		storageDiffCounter++
 		log.Info("stateReader Storage not same real storage", "data", ret, "lookupData", lookupData)
+	} else {
+		storageSameCounter++
 	}
+	log.Info("stateReader Storage", "storageSameCounter", storageSameCounter, "storageDiffCounter", storageDiffCounter)
+
 	// Perform the rlp-decode as the slot value is RLP-encoded in the state
 	// snapshot.
 	_, content, _, err := rlp.Split(ret)
