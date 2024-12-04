@@ -95,14 +95,6 @@ var (
 	errSnapshotCycle = errors.New("snapshot cycle")
 )
 
-// global
-var (
-	// descendants map[common.Hash]map[common.Hash]struct{}
-	GlobalLookup *Lookup
-
-	// TODO: global layer tree maybe a choice
-)
-
 // Snapshot represents the functionality supported by a snapshot storage layer.
 type Snapshot interface {
 	// Root returns the root hash for which this snapshot was made.
@@ -235,7 +227,7 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 
 	{
 		// TODO:
-		GlobalLookup = newLookup(head)
+		snap.lookup = newLookup(head)
 		log.Info("init GlobalLookup success")
 	}
 
@@ -386,8 +378,8 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	t.layers[snap.root] = snap
 	{
 		// update lookup, which in the tree lock guard.
-		GlobalLookup.addLayer(snap)
-		GlobalLookup.addDescendant(snap)
+		t.lookup.addLayer(snap)
+		t.lookup.addDescendant(snap)
 	}
 	log.Debug("Snapshot updated", "blockRoot", blockRoot)
 	return nil
@@ -461,8 +453,8 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 		//diff.markStale()
 		log.Info("Layer clearing descendant 11", "layer", diff.Root(), "destructs", len(diff.destructSet))
-		GlobalLookup.removeDescendant(snap)
-		GlobalLookup.removeLayer(diff)
+		t.lookup.removeDescendant(snap)
+		t.lookup.removeLayer(diff)
 	}
 	var remove func(root common.Hash, snap snapshot)
 	remove = func(root common.Hash, snap snapshot) {
@@ -816,7 +808,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 		root: generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root),
 	}
 	// TODO : check it ??
-	GlobalLookup = newLookup(t.layers[root])
+	t.lookup = newLookup(t.layers[root])
 	log.Info("init GlobalLookup success")
 }
 
@@ -956,7 +948,7 @@ func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) S
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	targetLayer := GlobalLookup.LookupAccount(accountAddrHash, head)
+	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
 	return targetLayer
 }
 
@@ -964,6 +956,6 @@ func (tree *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, h
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	targetLayer := GlobalLookup.LookupAccount(accountAddrHash, head)
+	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
 	return targetLayer
 }

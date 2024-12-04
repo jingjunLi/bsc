@@ -103,6 +103,7 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Retrieve a reference to the base and commit a diff on top
 	ref := snaps.Snapshot(base.root)
 
@@ -147,6 +148,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Retrieve a reference to the base and commit two diffs on top
 	ref := snaps.Snapshot(base.root)
 
@@ -200,6 +202,7 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
+		lookup: newLookup(base),
 	}
 	// Commit three diffs on top and retrieve a reference to the bottommost
 	accounts := map[common.Hash][]byte{
@@ -263,9 +266,8 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
+		lookup: newLookup(base),
 	}
-	fmt.Println("Creating")
-	GlobalLookup = newLookup(base)
 	// The lowest difflayer
 	snaps.Update(common.HexToHash("0xa1"), common.HexToHash("0x01"), nil, setAccount("0xa1"), nil)
 	snaps.Update(common.HexToHash("0xa2"), common.HexToHash("0xa1"), nil, setAccount("0xa2"), nil)
@@ -307,7 +309,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	// Now, merge the a-chain
 	snaps.Cap(common.HexToHash("0xa3"), 0)
 
-	fmt.Println("after cap", "descendants", GlobalLookup.descendants)
+	fmt.Println("after cap", "descendants", snaps.lookup.descendants)
 	// At this point, a2 got merged into a1. Thus, a1 is now modified, and as a1 is
 	// the parent of b2, b2 should no longer be able to iterate into parent.
 
@@ -363,14 +365,14 @@ func TestSnaphots(t *testing.T) {
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
+		lookup: newLookup(base),
 	}
-	GlobalLookup = newLookup(base)
 	// Construct the snapshots with 129 layers, flattening whatever's above that
 	var (
 		last = common.HexToHash("0x01")
 		head common.Hash
 	)
-	for i := 0; i < 150; i++ {
+	for i := 0; i < 129; i++ {
 		head = makeRoot(uint64(i + 2))
 		snaps.Update(head, last, nil, setAccount(fmt.Sprintf("%d", i+2)), nil)
 		last = head
@@ -385,7 +387,7 @@ func TestSnaphots(t *testing.T) {
 
 		// fastpath
 		root := head
-		targetLayer := GlobalLookup.LookupAccount(accountAddrHash, root)
+		targetLayer := snaps.LookupAccount(accountAddrHash, root)
 		if targetLayer != nil {
 			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
 			if err != nil {
@@ -494,6 +496,7 @@ func TestReadStateDuringFlattening(t *testing.T) {
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
+		lookup: newLookup(base),
 	}
 	// 4 layers in total, 3 diff layers and 1 disk layers
 	snaps.Update(common.HexToHash("0xa1"), common.HexToHash("0x01"), nil, setAccount("0xa1"), nil)

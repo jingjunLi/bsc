@@ -221,6 +221,7 @@ func TestAccountIteratorTraversal(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil)
@@ -268,6 +269,7 @@ func TestStorageIteratorTraversal(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x02", "0x03"}}, nil))
@@ -318,6 +320,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Create a batch of account sets to seed subsequent layers with
 	var (
 		a = make(map[common.Hash][]byte)
@@ -412,6 +415,7 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	wrapStorage := func(storage map[common.Hash][]byte) map[common.Hash]map[common.Hash][]byte {
 		return map[common.Hash]map[common.Hash][]byte{
 			common.HexToHash("0xaa"): storage,
@@ -522,6 +526,7 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	for i := 1; i < 128; i++ {
 		snaps.Update(common.HexToHash(fmt.Sprintf("0x%02x", i+1)), common.HexToHash(fmt.Sprintf("0x%02x", i)), nil, makeAccounts(200), nil)
 	}
@@ -566,6 +571,7 @@ func TestAccountIteratorFlattening(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Create a stack of diffs on top
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil)
@@ -598,6 +604,7 @@ func TestAccountIteratorSeek(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil)
 
@@ -661,6 +668,7 @@ func TestStorageIteratorSeek(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x03", "0x05"}}, nil))
@@ -724,6 +732,7 @@ func TestAccountIteratorDeletions(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"),
 		nil, randomAccountSet("0x11", "0x22", "0x33"), nil)
@@ -770,6 +779,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x03", "0x05"}}, nil))
@@ -848,6 +858,7 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 			base.root: base,
 		},
 	}
+	snaps.lookup = newLookup(snaps.layers[base.root])
 	for i := 1; i <= 100; i++ {
 		snaps.Update(common.HexToHash(fmt.Sprintf("0x%02x", i+1)), common.HexToHash(fmt.Sprintf("0x%02x", i)), nil, makeAccounts(200), nil)
 	}
