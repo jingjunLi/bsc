@@ -2,7 +2,7 @@ package snapshot
 
 import (
 	"fmt"
-	"sort"
+	//"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
