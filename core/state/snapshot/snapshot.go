@@ -486,8 +486,8 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			}
 		}
 		rebloom(persisted.root)
+		t.base = persisted
 	}
-	t.base = persisted
 	log.Info("Snapshot capped", "root", root)
 	return nil
 }
