@@ -108,7 +108,9 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 			if err != nil {
 				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
 			}
-			if len(lookupData) == 0 { // can be both nil and []byte{}
+			if len(lookupData) == 0 {
+				// can be both nil and []byte{}
+				lookupAccount = nil
 				log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
 			}
 			if err == nil && len(lookupData) != 0 {
@@ -196,6 +198,10 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 		return common.Hash{}, err
 	}
 	if len(ret) == 0 {
+		if len(lookupData) != 0 {
+			storageDiffCounter++
+			log.Info("stateReader Storage not same real account", "real data", ret, "lookupData", lookupData)
+		}
 		return common.Hash{}, nil
 	}
 
