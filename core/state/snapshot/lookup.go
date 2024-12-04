@@ -90,7 +90,7 @@ func newLookup(head Snapshot) *Lookup {
 }
 
 func (l *Lookup) isDescendant(state common.Hash, ancestor common.Hash) bool {
-	log.Info("isDescendant", "descendants size", len(l.descendants), "descendants subset", l.descendants[ancestor], "ancestor", ancestor)
+	//log.Info("isDescendant", "descendants size", len(l.descendants), "descendants subset", l.descendants[ancestor], "ancestor", ancestor)
 	subset := l.descendants[ancestor]
 	if subset == nil {
 		return false
@@ -109,7 +109,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		lookupAddLayerTimer.UpdateSince(now)
 	}(time.Now())
 	layerIDCounter++
-	log.Info("Layer adding", "layer", diff.Root(), "layerID", layerIDCounter)
+	//log.Info("Layer adding", "layer", diff.Root(), "layerID", layerIDCounter)
 
 	for accountHash, _ := range diff.accountData {
 		l.state2LayerRoots[accountHash.String()] = append(l.state2LayerRoots[accountHash.String()], diff)
@@ -129,7 +129,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 		lookupRemoveLayerTimer.UpdateSince(now)
 	}(time.Now())
 	layerIDRemoveCounter++
-	log.Info("Layer removing", "layer", diff.Root(), "layerID", layerIDRemoveCounter)
+	//log.Info("Layer removing", "layer", diff.Root(), "layerID", layerIDRemoveCounter)
 
 	diffRoot := diff.Root()
 	for accountHash, _ := range diff.accountData {
@@ -214,7 +214,7 @@ func diffAncestors(layer Snapshot) map[common.Hash]struct{} {
 }
 
 func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
-	log.Info("addDescendant", "addDescendant", topDiffLayer.Root())
+	//log.Info("addDescendant", "addDescendant", topDiffLayer.Root())
 	//var (
 	//	root    = topDiffLayer.Root()
 	//	current = topDiffLayer
@@ -271,10 +271,10 @@ func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
 }
 
 func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
-	log.Info("lookupAccount", "acc", accountAddrHash, "head", head)
+	//log.Info("lookupAccount", "acc", accountAddrHash, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()]
 	if !exists {
-		log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
+		//log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
@@ -282,20 +282,20 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.
 	for i := len(list) - 1; i >= 0; i-- {
-		log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
+		//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
 		if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
 			return list[i]
 		}
 	}
-	log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list", list)
+	//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list", list)
 	return nil
 }
 
 func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) Snapshot {
-	log.Info("lookupStorage", "addr", accountAddrHash, "slot", slot, "head", head)
+	//log.Info("lookupStorage", "addr", accountAddrHash, "slot", slot, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()+slot.String()]
 	if !exists {
-		log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
+		//log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
@@ -306,6 +306,6 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 			return list[i]
 		}
 	}
-	log.Info("LookupStorage not isDescendant", "acc", accountAddrHash, "head", head, "list", list)
+	//log.Info("LookupStorage not isDescendant", "acc", accountAddrHash, "head", head, "list", list)
 	return nil
 }

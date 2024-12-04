@@ -312,7 +312,6 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
-
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
 	hit := dl.diffed.ContainsHash(accountBloomHash(hash))
@@ -332,9 +331,7 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		return origin.AccountRLP(hash)
 	}
 	// The bloom filter hit, start poking in the internal maps
-	data, err := dl.accountRLP(hash, 0)
-
-	return data, err
+	return dl.accountRLP(hash, 0)
 }
 
 // accountRLP is an internal version of AccountRLP that skips the bloom filter
@@ -388,7 +385,6 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
-
 	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
 	if !hit {
 		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
@@ -406,9 +402,7 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		return origin.Storage(accountHash, storageHash)
 	}
 	// The bloom filter hit, start poking in the internal maps
-	data, err := dl.storage(accountHash, storageHash, 0)
-
-	return data, err
+	return dl.storage(accountHash, storageHash, 0)
 }
 
 // storage is an internal version of Storage that skips the bloom filter checks
@@ -482,7 +476,7 @@ func (dl *diffLayer) flatten() snapshot {
 	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
-	log.Info("Layer flattening stale", "layer", parent.Root(), "destructs", len(dl.destructSet))
+	//log.Info("Layer flattening stale", "layer", parent.Root(), "destructs", len(dl.destructSet))
 	// Overwrite all the updated accounts blindly, merge the sorted list
 	for hash := range dl.destructSet {
 		parent.destructSet[hash] = struct{}{}

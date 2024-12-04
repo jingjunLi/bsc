@@ -233,6 +233,9 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 
 	// Existing snapshot loaded, seed all the layers
 	for head != nil {
+		if layer, ok := head.(*diskLayer); ok {
+			snap.base = layer // panic if it's a diff layer
+		}
 		snap.layers[head.Root()] = head
 		head = head.Parent()
 	}
@@ -791,6 +794,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 			layer.stopGeneration()
 			layer.markStale()
 			layer.Release()
+			t.base = layer
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
