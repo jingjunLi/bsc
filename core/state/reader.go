@@ -95,11 +95,11 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
 	lookupAccount := new(types.SlimAccount)
 
-	log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
+	//log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
 	{
 		// fastpath
 		root := r.root
-		log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
+		//log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
 		targetLayer := r.db.snap.LookupAccount(accountAddrHash, root)
 		if targetLayer != nil {
 			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
@@ -114,7 +114,7 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 					panic(err)
 				}
 			} else {
-				log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
+				//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 			}
 			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 		}

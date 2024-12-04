@@ -484,6 +484,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 		rebloom(persisted.root)
 	}
+	t.base = persisted
 	log.Info("Snapshot capped", "root", root)
 	return nil
 }
@@ -949,6 +950,9 @@ func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) S
 	defer tree.lock.RUnlock()
 
 	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
+	if targetLayer == nil {
+		return tree.base
+	}
 	return targetLayer
 }
 
@@ -957,5 +961,8 @@ func (tree *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, h
 	defer tree.lock.RUnlock()
 
 	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
+	if targetLayer == nil {
+		return tree.base
+	}
 	return targetLayer
 }
