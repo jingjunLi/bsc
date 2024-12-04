@@ -46,6 +46,7 @@ func newLookup(head Snapshot) *Lookup {
 			current = current.Parent()
 		}
 		l.state2LayerRoots = make(map[string][]Snapshot)
+		l.destructSetLayerRoots = make(map[string][]Snapshot)
 
 		// Apply the layers from bottom to top
 		for i := len(layers) - 1; i >= 0; i-- {
