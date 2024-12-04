@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -98,13 +99,17 @@ func (l *Lookup) isDescendant(state common.Hash, ancestor common.Hash) bool {
 	return ok
 }
 
+var layerIDCounter int
+var layerIDRemoveCounter int
+
 // addLayer traverses all the dirty state within the given diff layer and links
 // them into the lookup set.
 func (l *Lookup) addLayer(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupAddLayerTimer.UpdateSince(now)
 	}(time.Now())
-	log.Info("Layer adding", "layer", diff, "destructs", len(diff.destructSet), "accounts", len(diff.accountData), "storage", len(diff.storageData))
+	layerIDCounter++
+	log.Info("Layer adding", "layer", diff.Root(), "layerID", layerIDCounter)
 
 	for accountHash, _ := range diff.accountData {
 		l.state2LayerRoots[accountHash.String()] = append(l.state2LayerRoots[accountHash.String()], diff)
@@ -123,7 +128,8 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	defer func(now time.Time) {
 		lookupRemoveLayerTimer.UpdateSince(now)
 	}(time.Now())
-	log.Info("Layer removing", "layer", diff.Root())
+	layerIDRemoveCounter++
+	log.Info("Layer removing", "layer", diff.Root(), "layerID", layerIDRemoveCounter)
 
 	diffRoot := diff.Root()
 	for accountHash, _ := range diff.accountData {
@@ -239,6 +245,24 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 		}
 		subset[topDiffLayer.Root()] = struct{}{}
 	}
+
+	//// Collect and sort the keys
+	//var keys []common.Hash
+	//for h := range l.descendants {
+	//	keys = append(keys, h)
+	//}
+	//sort.Slice(keys, func(i, j int) bool {
+	//	return keys[i].Big().Cmp(keys[j].Big()) < 0
+	//})
+	//
+	//log.Info("--------- descendants -------", "keys size", len(keys))
+	//
+	//// Iterate over the sorted keys
+	//for _, h := range keys {
+	//	subset := l.descendants[h]
+	//	log.Info("descendants", "ancestor", h, "subset size", len(subset), "subset", subset)
+	//}
+	//println("\n")
 }
 
 func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {

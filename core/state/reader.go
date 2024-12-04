@@ -60,6 +60,7 @@ type stateReader struct {
 	db   *CachingDB
 	snap snapshot.Snapshot
 	buff crypto.KeccakState
+	root common.Hash
 }
 
 // newStateReader constructs a flat state reader with on the specified state root.
@@ -72,6 +73,7 @@ func newStateReader(root common.Hash, snaps *snapshot.Tree, db *CachingDB) (*sta
 		snap: snap,
 		buff: crypto.NewKeccakState(),
 		db:   db,
+		root: root,
 	}, nil
 }
 
@@ -88,12 +90,11 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	lookupAccount := new(types.SlimAccount)
 
 	log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
-	// var lookupDone bool
 	{
 		// fastpath
-		root := r.snap.Root()
+		root := r.root
+		log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
 		targetLayer := r.db.snap.LookupAccount(accountAddrHash, root)
-		//targetLayer := snapshot.GlobalLookup.LookupAccount()
 		if targetLayer != nil {
 			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
 			if err != nil {
@@ -106,7 +107,6 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
 					panic(err)
 				}
-				// lookupDone = true
 			} else {
 				log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 			}
@@ -154,11 +154,9 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 
 	var lookupData []byte
 	var err error
-	// var lookupDone bool
 	// log.Info("stateReader Storage 11", "addr", addr, "key", key, "addrHash", addrHash, "slotHash", slotHash)
 	{
 		// fastpath
-		//targetLayer := snapshot.GlobalLookup.LookupStorage(addrHash, slotHash, r.snap.Root())
 		targetLayer := r.db.snap.LookupStorage(addrHash, slotHash, r.snap.Root())
 		if targetLayer != nil {
 			lookupData, err = targetLayer.Storage(addrHash, slotHash)
