@@ -94,7 +94,7 @@ var storageDiffCounter int
 func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) {
 	var err error
 	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
-	lookupAccount := new(types.SlimAccount)
+	var lookupAccount *types.SlimAccount = nil
 
 	//log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
 	{
