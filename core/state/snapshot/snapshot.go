@@ -455,7 +455,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			return
 		}
 		//diff.markStale()
-		log.Info("Layer clearing descendant 11", "layer", diff.Root(), "destructs", len(diff.destructSet))
+		//log.Info("Layer clearing descendant 11", "layer", diff.Root(), "destructs", len(diff.destructSet))
 		t.lookup.removeDescendant(snap)
 		t.lookup.removeLayer(diff)
 	}

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
@@ -28,8 +27,9 @@ func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 // Lookup is an internal help structure to quickly identify
 type Lookup struct {
 	// todo: add lock?? or in layer tree lock??
-	state2LayerRoots map[string][]Snapshot // think more about it
-	descendants      map[common.Hash]map[common.Hash]struct{}
+	state2LayerRoots      map[string][]Snapshot // think more about it
+	destructSetLayerRoots map[string][]Snapshot
+	descendants           map[common.Hash]map[common.Hash]struct{}
 }
 
 // newLookup initializes the lookup structure.
@@ -115,6 +115,10 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		l.state2LayerRoots[accountHash.String()] = append(l.state2LayerRoots[accountHash.String()], diff)
 	}
 
+	for accountHash, _ := range diff.destructSet {
+		l.destructSetLayerRoots[accountHash.String()] = append(l.destructSetLayerRoots[accountHash.String()], diff)
+	}
+
 	for accountHash, slots := range diff.storageData {
 		for storageHash := range slots {
 			l.state2LayerRoots[accountHash.String()+storageHash.String()] = append(l.state2LayerRoots[accountHash.String()+storageHash.String()], diff)
@@ -158,6 +162,35 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			delete(l.state2LayerRoots, stateKey)
 		} else {
 			l.state2LayerRoots[stateKey] = subset
+		}
+	}
+
+	for accountHash, _ := range diff.destructSet {
+		stateKey := accountHash.String()
+
+		subset := l.destructSetLayerRoots[stateKey]
+		if subset == nil {
+			return fmt.Errorf("unknown account addr hash %s", stateKey)
+		}
+		var found bool
+		for j := 0; j < len(subset); j++ {
+			if subset[j].Root() == diffRoot {
+				if j == 0 {
+					subset = subset[1:] // TODO what if the underlying slice is held forever?
+				} else {
+					subset = append(subset[:j], subset[j+1:]...)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("failed to delete lookup %s", stateKey)
+		}
+		if len(subset) == 0 {
+			delete(l.destructSetLayerRoots, stateKey)
+		} else {
+			l.destructSetLayerRoots[stateKey] = subset
 		}
 	}
 
@@ -266,44 +299,105 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 }
 
 func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
-	log.Info("removeDescendant", "addDescendant", bottomDiffLayer.Root())
+	//log.Info("removeDescendant", "addDescendant", bottomDiffLayer.Root())
 	delete(l.descendants, bottomDiffLayer.Root())
 }
 
 func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
 	//log.Info("lookupAccount", "acc", accountAddrHash, "head", head)
-	list, exists := l.state2LayerRoots[accountAddrHash.String()]
-	if !exists {
-		//log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
-		return nil
-	}
+	var stateSnap Snapshot = nil
+	var destruct Snapshot = nil
+	list, stateExists := l.state2LayerRoots[accountAddrHash.String()]
+
+	destructSetList, destructSetExists := l.destructSetLayerRoots[accountAddrHash.String()]
 
 	//log.Info("lookupAccount", "acc", accountAddrHash, "head", head, "snapshot", list)
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.
-	for i := len(list) - 1; i >= 0; i-- {
-		//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
-		if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
-			return list[i]
+	if stateExists {
+		for i := len(list) - 1; i >= 0; i-- {
+			//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
+			if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
+				stateSnap = list[i]
+				break
+				//return list[i]
+			}
 		}
 	}
+
+	if destructSetExists {
+		for i := len(destructSetList) - 1; i >= 0; i-- {
+			//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
+			if destructSetList[i].Root() == head || l.isDescendant(head, destructSetList[i].Root()) {
+				destruct = destructSetList[i]
+				break
+				//return destructSetList[i]
+			}
+		}
+	}
+
+	if stateSnap == nil && destruct == nil {
+		return nil
+	} else if stateSnap != nil && destruct == nil {
+		return stateSnap
+	} else if stateSnap == nil && destruct != nil {
+		return destruct
+	} else {
+		if l.isDescendant(destruct.Root(), stateSnap.Root()) {
+			return destruct
+		} else {
+			return stateSnap
+		}
+	}
+
 	//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list", list)
 	return nil
 }
 
 func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) Snapshot {
+	var stateSnap Snapshot = nil
+	var destruct Snapshot = nil
+
 	//log.Info("lookupStorage", "addr", accountAddrHash, "slot", slot, "head", head)
 	list, exists := l.state2LayerRoots[accountAddrHash.String()+slot.String()]
-	if !exists {
-		//log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
-		return nil
-	}
 
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.
-	for i := len(list) - 1; i >= 0; i-- {
-		if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
-			return list[i]
+	if exists {
+		for i := len(list) - 1; i >= 0; i-- {
+			//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
+			if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
+				stateSnap = list[i]
+				break
+				//return list[i]
+			}
+		}
+	}
+
+	destructSetList, destructSetExists := l.destructSetLayerRoots[accountAddrHash.String()]
+
+	if destructSetExists {
+		for i := len(destructSetList) - 1; i >= 0; i-- {
+			//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)
+			if destructSetList[i].Root() == head || l.isDescendant(head, destructSetList[i].Root()) {
+				destruct = destructSetList[i]
+				break
+				//return destructSetList[i]
+			}
+		}
+	}
+
+	if stateSnap == nil && destruct == nil {
+		return nil
+	} else if stateSnap != nil && destruct == nil {
+		return stateSnap
+	} else if stateSnap == nil && destruct != nil {
+		return destruct
+	} else {
+		if l.isDescendant(destruct.Root(), stateSnap.Root()) {
+			return destruct
+		} else {
+			return stateSnap
 		}
 	}
 	//log.Info("LookupStorage not isDescendant", "acc", accountAddrHash, "head", head, "list", list)

@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+var printInternal = 5000
+
 // Reader defines the interface for accessing accounts and storage slots
 // associated with a specific state.
 type Reader interface {
@@ -90,6 +92,7 @@ var storageDiffCounter int
 //
 // The returned account might be nil if it's not existent.
 func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) {
+	var lookupData []byte
 	var err error
 	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
 	lookupAccount := new(types.SlimAccount)
@@ -101,9 +104,17 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		//log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
 		targetLayer := r.db.snap.LookupAccount(accountAddrHash, root)
 		if targetLayer != nil {
-			lookupAccount, err = targetLayer.Account(accountAddrHash)
+			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
 			if err != nil {
 				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
+			}
+			if len(lookupData) == 0 { // can be both nil and []byte{}
+				log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
+			}
+			if err == nil && len(lookupData) != 0 {
+				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
+					panic(err)
+				}
 			}
 			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
 		}
@@ -113,6 +124,10 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		return nil, err
 	}
 	if ret == nil {
+		if lookupAccount != nil {
+			accountDiffCounter++
+			log.Info("stateReader Account not same real account", "real data", ret, "lookupData", lookupAccount)
+		}
 		return nil, nil
 	}
 	acct := &types.StateAccount{
@@ -136,7 +151,7 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		accountSameCounter++
 	}
 
-	if (accountDiffCounter+accountSameCounter)%1000 == 0 {
+	if (accountDiffCounter+accountSameCounter)%printInternal == 0 {
 		log.Info("stateReader Account", "accountSameCounter", accountSameCounter, "accountDiffCounter", accountDiffCounter)
 	}
 
@@ -169,7 +184,6 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 				//log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
 			}
 			if err == nil && len(lookupData) != 0 {
-			} else {
 				//log.Info("GlobalLookup.lookupStorage", "addrHash", addrHash, "slotHash", slotHash, "res", lookupData)
 			}
 			//return targetLayer.Storage(accountHash, storageHash)
@@ -191,7 +205,7 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	} else {
 		storageSameCounter++
 	}
-	if (storageDiffCounter+storageSameCounter)%1000 == 0 {
+	if (storageDiffCounter+storageSameCounter)%printInternal == 0 {
 		log.Info("stateReader Storage", "storageSameCounter", storageSameCounter, "storageDiffCounter", storageDiffCounter)
 	}
 
