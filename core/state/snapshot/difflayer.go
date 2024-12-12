@@ -282,6 +282,78 @@ func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 	return account, nil
 }
 
+// Account directly retrieves the account associated with a particular hash in
+// the snapshot slim data format.
+func (dl *diffLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error) {
+	data, err := dl.AccountRLP(hash)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 { // can be both nil and []byte{}
+		return nil, nil
+	}
+	account := new(types.SlimAccount)
+	if err := rlp.DecodeBytes(data, account); err != nil {
+		panic(err)
+	}
+	return account, nil
+}
+
+// CurrentLayerAccountRLP directly retrieves the account RLP associated with a particular
+// hash in the snapshot slim data format.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diffLayer) CurrentLayerAccountRLP(hash common.Hash) ([]byte, error) {
+	// Check staleness before reaching further.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.Stale() {
+		return nil, ErrSnapshotStale
+	}
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	//hit := dl.diffed.ContainsHash(accountBloomHash(hash))
+	//if !hit {
+	//	hit = dl.diffed.ContainsHash(destructBloomHash(hash))
+	//}
+	//var origin *diskLayer
+	//if !hit {
+	//	origin = dl.origin // extract origin while holding the lock
+	//}
+
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	//if origin != nil {
+	//	snapshotBloomAccountMissMeter.Mark(1)
+	//	return origin.AccountRLP(hash)
+	//}
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.Stale() {
+		return nil, ErrSnapshotStale
+	}
+	// If the account is known locally, return it
+	if data, ok := dl.accountData[hash]; ok {
+		snapshotDirtyAccountHitMeter.Mark(1)
+		snapshotDirtyAccountReadMeter.Mark(int64(len(data)))
+		snapshotBloomAccountTrueHitMeter.Mark(1)
+		return data, nil
+	}
+	// If the account is known locally, but deleted, return it
+	if _, ok := dl.destructSet[hash]; ok {
+		snapshotDirtyAccountHitMeter.Mark(1)
+		snapshotDirtyAccountInexMeter.Mark(1)
+		snapshotBloomAccountTrueHitMeter.Mark(1)
+		return nil, nil
+	}
+
+	return nil, nil
+	// The bloom filter hit, start poking in the internal maps
+	//return dl.accountRLP(hash, 0)
+}
+
 // Accounts directly retrieves all accounts in current snapshot in
 // the snapshot slim data format.
 func (dl *diffLayer) Accounts() (map[common.Hash]*types.SlimAccount, error) {
@@ -368,6 +440,53 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 	// Failed to resolve through diff layers, mark a bloom error and use the disk
 	snapshotBloomAccountFalseHitMeter.Mark(1)
 	return dl.parent.AccountRLP(hash)
+}
+
+// CurrentLayerStorage directly retrieves the storage data associated with a particular hash,
+// within a particular account. If the slot is unknown to this diff, it's parent
+// is consulted.
+//
+// Note the returned slot is not a copy, please don't modify it.
+func (dl *diffLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+	// Check staleness before reaching further.
+	if dl.Stale() {
+		return nil, ErrSnapshotStale
+	}
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.Stale() {
+		return nil, ErrSnapshotStale
+	}
+	// If the account is known locally, try to resolve the slot locally
+	if storage, ok := dl.storageData[accountHash]; ok {
+		if data, ok := storage[storageHash]; ok {
+			snapshotDirtyStorageHitMeter.Mark(1)
+			//snapshotDirtyStorageHitDepthHist.Update(int64(depth))
+			if n := len(data); n > 0 {
+				snapshotDirtyStorageReadMeter.Mark(int64(n))
+			} else {
+				snapshotDirtyStorageInexMeter.Mark(1)
+			}
+			snapshotBloomStorageTrueHitMeter.Mark(1)
+			return data, nil
+		}
+	}
+	// If the account is known locally, but deleted, return an empty slot
+	if _, ok := dl.destructSet[accountHash]; ok {
+		snapshotDirtyStorageHitMeter.Mark(1)
+		//snapshotDirtyStorageHitDepthHist.Update(int64(depth))
+		snapshotDirtyStorageInexMeter.Mark(1)
+		snapshotBloomStorageTrueHitMeter.Mark(1)
+		return nil, nil
+	}
+
+	return nil, nil
+	//return dl.storage(accountHash, storageHash, 0)
 }
 
 // Storage directly retrieves the storage data associated with a particular hash,

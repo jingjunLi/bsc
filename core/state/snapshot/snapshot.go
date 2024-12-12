@@ -104,6 +104,10 @@ type Snapshot interface {
 	// the snapshot slim data format.
 	Account(hash common.Hash) (*types.SlimAccount, error)
 
+	// Account directly retrieves the account associated with a particular hash in
+	// the snapshot slim data format.
+	CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error)
+
 	// Accounts directly retrieves all accounts in current snapshot in
 	// the snapshot slim data format.
 	Accounts() (map[common.Hash]*types.SlimAccount, error)
@@ -115,6 +119,10 @@ type Snapshot interface {
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account.
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
+
+	// Storage directly retrieves the storage data associated with a particular hash,
+	// within a particular account.
+	CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error)
 
 	// Parent returns the subsequent layer of a snapshot, or nil if the base was
 	// reached.

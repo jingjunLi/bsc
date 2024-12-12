@@ -375,7 +375,6 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 	}
 
 	destructSetList, destructSetExists := l.destructSetLayerRoots[accountAddrHash.String()]
-
 	if destructSetExists {
 		for i := len(destructSetList) - 1; i >= 0; i-- {
 			//log.Info("lookupAccount not isDescendant", "acc", accountAddrHash, "head", head, "list [i]", i, "root", list[i].Root(), "head", head)

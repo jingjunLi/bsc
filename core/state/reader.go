@@ -103,7 +103,7 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 		//log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
 		targetLayer := r.db.snap.LookupAccount(accountAddrHash, root)
 		if targetLayer != nil {
-			lookupAccount, err = targetLayer.Account(accountAddrHash)
+			lookupAccount, err = targetLayer.CurrentLayerAccount(accountAddrHash)
 			if err != nil {
 				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
 			}
@@ -167,7 +167,7 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 		// fastpath
 		targetLayer := r.db.snap.LookupStorage(addrHash, slotHash, r.snap.Root())
 		if targetLayer != nil {
-			lookupData, err = targetLayer.Storage(addrHash, slotHash)
+			lookupData, err = targetLayer.CurrentLayerStorage(addrHash, slotHash)
 			if err != nil {
 				log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
 			}
