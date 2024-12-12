@@ -110,7 +110,6 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		lookupAddLayerTimer.UpdateSince(now)
 	}(time.Now())
 	layerIDCounter++
-	//log.Info("Layer adding", "layer", diff.Root(), "layerID", layerIDCounter)
 
 	for accountHash, _ := range diff.accountData {
 		l.state2LayerRoots[accountHash.String()] = append(l.state2LayerRoots[accountHash.String()], diff)
