@@ -965,7 +965,7 @@ func (tree *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, h
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
+	targetLayer := tree.lookup.LookupStorage(accountAddrHash, slot, head)
 	if targetLayer == nil {
 		return tree.base
 	}
