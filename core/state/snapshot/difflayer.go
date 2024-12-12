@@ -282,10 +282,10 @@ func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 	return account, nil
 }
 
-// Account directly retrieves the account associated with a particular hash in
+// CurrentLayerAccount directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
 func (dl *diffLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error) {
-	data, err := dl.AccountRLP(hash)
+	data, err := dl.CurrentLayerAccountRLP(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -311,23 +311,6 @@ func (dl *diffLayer) CurrentLayerAccountRLP(hash common.Hash) ([]byte, error) {
 	if dl.Stale() {
 		return nil, ErrSnapshotStale
 	}
-	// Check the bloom filter first whether there's even a point in reaching into
-	// all the maps in all the layers below
-	//hit := dl.diffed.ContainsHash(accountBloomHash(hash))
-	//if !hit {
-	//	hit = dl.diffed.ContainsHash(destructBloomHash(hash))
-	//}
-	//var origin *diskLayer
-	//if !hit {
-	//	origin = dl.origin // extract origin while holding the lock
-	//}
-
-	// If the bloom filter misses, don't even bother with traversing the memory
-	// diff layers, reach straight into the bottom persistent disk layer
-	//if origin != nil {
-	//	snapshotBloomAccountMissMeter.Mark(1)
-	//	return origin.AccountRLP(hash)
-	//}
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
@@ -350,8 +333,6 @@ func (dl *diffLayer) CurrentLayerAccountRLP(hash common.Hash) ([]byte, error) {
 	}
 
 	return nil, nil
-	// The bloom filter hit, start poking in the internal maps
-	//return dl.accountRLP(hash, 0)
 }
 
 // Accounts directly retrieves all accounts in current snapshot in
@@ -486,7 +467,6 @@ func (dl *diffLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) (
 	}
 
 	return nil, nil
-	//return dl.storage(accountHash, storageHash, 0)
 }
 
 // Storage directly retrieves the storage data associated with a particular hash,

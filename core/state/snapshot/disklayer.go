@@ -105,7 +105,7 @@ func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 	return account, nil
 }
 
-// Account directly retrieves the account associated with a particular hash in
+// CurrentLayerAccount directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
 func (dl *diskLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error) {
 	data, err := dl.AccountRLP(hash)
@@ -200,7 +200,7 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	return blob, nil
 }
 
-// Storage directly retrieves the storage data associated with a particular hash,
+// CurrentLayerStorage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
 func (dl *diskLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
