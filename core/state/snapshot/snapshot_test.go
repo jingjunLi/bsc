@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/fortytw2/leaktest"
 	"math/rand"
 	"os"
 	"testing"
@@ -345,6 +346,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 func TestSnaphots(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	//fmt.Println(t.dump(false))
+	defer leaktest.Check(t)()
 
 	// setAccount is a helper to construct a random account entry and assign it to
 	// an account slot in a snapshot
@@ -382,35 +384,35 @@ func TestSnaphots(t *testing.T) {
 		snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 	}
 
-	{
-		var lookupData []byte
-		var err error
-		accountAddrHash := common.HexToHash("50")
-		lookupAccount := new(types.SlimAccount)
-
-		// fastpath
-		root := head
-		targetLayer := snaps.LookupAccount(accountAddrHash, root)
-		if targetLayer != nil {
-			lookupData, err = targetLayer.AccountRLP(accountAddrHash)
-			if err != nil {
-				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
-			}
-			if len(lookupData) == 0 { // can be both nil and []byte{}
-				log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
-			}
-			if err == nil && len(lookupData) != 0 {
-				if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
-					panic(err)
-				}
-				// lookupDone = true
-			} else {
-				log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
-			}
-
-			log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
-		}
-	}
+	//{
+	//	var lookupData []byte
+	//	var err error
+	//	accountAddrHash := common.HexToHash("50")
+	//	lookupAccount := new(types.SlimAccount)
+	//
+	//	// fastpath
+	//	root := head
+	//	targetLayer := snaps.LookupAccount(accountAddrHash, root)
+	//	if targetLayer != nil {
+	//		lookupData, err = targetLayer.AccountRLP(accountAddrHash)
+	//		if err != nil {
+	//			log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
+	//		}
+	//		if len(lookupData) == 0 { // can be both nil and []byte{}
+	//			log.Info("GlobalLookup.lookupAccount data nil", "hash", accountAddrHash, "root", root)
+	//		}
+	//		if err == nil && len(lookupData) != 0 {
+	//			if err := rlp.DecodeBytes(lookupData, lookupAccount); err != nil {
+	//				panic(err)
+	//			}
+	//			// lookupDone = true
+	//		} else {
+	//			log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
+	//		}
+	//
+	//		log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
+	//	}
+	//}
 
 	var cases = []struct {
 		headRoot     common.Hash
@@ -482,6 +484,8 @@ func TestSnaphots(t *testing.T) {
 // right state back(block until the flattening is finished) instead of
 // an unexpected error(snapshot layer is stale).
 func TestReadStateDuringFlattening(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	// setAccount is a helper to construct a random account entry and assign it to
 	// an account slot in a snapshot
 	setAccount := func(accKey string) map[common.Hash][]byte {

@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"sync"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,8 +36,9 @@ type diskLayer struct {
 	triedb *triedb.Database    // Trie node cache for reconstruction purposes
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
-	root  common.Hash // Root hash of the base snapshot
-	stale bool        // Signals that the layer became stale (state progressed)
+	root      common.Hash // Root hash of the base snapshot
+	stale     bool        // Signals that the layer became stale (state progressed)
+	canLookUp bool        //
 
 	genMarker  []byte                    // Marker for the state that's indexed during initial layer generation
 	genPending chan struct{}             // Notification channel when generation is done (test synchronicity)
@@ -74,6 +76,13 @@ func (dl *diskLayer) Stale() bool {
 	return dl.stale
 }
 
+func (dl *diskLayer) CanLookUp() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.canLookUp
+}
+
 // Accounts directly retrieves all accounts in current snapshot in
 // the snapshot slim data format.
 func (dl *diskLayer) Accounts() (map[common.Hash]*types.SlimAccount, error) {
@@ -108,6 +117,12 @@ func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 // CurrentLayerAccount directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
 func (dl *diskLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerAccountTimer.Update(ptime)
+		snapshotDiskLayerAccountMeter.Mark(1)
+	}()
 	data, err := dl.AccountRLP(hash)
 	if err != nil {
 		return nil, err
@@ -125,12 +140,19 @@ func (dl *diskLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, 
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
 func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerAccountTimer.Update(ptime)
+		snapshotDiskLayerAccountMeter.Mark(1)
+	}()
+
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.stale && !dl.canLookUp {
 		return nil, ErrSnapshotStale
 	}
 	// If the layer is being generated, ensure the requested hash has already been
@@ -163,12 +185,19 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
 func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerStorageTimer.Update(ptime)
+		snapshotDiskLayerStorageMeter.Mark(1)
+	}()
+
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.stale && !dl.canLookUp {
 		return nil, ErrSnapshotStale
 	}
 	key := append(accountHash[:], storageHash[:]...)
@@ -203,6 +232,12 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 // CurrentLayerStorage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
 func (dl *diskLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerStorageTimer.Update(ptime)
+		snapshotDiskLayerStorageMeter.Mark(1)
+	}()
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
