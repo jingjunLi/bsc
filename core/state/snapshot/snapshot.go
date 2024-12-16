@@ -448,7 +448,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		return nil
 	}
 	persisted := t.cap(diff, layers)
-	log.Info("cap after", "persisted", persisted)
+	//log.Info("cap after", "persisted", persisted)
 
 	// Remove any layer that is stale or links into a stale layer
 	children := make(map[common.Hash][]common.Hash)
@@ -497,7 +497,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		rebloom(persisted.root)
 		t.base = persisted
 	}
-	log.Info("Snapshot capped", "root", root, "base", t.base)
+	//log.Info("Snapshot capped", "root", root, "base", t.base)
 	return nil
 }
 
@@ -584,7 +584,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 	bottom.lock.RLock()
 	base := diffToDisk(bottom)
-	log.Info("diffToDisk", "base", base)
+	//log.Info("diffToDisk", "base", base)
 	bottom.lock.RUnlock()
 
 	t.layers[base.root] = base
