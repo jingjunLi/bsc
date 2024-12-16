@@ -966,7 +966,7 @@ func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) S
 	defer tree.lock.RUnlock()
 
 	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
-	log.Info("targetLayer LookupAccount ", "targetLayer", targetLayer)
+	//log.Info("targetLayer LookupAccount ", "targetLayer", targetLayer)
 	if targetLayer == nil {
 		return tree.base
 	}
