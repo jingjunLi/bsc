@@ -448,6 +448,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		return nil
 	}
 	persisted := t.cap(diff, layers)
+	log.Info("cap after", "persisted", persisted)
 
 	// Remove any layer that is stale or links into a stale layer
 	children := make(map[common.Hash][]common.Hash)
@@ -463,7 +464,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			return
 		}
 		//diff.markStale()
-		//log.Info("Layer clearing descendant 11", "layer", diff.Root(), "destructs", len(diff.destructSet))
+		log.Info("Layer clearing descendant 11", "layer", diff.Root(), "destructs", len(diff.destructSet))
 		t.lookup.removeDescendant(snap)
 		t.lookup.removeLayer(diff)
 	}
@@ -496,7 +497,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		rebloom(persisted.root)
 		t.base = persisted
 	}
-	log.Info("Snapshot capped", "root", root)
+	log.Info("Snapshot capped", "root", root, "base", t.base)
 	return nil
 }
 
@@ -532,29 +533,30 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		// Hold the write lock until the flattened parent is linked correctly.
 		// Otherwise, the stale layer may be accessed by external reads in the
 		// meantime.
-		diff.lock.Lock()
-		defer diff.lock.Unlock()
-
-		// Flatten the parent into the grandparent. The flattening internally obtains a
-		// write lock on grandparent.
-		flattened := parent.flatten().(*diffLayer)
-		t.layers[flattened.root] = flattened
-		// TODO:
-
-		// Invoke the hook if it's registered. Ugly hack.
-		if t.onFlatten != nil {
-			t.onFlatten()
-		}
-		diff.parent = flattened
-		if flattened.memory < aggregatorMemoryLimit {
-			// Accumulator layer is smaller than the limit, so we can abort, unless
-			// there's a snapshot being generated currently. In that case, the trie
-			// will move from underneath the generator so we **must** merge all the
-			// partial data down into the snapshot and restart the generation.
-			if flattened.parent.(*diskLayer).genAbort == nil {
-				return nil
-			}
-		}
+		//diff.lock.Lock()
+		//defer diff.lock.Unlock()
+		//
+		//// Flatten the parent into the grandparent. The flattening internally obtains a
+		//// write lock on grandparent.
+		//flattened := parent.flatten().(*diffLayer)
+		//t.layers[flattened.root] = flattened
+		//log.Info("diffLayer flattened", "flattened.root", flattened.root, "flattened", flattened)
+		//// TODO:
+		//
+		//// Invoke the hook if it's registered. Ugly hack.
+		//if t.onFlatten != nil {
+		//	t.onFlatten()
+		//}
+		//diff.parent = flattened
+		//if flattened.memory < aggregatorMemoryLimit {
+		//	// Accumulator layer is smaller than the limit, so we can abort, unless
+		//	// there's a snapshot being generated currently. In that case, the trie
+		//	// will move from underneath the generator so we **must** merge all the
+		//	// partial data down into the snapshot and restart the generation.
+		//	if flattened.parent.(*diskLayer).genAbort == nil {
+		//		return nil
+		//	}
+		//}
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
@@ -582,6 +584,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 	bottom.lock.RLock()
 	base := diffToDisk(bottom)
+	log.Info("diffToDisk", "base", base)
 	bottom.lock.RUnlock()
 
 	t.layers[base.root] = base
@@ -963,6 +966,7 @@ func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) S
 	defer tree.lock.RUnlock()
 
 	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
+	log.Info("targetLayer LookupAccount ", "targetLayer", targetLayer)
 	if targetLayer == nil {
 		return tree.base
 	}
