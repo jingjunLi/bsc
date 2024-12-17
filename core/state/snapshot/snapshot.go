@@ -540,7 +540,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		// write lock on grandparent.
 		flattened := parent.flatten().(*diffLayer)
 		t.layers[flattened.root] = flattened
-		log.Info("diffLayer flattened", "flattened.root", flattened.root, "flattened", flattened)
+		log.Info("diffLayer flattened", "flattened.root", flattened.root)
 		// TODO:
 		t.lookup.addLayer(flattened)
 
