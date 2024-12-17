@@ -533,30 +533,31 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		// Hold the write lock until the flattened parent is linked correctly.
 		// Otherwise, the stale layer may be accessed by external reads in the
 		// meantime.
-		//diff.lock.Lock()
-		//defer diff.lock.Unlock()
-		//
-		//// Flatten the parent into the grandparent. The flattening internally obtains a
-		//// write lock on grandparent.
-		//flattened := parent.flatten().(*diffLayer)
-		//t.layers[flattened.root] = flattened
-		//log.Info("diffLayer flattened", "flattened.root", flattened.root, "flattened", flattened)
-		//// TODO:
-		//
-		//// Invoke the hook if it's registered. Ugly hack.
-		//if t.onFlatten != nil {
-		//	t.onFlatten()
-		//}
-		//diff.parent = flattened
-		//if flattened.memory < aggregatorMemoryLimit {
-		//	// Accumulator layer is smaller than the limit, so we can abort, unless
-		//	// there's a snapshot being generated currently. In that case, the trie
-		//	// will move from underneath the generator so we **must** merge all the
-		//	// partial data down into the snapshot and restart the generation.
-		//	if flattened.parent.(*diskLayer).genAbort == nil {
-		//		return nil
-		//	}
-		//}
+		diff.lock.Lock()
+		defer diff.lock.Unlock()
+
+		// Flatten the parent into the grandparent. The flattening internally obtains a
+		// write lock on grandparent.
+		flattened := parent.flatten().(*diffLayer)
+		t.layers[flattened.root] = flattened
+		log.Info("diffLayer flattened", "flattened.root", flattened.root, "flattened", flattened)
+		// TODO:
+		t.lookup.addLayer(flattened)
+
+		// Invoke the hook if it's registered. Ugly hack.
+		if t.onFlatten != nil {
+			t.onFlatten()
+		}
+		diff.parent = flattened
+		if flattened.memory < aggregatorMemoryLimit {
+			// Accumulator layer is smaller than the limit, so we can abort, unless
+			// there's a snapshot being generated currently. In that case, the trie
+			// will move from underneath the generator so we **must** merge all the
+			// partial data down into the snapshot and restart the generation.
+			if flattened.parent.(*diskLayer).genAbort == nil {
+				return nil
+			}
+		}
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
