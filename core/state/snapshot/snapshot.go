@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -65,8 +66,9 @@ var (
 	snapshotFlushStorageItemMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/item", nil)
 	snapshotFlushStorageSizeMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/size", nil)
 
-	snapshotBloomIndexTimer = metrics.NewRegisteredResettingTimer("state/snapshot/bloom/index", nil)
-	snapshotBloomErrorGauge = metrics.NewRegisteredGaugeFloat64("state/snapshot/bloom/error", nil)
+	snapshotBloomAllDiffIndexTimer = metrics.NewRegisteredResettingTimer("state/snapshot/bloom/allDiff", nil)
+	snapshotBloomIndexTimer        = metrics.NewRegisteredResettingTimer("state/snapshot/bloom/index", nil)
+	snapshotBloomErrorGauge        = metrics.NewRegisteredGaugeFloat64("state/snapshot/bloom/error", nil)
 
 	snapshotBloomAccountTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/account/truehit", nil)
 	snapshotBloomAccountFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/account/falsehit", nil)
@@ -440,6 +442,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	}
 	// If the disk layer was modified, regenerate all the cumulative blooms
 	if persisted != nil {
+		defer func(start time.Time) {
+			snapshotBloomAllDiffIndexTimer.Update(time.Since(start))
+		}(time.Now())
 		var rebloom func(root common.Hash)
 		rebloom = func(root common.Hash) {
 			if diff, ok := t.layers[root].(*diffLayer); ok {
