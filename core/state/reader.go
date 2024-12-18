@@ -18,6 +18,8 @@ package state
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/metrics"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -30,6 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+)
+
+var (
+	snapshotAccountCacheTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/cache/account/hit", nil)
+	snapshotAccountCacheMissTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/cache/account/miss", nil)
+	snapshotStorageCacheTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/cache/storage/hit", nil)
+	snapshotStorageCacheMissTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/cache/account/miss", nil)
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
@@ -144,6 +153,9 @@ func newFlatReader(reader database.StateReader) *flatReader {
 //
 // The returned account might be nil if it's not existent.
 func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
+	defer func(now time.Time) {
+		snapshotAccountCacheTimer.UpdateSince(now)
+	}(time.Now())
 	account, err := r.reader.Account(crypto.HashData(r.buff, addr.Bytes()))
 	if err != nil {
 		return nil, err
@@ -174,6 +186,9 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 //
 // The returned storage slot might be empty if it's not existent.
 func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+	defer func(now time.Time) {
+		snapshotStorageCacheTimer.UpdateSince(now)
+	}(time.Now())
 	addrHash := crypto.HashData(r.buff, addr.Bytes())
 	slotHash := crypto.HashData(r.buff, key.Bytes())
 	ret, err := r.reader.Storage(addrHash, slotHash)
