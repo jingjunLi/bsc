@@ -78,6 +78,16 @@ var (
 	snapshotBloomStorageFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/falsehit", nil)
 	snapshotBloomStorageMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/miss", nil)
 
+	snapshotDiffLayerAccountTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/account", nil)
+	snapshotDiskLayerAccountTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diskLayer/account", nil)
+	snapshotDiffLayerStorageTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/storage", nil)
+	snapshotDiskLayerStorageTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diskLayer/storage", nil)
+
+	snapshotDiffLayerAccountMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/accounthit", nil)
+	snapshotDiskLayerAccountMeter = metrics.NewRegisteredMeter("state/snapshot/diskLayer/accounthit", nil)
+	snapshotDiffLayerStorageMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/storagehit", nil)
+	snapshotDiskLayerStorageMeter = metrics.NewRegisteredMeter("state/snapshot/diskLayer/storagehit", nil)
+
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough
 	// to not maintain the layer's original state.

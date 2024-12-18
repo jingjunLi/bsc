@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"sync"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -91,6 +92,10 @@ func (dl *diskLayer) markStale() {
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
 func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
+	defer func(now time.Time) {
+		snapshotDiskLayerAccountTimer.UpdateSince(now)
+		snapshotDiskLayerAccountMeter.Mark(1)
+	}(time.Now())
 	data, err := dl.AccountRLP(hash)
 	if err != nil {
 		return nil, err
@@ -146,6 +151,10 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
 func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	defer func(now time.Time) {
+		snapshotDiskLayerStorageTimer.UpdateSince(now)
+		snapshotDiskLayerStorageMeter.Mark(1)
+	}(time.Now())
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
