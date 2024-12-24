@@ -565,11 +565,9 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		// write lock on grandparent.
 		flattened := parent.flatten().(*diffLayer)
 		t.layers[flattened.root] = flattened
-		{
-			t.lookupLock.Lock()
-			defer t.lookupLock.Unlock()
-			t.baseDiff = flattened
-		}
+		t.lookupLock.Lock()
+		t.baseDiff = flattened
+		t.lookupLock.Unlock()
 		log.Info("diffLayer flattened", "flattened.root", flattened.root, "flattened", flattened)
 		// TODO:
 
@@ -615,15 +613,14 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	//}
 	log.Info("diffToDisk", "base", base)
 	bottom.lock.RUnlock()
-	{
-		log.Info("diffToDisk 111", "base", base.Root())
-		t.lookupLock.Lock()
-		log.Info("diffToDisk 222", "base", base.Root())
-		defer t.lookupLock.Unlock()
-		log.Info("diffToDisk 333", "base", base.Root())
-		t.baseDiff = diff
-		log.Info("diffToDisk 444", "base", base.Root())
-	}
+	log.Info("diffToDisk 111", "base", base.Root())
+	t.lookupLock.Lock()
+	log.Info("diffToDisk 222", "base", base.Root())
+	log.Info("diffToDisk 333", "base", base.Root())
+	t.baseDiff = diff
+	t.lookupLock.Unlock()
+
+	log.Info("diffToDisk 444", "base", base.Root())
 	clearDiff(bottom)
 	t.layers[base.root] = base
 	diff.parent = base
