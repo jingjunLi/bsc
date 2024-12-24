@@ -277,7 +277,7 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 			// snapshot.
 			_, content, _, err := rlp.Split(lookupData)
 			if err != nil {
-				return common.Hash{}, err
+				//return common.Hash{}, err
 			}
 			var value common.Hash
 			value.SetBytes(content)
