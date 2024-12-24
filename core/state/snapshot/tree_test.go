@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -560,19 +559,8 @@ func TestSnaphotsDescendants(t *testing.T) {
 
 			// fastpath
 			root := head
-			targetLayer := snaps.LookupAccount(accountAddrHash, root)
-			log.Info("LookupAccount result",
-				"index", i,
-				"accountAddrHash", accountAddrHash,
-				"root", root,
-				"targetLayer", targetLayer)
-			if targetLayer == nil || reflect.ValueOf(targetLayer).IsNil() {
-				log.Info("LookupAccount result targetLayer nil", "targetLayer", targetLayer)
-				continue
-			}
+			lookupAccount, err = snaps.LookupAccount(accountAddrHash, root)
 			// 如果真的不存在, 应该是如何 ? diskLayer 也不存在 ?
-			log.Info("CurrentLayerAccount not nil", "index", i, "targetLayer", targetLayer)
-			lookupAccount, err = targetLayer.CurrentLayerAccount(accountAddrHash)
 			if err != nil {
 				log.Info("GlobalLookup.lookupAccount err",
 					"hash", accountAddrHash,
