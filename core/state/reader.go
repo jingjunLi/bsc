@@ -180,10 +180,10 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 		snapshotCacheTimer.Update(ptime)
 		if err != nil {
 			log.Info("GlobalLookup.lookupAccount err", "acc hash", accountAddrHash, "err", err)
-			return nil, err
+			//return nil, err
 		}
 		if lookupAccount == nil {
-			return nil, nil
+			//return nil, nil
 		}
 
 		acct := &types.StateAccount{
@@ -199,7 +199,7 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 			acct.Root = types.EmptyRootHash
 		}
 		//log.Info("GlobalLookup.lookupAccount err", "acc hash", accountAddrHash, "root", r.stateRoot, "targetLayer root", targetLayer.Root(), "err", err)
-		return acct, nil
+		//return acct, nil
 	}
 
 	//log.Error("GlobalLookup.lookupAccount not exist", "hash", accountAddrHash)
@@ -265,10 +265,10 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 		lookupData, err = r.snap.LookupStorage(addrHash, slotHash, r.stateRoot)
 		if err != nil {
 			//log.Info("GlobalLookup.lookupStorage err", "addrHash", addrHash, "slotHash", slotHash, "err", err)
-			return common.Hash{}, err
+			//return common.Hash{}, err
 		}
 		if len(lookupData) == 0 { // can be both nil and []byte{}
-			return common.Hash{}, nil
+			//return common.Hash{}, nil
 			//log.Info("GlobalLookup.lookupStorage data nil", "addrHash", addrHash, "slotHash", slotHash)
 		}
 		if err == nil && len(lookupData) != 0 {
@@ -280,7 +280,7 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 			}
 			var value common.Hash
 			value.SetBytes(content)
-			return value, nil
+			//return value, nil
 			//log.Info("GlobalLookup.lookupStorage", "addrHash", addrHash, "slotHash", slotHash, "res", lookupData)
 		}
 		// log.Info("GlobalLookup.lookupStorage", "addrHash", addrHash, "slotHash", slotHash, "res", lookupData)
