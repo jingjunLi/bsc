@@ -184,20 +184,21 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 		}
 		if lookupAccount == nil {
 			//return nil, nil
+		} else {
+			acct := &types.StateAccount{
+				Nonce:    lookupAccount.Nonce,
+				Balance:  lookupAccount.Balance,
+				CodeHash: lookupAccount.CodeHash,
+				Root:     common.BytesToHash(lookupAccount.Root),
+			}
+			if len(acct.CodeHash) == 0 {
+				acct.CodeHash = types.EmptyCodeHash.Bytes()
+			}
+			if acct.Root == (common.Hash{}) {
+				acct.Root = types.EmptyRootHash
+			}
 		}
 
-		acct := &types.StateAccount{
-			Nonce:    lookupAccount.Nonce,
-			Balance:  lookupAccount.Balance,
-			CodeHash: lookupAccount.CodeHash,
-			Root:     common.BytesToHash(lookupAccount.Root),
-		}
-		if len(acct.CodeHash) == 0 {
-			acct.CodeHash = types.EmptyCodeHash.Bytes()
-		}
-		if acct.Root == (common.Hash{}) {
-			acct.Root = types.EmptyRootHash
-		}
 		//log.Info("GlobalLookup.lookupAccount err", "acc hash", accountAddrHash, "root", r.stateRoot, "targetLayer root", targetLayer.Root(), "err", err)
 		//return acct, nil
 	}
