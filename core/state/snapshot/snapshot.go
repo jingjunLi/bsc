@@ -597,7 +597,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 			return
 		}
 		// TODO: fix: already stale
-		//log.Info("Layer clearing descendant in cap", "layer", diff.Root())
+		log.Info("Layer clearing descendant in cap", "layer", diff.Root())
 		t.lookup.removeDescendant(snap)
 		t.lookup.removeLayer(diff)
 	}
@@ -616,9 +616,13 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	log.Info("diffToDisk", "base", base)
 	bottom.lock.RUnlock()
 	{
+		log.Info("diffToDisk 111", "base", base.Root())
 		t.lookupLock.Lock()
+		log.Info("diffToDisk 222", "base", base.Root())
 		defer t.lookupLock.Unlock()
+		log.Info("diffToDisk 333", "base", base.Root())
 		t.baseDiff = diff
+		log.Info("diffToDisk 444", "base", base.Root())
 	}
 	clearDiff(bottom)
 	t.layers[base.root] = base
