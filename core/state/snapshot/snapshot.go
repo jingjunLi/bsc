@@ -981,7 +981,6 @@ func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize, preimag
 
 func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) (*types.SlimAccount, error) {
 	tree.lookupLock.RLock()
-	defer tree.lookupLock.RUnlock()
 
 	targetLayer := tree.lookup.LookupAccount(accountAddrHash, head)
 	//log.Info("targetLayer LookupAccount ", "targetLayer", targetLayer)
@@ -993,6 +992,7 @@ func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) (
 			targetLayer = tree.baseDiff
 		}
 	}
+	tree.lookupLock.RUnlock()
 
 	if targetLayer != nil && !reflect.ValueOf(targetLayer).IsNil() {
 		lookupAccount, err := targetLayer.CurrentLayerAccount(accountAddrHash)
@@ -1005,7 +1005,6 @@ func (tree *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) (
 
 func (tree *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) ([]byte, error) {
 	tree.lookupLock.RLock()
-	defer tree.lookupLock.RUnlock()
 
 	targetLayer := tree.lookup.LookupStorage(accountAddrHash, slot, head)
 	if targetLayer == nil {
@@ -1016,6 +1015,7 @@ func (tree *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, h
 			targetLayer = tree.baseDiff
 		}
 	}
+	tree.lookupLock.RUnlock()
 
 	if targetLayer != nil && !reflect.ValueOf(targetLayer).IsNil() {
 		lookupData, err := targetLayer.CurrentLayerStorage(accountAddrHash, slot)
