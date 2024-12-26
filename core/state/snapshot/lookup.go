@@ -110,12 +110,17 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	layerIDCounter++
 
 	for accountHash, _ := range diff.accountData {
-		l.state2LayerRoots[accountHash.String()] = append(l.state2LayerRoots[accountHash.String()], diff)
+		account := accountHash.String()
+		l.state2LayerRoots[account] = append(l.state2LayerRoots[account], diff)
+		//l.state2LayerRoots[accountHash.Bytes()] = append(l.state2LayerRoots[accountHash.String()], diff)
 	}
 
 	for accountHash, slots := range diff.storageData {
+		account := accountHash.String()
 		for storageHash := range slots {
-			l.state2LayerRoots[accountHash.String()+storageHash.String()] = append(l.state2LayerRoots[accountHash.String()+storageHash.String()], diff)
+			storage := storageHash.String()
+			l.state2LayerRoots[account+storage] = append(l.state2LayerRoots[account+storage], diff)
+			//l.state2LayerRoots[accountHash.Bytes()+storageHash.Bytes()] = append(l.state2LayerRoots[accountHash.String()+storageHash.String()], diff)
 		}
 	}
 }
