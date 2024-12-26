@@ -24,6 +24,19 @@ func getSlice() []Snapshot {
 	return slice
 }
 
+// 定义分段锁的数量
+const shardCount = 32
+
+// ShardLock 是一个分段锁的结构
+type ShardLock struct {
+	locks [shardCount]sync.Mutex
+}
+
+// 获取特定哈希值的锁
+func (s *ShardLock) getLock(hash common.Hash) *sync.Mutex {
+	return &s.locks[accountBloomHash(hash)%shardCount]
+}
+
 func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 	set := make(map[common.Hash]struct{})
 	for {
@@ -46,7 +59,8 @@ type Lookup struct {
 	stateToLayerStorage map[common.Hash]map[common.Hash][]Snapshot
 	descendants         map[common.Hash]map[common.Hash]struct{}
 
-	lock sync.RWMutex
+	lock            sync.RWMutex
+	descendantsLock ShardLock
 }
 
 // newLookup initializes the lookup structure.
@@ -269,16 +283,23 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 
 	// Link the new layer into the descendents set
 	// TODO parallel
-	var workers errgroup.Group
-	workers.SetLimit(2)
+	var (
+		workers errgroup.Group
+	)
+
+	workers.SetLimit(3)
 
 	for h := range diffAncestors(topDiffLayer) {
 		workers.Go(func() error {
+			lock := l.descendantsLock.getLock(h)
+			lock.Lock()
 			subset := l.descendants[h]
 			if subset == nil {
 				subset = make(map[common.Hash]struct{})
 				l.descendants[h] = subset
 			}
+			lock.Unlock()
+
 			subset[topDiffLayer.Root()] = struct{}{}
 			return nil
 		})
