@@ -155,7 +155,8 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 		for accountHash, _ := range diff.accountData {
 			subset := l.stateToLayerAccount[accountHash]
 			if subset == nil {
-				log.Error("unknown account addr hash %s", accountHash)
+				return
+				//log.Error("unknown account addr hash %s", accountHash)
 			}
 			var found bool
 			for j := 0; j < len(subset); j++ {
@@ -170,6 +171,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				}
 			}
 			if !found {
+				return
 				log.Error("failed to delete lookup %s", accountHash)
 			}
 			if len(subset) == 0 {
@@ -191,6 +193,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			for storageHash := range slots {
 				slotSubset := subset[storageHash]
 				if slotSubset == nil {
+					return
 					log.Error("unknown account addr hash %s", storageHash)
 				}
 				var found bool
@@ -206,6 +209,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					}
 				}
 				if !found {
+					return
 					log.Error("failed to delete lookup %s", storageHash)
 				}
 				if len(slotSubset) == 0 {
@@ -246,6 +250,7 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 	}(time.Now())
 
 	// Link the new layer into the descendents set
+	// TODO parallel
 	for h := range diffAncestors(topDiffLayer) {
 		subset := l.descendants[h]
 		if subset == nil {
@@ -304,7 +309,6 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 
 	list, exists := l.stateToLayerAccount[accountAddrHash]
 	if !exists {
-		//log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
