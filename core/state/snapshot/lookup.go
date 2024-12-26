@@ -268,6 +268,7 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
 		l.addLayer(diff)
 		wg.Done()
@@ -282,7 +283,9 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
+
 	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
 		l.removeLayer(diff)
 		wg.Done()
