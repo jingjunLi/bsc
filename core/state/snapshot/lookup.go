@@ -261,7 +261,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 // diffAncestors returns all the ancestors of the specific layer (disk layer
 // is not included).
 func diffAncestors(layer Snapshot) map[common.Hash]struct{} {
-	set := make(map[common.Hash]struct{})
+	set := make(map[common.Hash]struct{}, 128)
 	for {
 		parent := layer.Parent()
 		if parent == nil {
@@ -298,9 +298,9 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 				subset = make(map[common.Hash]struct{})
 				l.descendants[h] = subset
 			}
+			subset[topDiffLayer.Root()] = struct{}{}
 			lock.Unlock()
 
-			subset[topDiffLayer.Root()] = struct{}{}
 			return nil
 		})
 	}
