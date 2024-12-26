@@ -417,6 +417,7 @@ func (dl *diffLayer) flatten() snapshot {
 	parent.lock.Lock()
 	defer parent.lock.Unlock()
 
+	snapshotFlattenMeter.Mark(1)
 	// Before actually writing all our data to the parent, first ensure that the
 	// parent hasn't been 'corrupted' by someone else already flattening into it
 	if parent.stale.Swap(true) {

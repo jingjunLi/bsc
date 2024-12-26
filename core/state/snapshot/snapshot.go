@@ -88,6 +88,9 @@ var (
 	snapshotLookUpStorageAPITimer = metrics.NewRegisteredResettingTimer("state/snapshot/API/LookUpStorage", nil)
 	snapshotLookUpAccountAPITimer = metrics.NewRegisteredResettingTimer("state/snapshot/API/LookUpAccount", nil)
 
+	snapshotFlattenMeter    = metrics.NewRegisteredMeter("state/snapshot/diffLayer/flatten", nil)
+	snapshotDiffToDiskMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/rebloom", nil)
+
 	snapshotDiffLayerAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/diffLayer/accounthit", nil)
 	snapshotBaseDiffLayerAccountMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/base/accounthit", nil)
 	snapshotDiskLayerAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/diskLayer/accounthit", nil)
@@ -547,6 +550,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	bottom.lock.RLock()
 	base := diffToDisk(bottom)
 	bottom.lock.RUnlock()
+	snapshotDiffToDiskMeter.Mark(1)
 
 	t.layers[base.root] = base
 	diff.parent = base
