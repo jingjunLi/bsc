@@ -121,15 +121,6 @@ func newLookup(head Snapshot) *Lookup {
 	return l
 }
 
-func (l *Lookup) isDescendant(state common.Hash, ancestor common.Hash) bool {
-	subset := l.descendants[ancestor]
-	if subset == nil {
-		return false
-	}
-	_, ok := subset[state]
-	return ok
-}
-
 var layerIDCounter int
 var layerIDRemoveCounter int
 
@@ -311,7 +302,23 @@ func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
 		lookupRemoveDescendantTimer.UpdateSince(now)
 	}(time.Now())
 
+	lock := l.descendantsLock.getLock(bottomDiffLayer.Root())
+	lock.Lock()
 	delete(l.descendants, bottomDiffLayer.Root())
+	lock.Unlock()
+}
+
+func (l *Lookup) isDescendant(state common.Hash, ancestor common.Hash) bool {
+	lock := l.descendantsLock.getLock(ancestor)
+	lock.Lock()
+	subset := l.descendants[ancestor]
+	if subset == nil {
+		return false
+	}
+	_, ok := subset[state]
+
+	lock.Unlock()
+	return ok
 }
 
 func (l *Lookup) AddSnapshot(diff *diffLayer) {
