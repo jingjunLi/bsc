@@ -114,7 +114,8 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// etc.), we just discard all diffs and try to recover them later.
 	var current snapshot = base
 	err := iterateJournal(db, func(parent common.Hash, root common.Hash, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte) error {
-		current = newDiffLayer(current, root, accountData, storageData)
+		// TODO: handle tree
+		current = newDiffLayer(current, root, accountData, storageData, true)
 		return nil
 	})
 	if err != nil {

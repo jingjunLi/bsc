@@ -123,7 +123,7 @@ func storageBloomHash(h0, h1 common.Hash) uint64 {
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
 // level persistent database or a hierarchical diff already.
-func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
+func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, enableLookUp bool) *diffLayer {
 	// Create the new layer with some pre-allocated data segments
 	dl := &diffLayer{
 		parent:      parent,
@@ -133,13 +133,15 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 		storageList: make(map[common.Hash][]common.Hash),
 	}
 
-	switch parent := parent.(type) {
-	case *diskLayer:
-		dl.rebloom(parent)
-	case *diffLayer:
-		dl.rebloom(parent.origin)
-	default:
-		panic("unknown parent type")
+	if !enableLookUp {
+		switch parent := parent.(type) {
+		case *diskLayer:
+			dl.rebloom(parent)
+		case *diffLayer:
+			dl.rebloom(parent.origin)
+		default:
+			panic("unknown parent type")
+		}
 	}
 
 	// Sanity check that accounts or storage slots are never nil
@@ -505,8 +507,8 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items.
-func (dl *diffLayer) Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
-	return newDiffLayer(dl, blockRoot, accounts, storage)
+func (dl *diffLayer) Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, enableLookUp bool) *diffLayer {
+	return newDiffLayer(dl, blockRoot, accounts, storage, enableLookUp)
 }
 
 // flatten pushes all data from this point downwards, flattening everything into

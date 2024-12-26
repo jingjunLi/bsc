@@ -158,7 +158,7 @@ type snapshot interface {
 	// the specified data items.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
+	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, enableLookUp bool) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
@@ -229,11 +229,12 @@ type Tree struct {
 //     a background thread.
 func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash, cap int, withoutTrie bool) (*Tree, error) {
 	snap := &Tree{
-		config:   config,
-		diskdb:   diskdb,
-		triedb:   triedb,
-		capLimit: cap,
-		layers:   make(map[common.Hash]snapshot),
+		config:       config,
+		diskdb:       diskdb,
+		triedb:       triedb,
+		capLimit:     cap,
+		layers:       make(map[common.Hash]snapshot),
+		enableLookUp: true,
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, root, config.CacheSize, config.Recovery, config.NoBuild, withoutTrie)
@@ -411,7 +412,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 	if parent == nil {
 		return fmt.Errorf("parent [%#x] snapshot missing", parentRoot)
 	}
-	snap := parent.(snapshot).Update(blockRoot, accounts, storage)
+	snap := parent.(snapshot).Update(blockRoot, accounts, storage, t.enableLookUp)
 
 	t.lookup.AddSnapshot(snap)
 	// Save the new snapshot for later
@@ -518,7 +519,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 	}
 	// If the disk layer was modified, regenerate all the cumulative blooms
-	if persisted != nil {
+	if persisted != nil && !t.enableLookUp {
 		var rebloom func(root common.Hash)
 		rebloom = func(root common.Hash) {
 			if diff, ok := t.layers[root].(*diffLayer); ok {

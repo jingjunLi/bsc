@@ -1,11 +1,11 @@
 package snapshot
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
@@ -111,20 +111,31 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	}(time.Now())
 	layerIDCounter++
 
-	for accountHash, _ := range diff.accountData {
-		l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	for accountHash, slots := range diff.storageData {
-		subset := l.stateToLayerStorage[accountHash]
-		if subset == nil {
-			subset = make(map[common.Hash][]Snapshot)
-			l.stateToLayerStorage[accountHash] = subset
+	go func() {
+		for accountHash, _ := range diff.accountData {
+			l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
 		}
-		for storageHash := range slots {
-			subset[storageHash] = append(subset[storageHash], diff)
+		wg.Done()
+	}()
+
+	go func() {
+		for accountHash, slots := range diff.storageData {
+			subset := l.stateToLayerStorage[accountHash]
+			if subset == nil {
+				subset = make(map[common.Hash][]Snapshot)
+				l.stateToLayerStorage[accountHash] = subset
+			}
+			for storageHash := range slots {
+				subset[storageHash] = append(subset[storageHash], diff)
+			}
 		}
-	}
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
 
 // removeLayer traverses all the dirty state within the given diff layer and
@@ -136,67 +147,78 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	layerIDRemoveCounter++
 
 	diffRoot := diff.Root()
-	for accountHash, _ := range diff.accountData {
-		subset := l.stateToLayerAccount[accountHash]
-		if subset == nil {
-			return fmt.Errorf("unknown account addr hash %s", accountHash)
-		}
-		var found bool
-		for j := 0; j < len(subset); j++ {
-			if subset[j].Root() == diffRoot {
-				if j == 0 {
-					subset = subset[1:] // TODO what if the underlying slice is held forever?
-				} else {
-					subset = append(subset[:j], subset[j+1:]...)
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("failed to delete lookup %s", accountHash)
-		}
-		if len(subset) == 0 {
-			delete(l.stateToLayerAccount, accountHash)
-		} else {
-			l.stateToLayerAccount[accountHash] = subset
-		}
-	}
 
-	for accountHash, slots := range diff.storageData {
-		subset := l.stateToLayerStorage[accountHash]
-		if subset == nil {
-			subset = make(map[common.Hash][]Snapshot)
-			l.stateToLayerStorage[accountHash] = subset
-		}
-		for storageHash := range slots {
-			slotSubset := subset[storageHash]
-			if slotSubset == nil {
-				return fmt.Errorf("unknown account addr hash %s", storageHash)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		for accountHash, _ := range diff.accountData {
+			subset := l.stateToLayerAccount[accountHash]
+			if subset == nil {
+				log.Error("unknown account addr hash %s", accountHash)
 			}
 			var found bool
-			for j := 0; j < len(slotSubset); j++ {
-				if slotSubset[j].Root() == diffRoot {
+			for j := 0; j < len(subset); j++ {
+				if subset[j].Root() == diffRoot {
 					if j == 0 {
-						slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
+						subset = subset[1:] // TODO what if the underlying slice is held forever?
 					} else {
-						slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
+						subset = append(subset[:j], subset[j+1:]...)
 					}
 					found = true
 					break
 				}
 			}
 			if !found {
-				return fmt.Errorf("failed to delete lookup %s", storageHash)
+				log.Error("failed to delete lookup %s", accountHash)
 			}
-			if len(slotSubset) == 0 {
-				delete(l.stateToLayerStorage, storageHash)
+			if len(subset) == 0 {
+				delete(l.stateToLayerAccount, accountHash)
 			} else {
-				subset[storageHash] = slotSubset
+				l.stateToLayerAccount[accountHash] = subset
 			}
 		}
-	}
+		wg.Done()
+	}()
 
+	go func() {
+		for accountHash, slots := range diff.storageData {
+			subset := l.stateToLayerStorage[accountHash]
+			if subset == nil {
+				subset = make(map[common.Hash][]Snapshot)
+				l.stateToLayerStorage[accountHash] = subset
+			}
+			for storageHash := range slots {
+				slotSubset := subset[storageHash]
+				if slotSubset == nil {
+					log.Error("unknown account addr hash %s", storageHash)
+				}
+				var found bool
+				for j := 0; j < len(slotSubset); j++ {
+					if slotSubset[j].Root() == diffRoot {
+						if j == 0 {
+							slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
+						} else {
+							slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
+						}
+						found = true
+						break
+					}
+				}
+				if !found {
+					log.Error("failed to delete lookup %s", storageHash)
+				}
+				if len(slotSubset) == 0 {
+					delete(l.stateToLayerStorage, storageHash)
+				} else {
+					subset[storageHash] = slotSubset
+				}
+			}
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
 	return nil
 }
 
@@ -245,15 +267,32 @@ func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
 func (l *Lookup) AddSnapshot(diff *diffLayer) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
-	l.addLayer(diff)
-	l.addDescendant(diff)
+	var wg sync.WaitGroup
+	go func() {
+		l.addLayer(diff)
+		wg.Done()
+	}()
+	go func() {
+		l.addDescendant(diff)
+		wg.Done()
+	}()
+	wg.Wait()
 }
 
 func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
-	l.removeLayer(diff)
-	l.removeDescendant(diff)
+	var wg sync.WaitGroup
+	go func() {
+		l.removeLayer(diff)
+		wg.Done()
+	}()
+	go func() {
+		l.removeDescendant(diff)
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
 
 func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
