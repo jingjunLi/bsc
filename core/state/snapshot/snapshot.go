@@ -83,10 +83,16 @@ var (
 	snapshotDiffLayerStorageTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/storage", nil)
 	snapshotDiskLayerStorageTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diskLayer/storage", nil)
 
-	snapshotDiffLayerAccountMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/accounthit", nil)
-	snapshotDiskLayerAccountMeter = metrics.NewRegisteredMeter("state/snapshot/diskLayer/accounthit", nil)
-	snapshotDiffLayerStorageMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/storagehit", nil)
-	snapshotDiskLayerStorageMeter = metrics.NewRegisteredMeter("state/snapshot/diskLayer/storagehit", nil)
+	snapshotUpdateAPITimer        = metrics.NewRegisteredResettingTimer("state/snapshot/API/Update", nil)
+	snapshotCapAPITimer           = metrics.NewRegisteredResettingTimer("state/snapshot/API/Cap", nil)
+	snapshotLookUpStorageAPITimer = metrics.NewRegisteredResettingTimer("state/snapshot/API/LookUpStorage", nil)
+	snapshotLookUpAccountAPITimer = metrics.NewRegisteredResettingTimer("state/snapshot/API/LookUpAccount", nil)
+
+	snapshotDiffLayerAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/diffLayer/accounthit", nil)
+	snapshotBaseDiffLayerAccountMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/base/accounthit", nil)
+	snapshotDiskLayerAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/diskLayer/accounthit", nil)
+	snapshotDiffLayerStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/diffLayer/storagehit", nil)
+	snapshotDiskLayerStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/diskLayer/storagehit", nil)
 
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough
@@ -355,6 +361,10 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
 func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
+	defer func(now time.Time) {
+		snapshotUpdateAPITimer.UpdateSince(now)
+	}(time.Now())
+
 	// Reject noop updates to avoid self-loops in the snapshot tree. This is a
 	// special case that can only happen for Clique networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -394,6 +404,10 @@ func (t *Tree) CapLimit() int {
 // survival is only known *after* capping, we need to omit it from the count if
 // we want to ensure that *at least* the requested number of diff layers remain.
 func (t *Tree) Cap(root common.Hash, layers int) error {
+	defer func(now time.Time) {
+		snapshotCapAPITimer.UpdateSince(now)
+	}(time.Now())
+
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
 	if snap == nil {
