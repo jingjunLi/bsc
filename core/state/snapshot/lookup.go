@@ -6,7 +6,23 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/sync/errgroup"
 )
+
+// slicePool is a shared pool of hash slice, for reducing the GC pressure.
+var slicePool = sync.Pool{
+	New: func() interface{} {
+		slice := make([]Snapshot, 0, 16) // Pre-allocate a slice with a reasonable capacity.
+		return &slice
+	},
+}
+
+// getSlice obtains the hash slice from the shared pool.
+func getSlice() []Snapshot {
+	slice := *slicePool.Get().(*[]Snapshot)
+	slice = slice[:0]
+	return slice
+}
 
 func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 	set := make(map[common.Hash]struct{})
@@ -156,6 +172,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 		for accountHash, _ := range diff.accountData {
 			subset := l.stateToLayerAccount[accountHash]
 			if subset == nil {
+				//TODO if error, this happens sometimes
 				return
 				//log.Error("unknown account addr hash %s", accountHash)
 			}
@@ -252,13 +269,19 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 
 	// Link the new layer into the descendents set
 	// TODO parallel
+	var workers errgroup.Group
+	workers.SetLimit(2)
+
 	for h := range diffAncestors(topDiffLayer) {
-		subset := l.descendants[h]
-		if subset == nil {
-			subset = make(map[common.Hash]struct{})
-			l.descendants[h] = subset
-		}
-		subset[topDiffLayer.Root()] = struct{}{}
+		workers.Go(func() error {
+			subset := l.descendants[h]
+			if subset == nil {
+				subset = make(map[common.Hash]struct{})
+				l.descendants[h] = subset
+			}
+			subset[topDiffLayer.Root()] = struct{}{}
+			return nil
+		})
 	}
 }
 
