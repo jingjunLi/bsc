@@ -223,6 +223,9 @@ func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 		snapshotDiffLayerAccountTimer.UpdateSince(now)
 		snapshotDiffLayerAccountMeter.Mark(1)
 	}(time.Now())
+	defer func(now time.Time) {
+		snapshotLookUpAccountAPITimer.UpdateSince(now)
+	}(time.Now())
 	data, err := dl.AccountRLP(hash)
 	if err != nil {
 		return nil, err
@@ -327,6 +330,9 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	defer func(now time.Time) {
 		snapshotDiffLayerStorageTimer.UpdateSince(now)
 		snapshotDiffLayerStorageMeter.Mark(1)
+	}(time.Now())
+	defer func(now time.Time) {
+		snapshotLookUpStorageAPITimer.UpdateSince(now)
 	}(time.Now())
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
