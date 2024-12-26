@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/sync/errgroup"
 )
 
 // slicePool is a shared pool of hash slice, for reducing the GC pressure.
@@ -59,8 +58,8 @@ type Lookup struct {
 	stateToLayerStorage map[common.Hash]map[common.Hash][]Snapshot
 	descendants         map[common.Hash]map[common.Hash]struct{}
 
-	lock            sync.RWMutex
-	descendantsLock ShardLock
+	lock sync.RWMutex
+	//descendantsLock ShardLock
 }
 
 // newLookup initializes the lookup structure.
@@ -274,26 +273,26 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 
 	// Link the new layer into the descendents set
 	// TODO parallel
-	var (
-		workers errgroup.Group
-	)
-
-	workers.SetLimit(3)
+	//var (
+	//	workers errgroup.Group
+	//)
+	//
+	//workers.SetLimit(3)
 
 	for h := range diffAncestors(topDiffLayer) {
-		workers.Go(func() error {
-			lock := l.descendantsLock.getLock(h)
-			lock.Lock()
-			subset := l.descendants[h]
-			if subset == nil {
-				subset = make(map[common.Hash]struct{})
-				l.descendants[h] = subset
-			}
-			subset[topDiffLayer.Root()] = struct{}{}
-			lock.Unlock()
+		//workers.Go(func() error {
+		//	lock := l.descendantsLock.getLock(h)
+		//	lock.Lock()
+		subset := l.descendants[h]
+		if subset == nil {
+			subset = make(map[common.Hash]struct{})
+			l.descendants[h] = subset
+		}
+		subset[topDiffLayer.Root()] = struct{}{}
+		//lock.Unlock()
 
-			return nil
-		})
+		//return nil
+		//}
 	}
 }
 
@@ -302,22 +301,22 @@ func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
 		lookupRemoveDescendantTimer.UpdateSince(now)
 	}(time.Now())
 
-	lock := l.descendantsLock.getLock(bottomDiffLayer.Root())
-	lock.Lock()
+	//lock := l.descendantsLock.getLock(bottomDiffLayer.Root())
+	//lock.Lock()
 	delete(l.descendants, bottomDiffLayer.Root())
-	lock.Unlock()
+	//lock.Unlock()
 }
 
 func (l *Lookup) isDescendant(state common.Hash, ancestor common.Hash) bool {
-	lock := l.descendantsLock.getLock(ancestor)
-	lock.Lock()
+	//lock := l.descendantsLock.getLock(ancestor)
+	//lock.Lock()
 	subset := l.descendants[ancestor]
 	if subset == nil {
 		return false
 	}
 	_, ok := subset[state]
 
-	lock.Unlock()
+	//lock.Unlock()
 	return ok
 }
 
