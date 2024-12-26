@@ -282,11 +282,13 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 
 	subset, exists := l.stateToLayerStorage[accountAddrHash]
 	if !exists {
-		//log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
 
-	list := subset[slot]
+	list, exists := subset[slot]
+	if !exists {
+		return nil
+	}
 
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.
