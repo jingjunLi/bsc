@@ -519,7 +519,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 	}
 	// If the disk layer was modified, regenerate all the cumulative blooms
-	if persisted != nil && !t.enableLookUp {
+	if persisted != nil {
 		var rebloom func(root common.Hash)
 		rebloom = func(root common.Hash) {
 			if diff, ok := t.layers[root].(*diffLayer); ok {

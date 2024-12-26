@@ -133,16 +133,16 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 		storageList: make(map[common.Hash][]common.Hash),
 	}
 
-	if !enableLookUp {
-		switch parent := parent.(type) {
-		case *diskLayer:
-			dl.rebloom(parent)
-		case *diffLayer:
-			dl.rebloom(parent.origin)
-		default:
-			panic("unknown parent type")
-		}
+	//if !enableLookUp {
+	switch parent := parent.(type) {
+	case *diskLayer:
+		dl.rebloom(parent)
+	case *diffLayer:
+		dl.rebloom(parent.origin)
+	default:
+		panic("unknown parent type")
 	}
+	//}
 
 	// Sanity check that accounts or storage slots are never nil
 	for _, blob := range accounts {
