@@ -190,9 +190,9 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				return fmt.Errorf("failed to delete lookup %s", storageHash)
 			}
 			if len(slotSubset) == 0 {
-				delete(l.stateToLayerAccount, storageHash)
+				delete(l.stateToLayerStorage, storageHash)
 			} else {
-				l.stateToLayerAccount[storageHash] = slotSubset
+				subset[storageHash] = slotSubset
 			}
 		}
 	}
