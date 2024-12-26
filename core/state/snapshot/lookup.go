@@ -26,8 +26,9 @@ func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 
 // Lookup is an internal help structure to quickly identify
 type Lookup struct {
-	state2LayerRoots map[string][]Snapshot // think more about it
-	descendants      map[common.Hash]map[common.Hash]struct{}
+	stateToLayerAccount map[common.Hash][]Snapshot
+	stateToLayerStorage map[common.Hash]map[common.Hash][]Snapshot
+	descendants         map[common.Hash]map[common.Hash]struct{}
 
 	lock sync.RWMutex
 }
@@ -45,7 +46,8 @@ func newLookup(head Snapshot) *Lookup {
 			layers = append(layers, current)
 			current = current.Parent()
 		}
-		l.state2LayerRoots = make(map[string][]Snapshot)
+		l.stateToLayerAccount = make(map[common.Hash][]Snapshot)
+		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]Snapshot)
 
 		// Apply the layers from bottom to top
 		for i := len(layers) - 1; i >= 0; i-- {
@@ -110,17 +112,17 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	layerIDCounter++
 
 	for accountHash, _ := range diff.accountData {
-		account := accountHash.String()
-		l.state2LayerRoots[account] = append(l.state2LayerRoots[account], diff)
-		//l.state2LayerRoots[accountHash.Bytes()] = append(l.state2LayerRoots[accountHash.String()], diff)
+		l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
 	}
 
 	for accountHash, slots := range diff.storageData {
-		account := accountHash.String()
+		subset := l.stateToLayerStorage[accountHash]
+		if subset == nil {
+			subset = make(map[common.Hash][]Snapshot)
+			l.stateToLayerStorage[accountHash] = subset
+		}
 		for storageHash := range slots {
-			storage := storageHash.String()
-			l.state2LayerRoots[account+storage] = append(l.state2LayerRoots[account+storage], diff)
-			//l.state2LayerRoots[accountHash.Bytes()+storageHash.Bytes()] = append(l.state2LayerRoots[accountHash.String()+storageHash.String()], diff)
+			subset[storageHash] = append(subset[storageHash], diff)
 		}
 	}
 }
@@ -135,11 +137,9 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 
 	diffRoot := diff.Root()
 	for accountHash, _ := range diff.accountData {
-		stateKey := accountHash.String()
-
-		subset := l.state2LayerRoots[stateKey]
+		subset := l.stateToLayerAccount[accountHash]
 		if subset == nil {
-			return fmt.Errorf("unknown account addr hash %s", stateKey)
+			return fmt.Errorf("unknown account addr hash %s", accountHash)
 		}
 		var found bool
 		for j := 0; j < len(subset); j++ {
@@ -154,42 +154,45 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("failed to delete lookup %s", stateKey)
+			return fmt.Errorf("failed to delete lookup %s", accountHash)
 		}
 		if len(subset) == 0 {
-			delete(l.state2LayerRoots, stateKey)
+			delete(l.stateToLayerAccount, accountHash)
 		} else {
-			l.state2LayerRoots[stateKey] = subset
+			l.stateToLayerAccount[accountHash] = subset
 		}
 	}
 
 	for accountHash, slots := range diff.storageData {
+		subset := l.stateToLayerStorage[accountHash]
+		if subset == nil {
+			subset = make(map[common.Hash][]Snapshot)
+			l.stateToLayerStorage[accountHash] = subset
+		}
 		for storageHash := range slots {
-			stateKey := accountHash.String() + storageHash.String()
-
-			subset := l.state2LayerRoots[stateKey]
-			if subset == nil {
-				return fmt.Errorf("unknown account addr hash %s", stateKey)
+			slotSubset := subset[storageHash]
+			if slotSubset == nil {
+				return fmt.Errorf("unknown account addr hash %s", storageHash)
 			}
 			var found bool
-			for j := 0; j < len(subset); j++ {
-				if subset[j].Root() == diffRoot {
+			for j := 0; j < len(slotSubset); j++ {
+				if slotSubset[j].Root() == diffRoot {
 					if j == 0 {
-						subset = subset[1:] // TODO what if the underlying slice is held forever?
+						slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
 					} else {
-						subset = append(subset[:j], subset[j+1:]...)
+						slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
 					}
 					found = true
 					break
 				}
 			}
 			if !found {
-				return fmt.Errorf("failed to delete lookup %s", stateKey)
+				return fmt.Errorf("failed to delete lookup %s", storageHash)
 			}
-			if len(subset) == 0 {
-				delete(l.state2LayerRoots, stateKey)
+			if len(slotSubset) == 0 {
+				delete(l.stateToLayerAccount, storageHash)
 			} else {
-				l.state2LayerRoots[stateKey] = subset
+				l.stateToLayerAccount[storageHash] = slotSubset
 			}
 		}
 	}
@@ -257,7 +260,7 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	list, exists := l.state2LayerRoots[accountAddrHash.String()]
+	list, exists := l.stateToLayerAccount[accountAddrHash]
 	if !exists {
 		//log.Info("lookupAccount not exist", "acc", accountAddrHash, "head", head)
 		return nil
@@ -277,11 +280,13 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	list, exists := l.state2LayerRoots[accountAddrHash.String()+slot.String()]
+	subset, exists := l.stateToLayerStorage[accountAddrHash]
 	if !exists {
 		//log.Info("LookupStorage not exist", "acc", accountAddrHash, "head", head)
 		return nil
 	}
+
+	list := subset[slot]
 
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.

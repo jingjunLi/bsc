@@ -413,13 +413,14 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 	}
 	snap := parent.(snapshot).Update(blockRoot, accounts, storage)
 
+	t.lookup.AddSnapshot(snap)
 	// Save the new snapshot for later
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	t.layers[snap.root] = snap
 	// update lookup, which in the tree lock guard.
-	t.lookup.AddSnapshot(snap)
+	//t.lookup.AddSnapshot(snap)
 	if t.baseDiff == nil || reflect.ValueOf(t.baseDiff).IsNil() {
 		t.baseDiff = snap
 	}
