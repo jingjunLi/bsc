@@ -152,6 +152,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	wg.Add(2)
 
 	go func() {
+		defer wg.Done()
 		for accountHash, _ := range diff.accountData {
 			subset := l.stateToLayerAccount[accountHash]
 			if subset == nil {
@@ -180,10 +181,10 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				l.stateToLayerAccount[accountHash] = subset
 			}
 		}
-		wg.Done()
 	}()
 
 	go func() {
+		defer wg.Done()
 		for accountHash, slots := range diff.storageData {
 			subset := l.stateToLayerStorage[accountHash]
 			if subset == nil {
@@ -219,7 +220,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				}
 			}
 		}
-		wg.Done()
+
 	}()
 
 	wg.Wait()
@@ -272,6 +273,7 @@ func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
 func (l *Lookup) AddSnapshot(diff *diffLayer) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
