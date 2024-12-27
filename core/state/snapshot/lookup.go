@@ -131,6 +131,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	}(time.Now())
 	layerIDCounter++
 
+	log.Info("addLayer", "layerIDCounter", layerIDCounter, "root", diff.Root())
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -140,6 +141,10 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		}(time.Now())
 		for accountHash, _ := range diff.accountData {
 			l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
+			log.Info("addLayer", "layerIDCounter", layerIDCounter, "accountHash", accountHash)
+			for _, layer := range l.stateToLayerAccount[accountHash] {
+				log.Info("subset", "layerRoot", layer.Root())
+			}
 		}
 		wg.Done()
 	}()
@@ -172,6 +177,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	}(time.Now())
 	layerIDRemoveCounter++
 
+	log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root())
 	diffRoot := diff.Root()
 
 	var wg sync.WaitGroup
@@ -188,15 +194,21 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				exists bool
 				found  bool
 			)
-			if subset, exists = l.stateToLayerAccount[accountHash]; exists && subset == nil {
-				delete(l.stateToLayerAccount, accountHash)
-				return
+			log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "accountHash", accountHash)
+			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
+				if subset == nil {
+					log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
+					delete(l.stateToLayerAccount, accountHash)
+					return
+				}
 			} else {
+				log.Info("removeLayer 222", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 				//TODO if error, this happens sometimes
 				return
 				//log.Error("unknown account addr hash %s", accountHash)
 			}
 
+			log.Info("removeLayer 333", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 			for j := 0; j < len(subset); j++ {
 				if subset[j].Root() == diffRoot {
 					if j == 0 {
@@ -208,13 +220,17 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					break
 				}
 			}
+			log.Info("removeLayer 444", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 			if !found {
 				return
 				log.Error("failed to delete lookup %s", accountHash)
 			}
+			log.Info("removeLayer 555", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 			if len(subset) == 0 {
+				log.Info("removeLayer finished ----", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 				delete(l.stateToLayerAccount, accountHash)
 			} else {
+				log.Info("removeLayer 777", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 				l.stateToLayerAccount[accountHash] = subset
 			}
 		}
@@ -230,11 +246,13 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				subset map[common.Hash][]*diffLayer
 				exist  bool
 			)
-			if subset, exist = l.stateToLayerStorage[accountHash]; exist && subset == nil {
-				delete(l.stateToLayerStorage, accountHash)
-				return
-				subset = make(map[common.Hash][]*diffLayer)
-				l.stateToLayerStorage[accountHash] = subset
+			if subset, exist = l.stateToLayerStorage[accountHash]; exist {
+				if subset == nil {
+					delete(l.stateToLayerStorage, accountHash)
+					return
+					subset = make(map[common.Hash][]*diffLayer)
+					l.stateToLayerStorage[accountHash] = subset
+				}
 			}
 
 			for storageHash := range slots {
@@ -242,10 +260,12 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					slotSubset []*diffLayer
 					slotExists bool
 				)
-				if slotSubset, slotExists = subset[storageHash]; slotExists && slotSubset == nil {
-					delete(subset, storageHash)
-					return
-					log.Error("unknown account addr hash %s", storageHash)
+				if slotSubset, slotExists = subset[storageHash]; slotExists {
+					if slotSubset == nil {
+						delete(subset, storageHash)
+						return
+						log.Error("unknown account addr hash %s", storageHash)
+					}
 				}
 
 				var found bool

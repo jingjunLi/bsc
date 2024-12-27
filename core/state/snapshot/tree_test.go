@@ -585,6 +585,10 @@ func TestSnaphotsDescendants(t *testing.T) {
 			}
 		}
 	}
+	log.Info("lookup", "account size", len(snaps.lookup.stateToLayerAccount))
+	for i := range snaps.lookup.stateToLayerAccount {
+		log.Info("stateToLayerAccount", "index", i, "account", snaps.lookup.stateToLayerAccount[i])
+	}
 
 	// {
 	// 	var lookupAccount *types.SlimAccount

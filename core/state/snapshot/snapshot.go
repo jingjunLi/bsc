@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -500,6 +501,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		if !ok {
 			return
 		}
+		log.Info("Layer clearing RemoveSnapshot", "layer", diff.Root())
 		t.lookup.RemoveSnapshot(diff)
 	}
 	var remove func(root common.Hash, snap snapshot)
@@ -574,6 +576,14 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		flattened := parent.flatten().(*diffLayer)
 		t.layers[flattened.root] = flattened
 		t.baseDiff = flattened
+		t.lookup.RemoveSnapshot(flattened)
+		{
+			var accounts []string
+			for acc := range flattened.accountData {
+				accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
+			}
+			log.Info("Flattened parent Merged accounts", "accounts", strings.Join(accounts, ", "))
+		}
 
 		// Invoke the hook if it's registered. Ugly hack.
 		if t.onFlatten != nil {
