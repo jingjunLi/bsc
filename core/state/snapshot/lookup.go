@@ -188,10 +188,9 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				exists bool
 				found  bool
 			)
-			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
-				if subset == nil {
-					delete(l.stateToLayerAccount, accountHash)
-				}
+			if subset, exists = l.stateToLayerAccount[accountHash]; exists && subset == nil {
+				delete(l.stateToLayerAccount, accountHash)
+				return
 			} else {
 				//TODO if error, this happens sometimes
 				return
@@ -231,13 +230,11 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				subset map[common.Hash][]*diffLayer
 				exist  bool
 			)
-			if subset, exist = l.stateToLayerStorage[accountHash]; exist {
-				if subset == nil {
-					delete(l.stateToLayerStorage, accountHash)
-					return
-					subset = make(map[common.Hash][]*diffLayer)
-					l.stateToLayerStorage[accountHash] = subset
-				}
+			if subset, exist = l.stateToLayerStorage[accountHash]; exist && subset == nil {
+				delete(l.stateToLayerStorage, accountHash)
+				return
+				subset = make(map[common.Hash][]*diffLayer)
+				l.stateToLayerStorage[accountHash] = subset
 			}
 
 			for storageHash := range slots {
@@ -245,12 +242,10 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					slotSubset []*diffLayer
 					slotExists bool
 				)
-				if slotSubset, slotExists = subset[storageHash]; slotExists {
-					if slotSubset == nil {
-						delete(subset, storageHash)
-						return
-						log.Error("unknown account addr hash %s", storageHash)
-					}
+				if slotSubset, slotExists = subset[storageHash]; slotExists && slotSubset == nil {
+					delete(subset, storageHash)
+					return
+					log.Error("unknown account addr hash %s", storageHash)
 				}
 
 				var found bool
@@ -359,6 +354,11 @@ func (l *Lookup) isDescendant(state common.Hash, ancestor common.Hash) bool {
 }
 
 func (l *Lookup) AddSnapshot(diff *diffLayer) {
+	defer func(now time.Time) {
+		lookupAddSnapshotTimer.UpdateSince(now)
+		lookupAddSnapshotCounter.Mark(1)
+	}(time.Now())
+
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -379,6 +379,11 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 }
 
 func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
+	defer func(now time.Time) {
+		lookupRemoveSnapshotTimer.UpdateSince(now)
+		lookupRemoveSnapshotCounter.Mark(1)
+	}(time.Now())
+
 	l.lock.Lock()
 	defer l.lock.Unlock()
 

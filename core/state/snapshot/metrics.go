@@ -51,6 +51,11 @@ var (
 	// snapStorageCleanCounter measures time spent on deleting storages
 	snapStorageCleanCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/clean", nil)
 
+	lookupAddSnapshotTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addSnapshot/time", nil)
+	lookupRemoveSnapshotTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeSnapshot/time", nil)
+	lookupAddSnapshotCounter    = metrics.NewRegisteredMeter("pathdb/lookup/addSnapshot/added", nil)
+	lookupRemoveSnapshotCounter = metrics.NewRegisteredMeter("pathdb/lookup/removeSnapshot/removed", nil)
+
 	lookupAddLayerTimer           = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/time", nil)
 	lookupRemoveLayerTimer        = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/time", nil)
 	lookupAddLayerStorageTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/storage/time", nil)
