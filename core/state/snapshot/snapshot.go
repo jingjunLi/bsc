@@ -496,11 +496,11 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 	}
 	clearDiff := func(snap snapshot) {
-		diff, ok := snap.(*diffLayer)
-		if !ok {
+		diffLook, okLook := snap.(*diffLayer)
+		if !okLook {
 			return
 		}
-		t.lookup.RemoveSnapshot(diff)
+		t.lookup.RemoveSnapshot(diffLook)
 	}
 	var remove func(root common.Hash, snap snapshot)
 	remove = func(root common.Hash, snap snapshot) {
