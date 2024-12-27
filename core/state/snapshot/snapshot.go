@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -494,21 +495,33 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		if diff, ok := snap.(*diffLayer); ok {
 			parent := diff.parent.Root()
 			children[parent] = append(children[parent], root)
+			//log.Info("clear data", "root", diff.Root())
+			//for accountHash, _ := range diff.accountData {
+			//	log.Info("clear data", "accountHash", accountHash)
+			//}
 		}
 	}
 	clearDiff := func(snap snapshot) {
-		diff, ok := snap.(*diffLayer)
-		if !ok {
+		//log.Info("Layer clearing RemoveSnapshot", "layer", snap)
+		diffLook, okLook := snap.(*diffLayer)
+		if !okLook {
 			return
 		}
-		log.Info("Layer clearing RemoveSnapshot", "layer", diff.Root())
-		t.lookup.RemoveSnapshot(diff)
+		//var accounts []string
+		//for acc := range diffLook.accountData {
+		//	accounts = append(accounts, acc.String())
+		//}
+		//sort.Strings(accounts)
+		//
+		//log.Info("Layer clearing RemoveSnapshot", "layer", diffLook.Root(), "accounts", strings.Join(accounts, ", "))
+		t.lookup.RemoveSnapshot(diffLook)
 	}
 	var remove func(root common.Hash, snap snapshot)
 	remove = func(root common.Hash, snap snapshot) {
-		delete(t.layers, root)
 		// TODO:
-		clearDiff(snap)
+		clearDiff(t.layers[root])
+
+		delete(t.layers, root)
 		for _, child := range children[root] {
 			remove(child, snap)
 		}
@@ -576,12 +589,14 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		flattened := parent.flatten().(*diffLayer)
 		t.layers[flattened.root] = flattened
 		t.baseDiff = flattened
+		log.Info("deleting flatten layer")
 		t.lookup.RemoveSnapshot(flattened)
 		{
 			var accounts []string
 			for acc := range flattened.accountData {
 				accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
 			}
+			sort.Strings(accounts)
 			log.Info("Flattened parent Merged accounts", "accounts", strings.Join(accounts, ", "))
 		}
 

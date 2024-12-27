@@ -20,6 +20,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -544,8 +546,8 @@ func TestSnaphotsDescendants(t *testing.T) {
 		head = makeRoot(uint64(i + 2))
 		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), nil)
 		last = head
-		snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 	}
+	snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 
 	{
 		// flatten 的数据丢弃了 ? 如何找到 ?
@@ -586,9 +588,12 @@ func TestSnaphotsDescendants(t *testing.T) {
 		}
 	}
 	log.Info("lookup", "account size", len(snaps.lookup.stateToLayerAccount))
-	for i := range snaps.lookup.stateToLayerAccount {
-		log.Info("stateToLayerAccount", "index", i, "account", snaps.lookup.stateToLayerAccount[i])
+	var accounts []string
+	for acc := range snaps.lookup.stateToLayerAccount {
+		accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
 	}
+	sort.Strings(accounts)
+	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
 
 	// {
 	// 	var lookupAccount *types.SlimAccount

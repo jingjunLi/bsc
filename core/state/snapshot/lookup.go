@@ -131,7 +131,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	}(time.Now())
 	layerIDCounter++
 
-	log.Info("addLayer", "layerIDCounter", layerIDCounter, "root", diff.Root())
+	//log.Info("addLayer", "layerIDCounter", layerIDCounter, "root", diff.Root())
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -141,10 +141,10 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		}(time.Now())
 		for accountHash, _ := range diff.accountData {
 			l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
-			log.Info("addLayer", "layerIDCounter", layerIDCounter, "accountHash", accountHash)
-			for _, layer := range l.stateToLayerAccount[accountHash] {
-				log.Info("subset", "layerRoot", layer.Root())
-			}
+			//log.Info("addLayer", "layerIDCounter", layerIDCounter, "accountHash", accountHash)
+			//for _, layer := range l.stateToLayerAccount[accountHash] {
+			//	log.Info("subset", "layerRoot", layer.Root())
+			//}
 		}
 		wg.Done()
 	}()
@@ -177,7 +177,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	}(time.Now())
 	layerIDRemoveCounter++
 
-	log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root())
+	//log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root())
 	diffRoot := diff.Root()
 
 	var wg sync.WaitGroup
@@ -194,7 +194,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				exists bool
 				found  bool
 			)
-			log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "accountHash", accountHash)
+			//log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "accountHash", accountHash)
 			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
 				if subset == nil {
 					log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
