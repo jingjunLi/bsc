@@ -278,8 +278,8 @@ func (dl *diskLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) (
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items. Note, the maps are retained by the method to avoid
 // copying everything.
-func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, enableLookup bool) *diffLayer {
-	return newDiffLayer(dl, blockHash, accounts, storage, enableLookup)
+func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
+	return newDiffLayer(dl, blockHash, accounts, storage)
 }
 
 // stopGeneration aborts the state snapshot generation if it is currently running.

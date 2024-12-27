@@ -59,4 +59,8 @@ var (
 	lookupRemoveLayerAccountTimer = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/account/time", nil)
 	lookupAddDescendantTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addDescendant/time", nil)
 	lookupRemoveDescendantTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeDescendant/time", nil)
+
+	lookupDescendantGauge = metrics.NewRegisteredGauge("pathdb/lookup/descendant", nil)
+	lookupAccountGauge    = metrics.NewRegisteredGauge("pathdb/lookup/account", nil)
+	lookupStorageGauge    = metrics.NewRegisteredGauge("pathdb/lookup/storage", nil)
 )

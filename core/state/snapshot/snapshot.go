@@ -158,7 +158,7 @@ type snapshot interface {
 	// the specified data items.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, enableLookUp bool) *diffLayer
+	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
@@ -412,7 +412,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 	if parent == nil {
 		return fmt.Errorf("parent [%#x] snapshot missing", parentRoot)
 	}
-	snap := parent.(snapshot).Update(blockRoot, accounts, storage, t.enableLookUp)
+	snap := parent.(snapshot).Update(blockRoot, accounts, storage)
 
 	t.lookup.AddSnapshot(snap)
 	// Save the new snapshot for later
@@ -480,8 +480,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		// Replace the entire snapshot tree with the flat base
 		t.layers = map[common.Hash]snapshot{base.root: base}
 		// TODO:
-		//t.descendants = make(map[common.Hash]map[common.Hash]struct{})
-		//t.lookup = newLookup(base)
+		t.lookup = newLookup(base)
 
 		return nil
 	}
