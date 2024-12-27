@@ -409,6 +409,38 @@ func diffToMapInCommonHash(dl *diffLayer, state2LayerRoots map[common.Hash][]*di
 	}
 }
 
+func diffToMapInCommonHash2(dl *diffLayer, state2LayerRoots map[common.Hash][]diffLayer, state2LayerStorage map[common.Hash]map[common.Hash][]diffLayer) {
+	for accountHash := range dl.accountData {
+		state2LayerRoots[accountHash] = append(state2LayerRoots[accountHash], *dl)
+	}
+	for accountHash, slots := range dl.storageData {
+		subset := state2LayerStorage[accountHash]
+		if subset == nil {
+			subset = make(map[common.Hash][]diffLayer)
+			state2LayerStorage[accountHash] = subset
+		}
+		for storageHash := range slots {
+			subset[storageHash] = append(subset[storageHash], *dl)
+		}
+	}
+}
+
+func diffToMapInCommonHash3(dl *diffLayer, state2LayerRoots map[common.Hash][]common.Hash, state2LayerStorage map[common.Hash]map[common.Hash][]common.Hash) {
+	for accountHash := range dl.accountData {
+		state2LayerRoots[accountHash] = append(state2LayerRoots[accountHash], dl.Root())
+	}
+	for accountHash, slots := range dl.storageData {
+		subset := state2LayerStorage[accountHash]
+		if subset == nil {
+			subset = make(map[common.Hash][]common.Hash)
+			state2LayerStorage[accountHash] = subset
+		}
+		for storageHash := range slots {
+			subset[storageHash] = append(subset[storageHash], dl.Root())
+		}
+	}
+}
+
 func BenchmarkSearchBloom(b *testing.B) {
 	// First, we set up 128 diff layers, with 1K items each
 	fill := func(parent snapshot) *diffLayer {
@@ -416,7 +448,7 @@ func BenchmarkSearchBloom(b *testing.B) {
 			accounts = make(map[common.Hash][]byte)
 			storage  = make(map[common.Hash]map[common.Hash][]byte)
 		)
-		for i := 0; i < 10000; i++ {
+		for i := 0; i < 100000; i++ {
 			accounts[randomHash()] = randomAccount()
 		}
 		//for i := 0; i < 1000000; i++ {
@@ -454,7 +486,24 @@ func BenchmarkSearchBloom(b *testing.B) {
 	diffToMapInCommonHash(difflayer, state2layerroots2, stateToLayer)
 	diffsecondduration2 := time.Since(startTime).Microseconds()
 
+	startTime = time.Now()
+	state2layerroots3 := make(map[common.Hash][]diffLayer, len(difflayer.accountData)+len(difflayer.storageData))
+	stateToLayer3 := make(map[common.Hash]map[common.Hash][]diffLayer, mapsize)
+
+	diffToMapInCommonHash2(difflayer, state2layerroots3, stateToLayer3)
+	diffsecondduration3 := time.Since(startTime).Microseconds()
+
+	startTime = time.Now()
+	state2layerroots4 := make(map[common.Hash][]common.Hash, len(difflayer.accountData)+len(difflayer.storageData))
+	stateToLayer4 := make(map[common.Hash]map[common.Hash][]common.Hash, mapsize)
+
+	diffToMapInCommonHash3(difflayer, state2layerroots4, stateToLayer4)
+	diffsecondduration4 := time.Since(startTime).Microseconds()
+
 	fmt.Printf("diffToBloom cost: %d us\n", diffFirstDuration)
 	fmt.Printf("diffToMapInString cost: %d us\n", diffSecondDuration)
-	fmt.Printf("diffToMapInCommonHash cost: %d us\n", diffsecondduration2)
+	fmt.Printf("diffToMapInCommonHash *difflayer cost: %d us\n", diffsecondduration2)
+
+	fmt.Printf("diffToMapInCommonHash difflayer cost: %d us\n", diffsecondduration3)
+	fmt.Printf("diffToMapInCommonHash common hash cost: %d us\n", diffsecondduration4)
 }

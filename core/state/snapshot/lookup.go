@@ -54,8 +54,8 @@ func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 
 // Lookup is an internal help structure to quickly identify
 type Lookup struct {
-	stateToLayerAccount map[common.Hash][]Snapshot
-	stateToLayerStorage map[common.Hash]map[common.Hash][]Snapshot
+	stateToLayerAccount map[common.Hash][]*diffLayer
+	stateToLayerStorage map[common.Hash]map[common.Hash][]*diffLayer
 	descendants         map[common.Hash]map[common.Hash]struct{}
 
 	lock sync.RWMutex
@@ -75,8 +75,8 @@ func newLookup(head Snapshot) *Lookup {
 			layers = append(layers, current)
 			current = current.Parent()
 		}
-		l.stateToLayerAccount = make(map[common.Hash][]Snapshot)
-		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]Snapshot)
+		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer)
+		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer)
 
 		// Apply the layers from bottom to top
 		for i := len(layers) - 1; i >= 0; i-- {
@@ -151,7 +151,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		for accountHash, slots := range diff.storageData {
 			subset := l.stateToLayerStorage[accountHash]
 			if subset == nil {
-				subset = make(map[common.Hash][]Snapshot)
+				subset = make(map[common.Hash][]*diffLayer)
 				l.stateToLayerStorage[accountHash] = subset
 			}
 			for storageHash := range slots {
@@ -222,7 +222,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			subset := l.stateToLayerStorage[accountHash]
 			if subset == nil {
 				return
-				subset = make(map[common.Hash][]Snapshot)
+				subset = make(map[common.Hash][]*diffLayer)
 				l.stateToLayerStorage[accountHash] = subset
 			}
 			for storageHash := range slots {
