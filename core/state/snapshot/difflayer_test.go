@@ -21,6 +21,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -393,6 +394,40 @@ func diffToMapInString(dl *diffLayer, state2LayerRoots map[string][]*diffLayer) 
 	}
 }
 
+// slicePool is a shared pool of hash slice, for reducing the GC pressure.
+var slicePoolx = sync.Pool{
+	New: func() interface{} {
+		slice := make([]*diffLayer, 0, 160) // Pre-allocate a slice with a reasonable capacity.
+		return &slice
+	},
+}
+
+// getSlice obtains the hash slice from the shared pool.
+func getSlicex() []*diffLayer {
+	slice := *slicePoolx.Get().(*[]*diffLayer)
+	slice = slice[:0]
+	return slice
+}
+
+func diffToMapInCommonHashSlicePool(dl *diffLayer, state2LayerRoots map[common.Hash][]*diffLayer, state2LayerStorage map[common.Hash]map[common.Hash][]*diffLayer) {
+	for accountHash := range dl.accountData {
+		state2LayerRoots[accountHash] = append(state2LayerRoots[accountHash], dl)
+	}
+	for accountHash, slots := range dl.storageData {
+		subset := state2LayerStorage[accountHash]
+		if subset == nil {
+			subset = make(map[common.Hash][]*diffLayer)
+			state2LayerStorage[accountHash] = subset
+		}
+		for storageHash := range slots {
+			if _, exists := subset[storageHash]; !exists {
+				subset[storageHash] = getSlicex()
+			}
+			subset[storageHash] = append(subset[storageHash], dl)
+		}
+	}
+}
+
 func diffToMapInCommonHash(dl *diffLayer, state2LayerRoots map[common.Hash][]*diffLayer, state2LayerStorage map[common.Hash]map[common.Hash][]*diffLayer) {
 	for accountHash := range dl.accountData {
 		state2LayerRoots[accountHash] = append(state2LayerRoots[accountHash], dl)
@@ -448,9 +483,20 @@ func BenchmarkSearchBloom(b *testing.B) {
 			accounts = make(map[common.Hash][]byte)
 			storage  = make(map[common.Hash]map[common.Hash][]byte)
 		)
-		for i := 0; i < 100000; i++ {
-			accounts[randomHash()] = randomAccount()
+		for i := 0; i < 10000; i++ {
+			accountKey := randomHash()
+
+			accounts[accountKey] = randomAccount()
+
+			accStorage := make(map[common.Hash][]byte)
+			for i := 0; i < 20; i++ {
+				value := make([]byte, 32)
+				crand.Read(value)
+				accStorage[randomHash()] = value
+			}
+			storage[accountKey] = accStorage
 		}
+
 		//for i := 0; i < 1000000; i++ {
 		//	storage[randomHash()] = randomAccount()
 		//}
@@ -482,9 +528,16 @@ func BenchmarkSearchBloom(b *testing.B) {
 	startTime = time.Now()
 	state2layerroots2 := make(map[common.Hash][]*diffLayer, len(difflayer.accountData)+len(difflayer.storageData))
 	stateToLayer := make(map[common.Hash]map[common.Hash][]*diffLayer, mapsize)
-
+	// *diffLayer
 	diffToMapInCommonHash(difflayer, state2layerroots2, stateToLayer)
 	diffsecondduration2 := time.Since(startTime).Microseconds()
+
+	startTime = time.Now()
+	state2layerroots5 := make(map[common.Hash][]*diffLayer, len(difflayer.accountData)+len(difflayer.storageData))
+	stateToLayer5 := make(map[common.Hash]map[common.Hash][]*diffLayer, mapsize)
+	// *diffLayer in slice pool
+	diffToMapInCommonHashSlicePool(difflayer, state2layerroots5, stateToLayer5)
+	diffsecondduration5 := time.Since(startTime).Microseconds()
 
 	startTime = time.Now()
 	state2layerroots3 := make(map[common.Hash][]diffLayer, len(difflayer.accountData)+len(difflayer.storageData))
@@ -506,4 +559,5 @@ func BenchmarkSearchBloom(b *testing.B) {
 
 	fmt.Printf("diffToMapInCommonHash difflayer cost: %d us\n", diffsecondduration3)
 	fmt.Printf("diffToMapInCommonHash common hash cost: %d us\n", diffsecondduration4)
+	fmt.Printf("diffToMapInCommonHash difflayer in slice pool cost: %d us\n", diffsecondduration5)
 }

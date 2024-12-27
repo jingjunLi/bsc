@@ -183,13 +183,21 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 		}(time.Now())
 		defer wg.Done()
 		for accountHash, _ := range diff.accountData {
-			subset := l.stateToLayerAccount[accountHash]
-			if subset == nil {
+			var (
+				subset []*diffLayer
+				exists bool
+				found  bool
+			)
+			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
+				if subset == nil {
+					delete(l.stateToLayerAccount, accountHash)
+				}
+			} else {
 				//TODO if error, this happens sometimes
 				return
 				//log.Error("unknown account addr hash %s", accountHash)
 			}
-			var found bool
+
 			for j := 0; j < len(subset); j++ {
 				if subset[j].Root() == diffRoot {
 					if j == 0 {
@@ -219,18 +227,32 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 		}(time.Now())
 		defer wg.Done()
 		for accountHash, slots := range diff.storageData {
-			subset := l.stateToLayerStorage[accountHash]
-			if subset == nil {
-				return
-				subset = make(map[common.Hash][]*diffLayer)
-				l.stateToLayerStorage[accountHash] = subset
-			}
-			for storageHash := range slots {
-				slotSubset := subset[storageHash]
-				if slotSubset == nil {
+			var (
+				subset map[common.Hash][]*diffLayer
+				exist  bool
+			)
+			if subset, exist = l.stateToLayerStorage[accountHash]; exist {
+				if subset == nil {
+					delete(l.stateToLayerStorage, accountHash)
 					return
-					log.Error("unknown account addr hash %s", storageHash)
+					subset = make(map[common.Hash][]*diffLayer)
+					l.stateToLayerStorage[accountHash] = subset
 				}
+			}
+
+			for storageHash := range slots {
+				var (
+					slotSubset []*diffLayer
+					slotExists bool
+				)
+				if slotSubset, slotExists = subset[storageHash]; slotExists {
+					if slotSubset == nil {
+						delete(subset, storageHash)
+						return
+						log.Error("unknown account addr hash %s", storageHash)
+					}
+				}
+
 				var found bool
 				for j := 0; j < len(slotSubset); j++ {
 					if slotSubset[j].Root() == diffRoot {
