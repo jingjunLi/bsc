@@ -51,8 +51,12 @@ var (
 	// snapStorageCleanCounter measures time spent on deleting storages
 	snapStorageCleanCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/clean", nil)
 
-	lookupAddLayerTimer         = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/time", nil)
-	lookupRemoveLayerTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/time", nil)
-	lookupAddDescendantTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addDescendant/time", nil)
-	lookupRemoveDescendantTimer = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeDescendant/time", nil)
+	lookupAddLayerTimer           = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/time", nil)
+	lookupRemoveLayerTimer        = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/time", nil)
+	lookupAddLayerStorageTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/storage/time", nil)
+	lookupAddLayerAccountTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/account/time", nil)
+	lookupRemoveLayerStorageTimer = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/storage/time", nil)
+	lookupRemoveLayerAccountTimer = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/account/time", nil)
+	lookupAddDescendantTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addDescendant/time", nil)
+	lookupRemoveDescendantTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeDescendant/time", nil)
 )

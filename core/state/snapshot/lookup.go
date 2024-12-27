@@ -135,6 +135,9 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	wg.Add(2)
 
 	go func() {
+		defer func(now time.Time) {
+			lookupAddLayerAccountTimer.UpdateSince(now)
+		}(time.Now())
 		for accountHash, _ := range diff.accountData {
 			l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
 		}
@@ -142,6 +145,9 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	}()
 
 	go func() {
+		defer func(now time.Time) {
+			lookupAddLayerStorageTimer.UpdateSince(now)
+		}(time.Now())
 		for accountHash, slots := range diff.storageData {
 			subset := l.stateToLayerStorage[accountHash]
 			if subset == nil {
@@ -172,6 +178,9 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	wg.Add(2)
 
 	go func() {
+		defer func(now time.Time) {
+			lookupRemoveLayerAccountTimer.UpdateSince(now)
+		}(time.Now())
 		defer wg.Done()
 		for accountHash, _ := range diff.accountData {
 			subset := l.stateToLayerAccount[accountHash]
@@ -205,10 +214,14 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	}()
 
 	go func() {
+		defer func(now time.Time) {
+			lookupRemoveLayerStorageTimer.UpdateSince(now)
+		}(time.Now())
 		defer wg.Done()
 		for accountHash, slots := range diff.storageData {
 			subset := l.stateToLayerStorage[accountHash]
 			if subset == nil {
+				return
 				subset = make(map[common.Hash][]Snapshot)
 				l.stateToLayerStorage[accountHash] = subset
 			}
@@ -235,13 +248,16 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					log.Error("failed to delete lookup %s", storageHash)
 				}
 				if len(slotSubset) == 0 {
-					delete(l.stateToLayerStorage, storageHash)
+					delete(subset, storageHash)
 				} else {
 					subset[storageHash] = slotSubset
 				}
 			}
-		}
 
+			if len(subset) == 0 {
+				delete(l.stateToLayerStorage, accountHash)
+			}
+		}
 	}()
 
 	wg.Wait()
