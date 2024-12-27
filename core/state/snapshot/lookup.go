@@ -352,8 +352,8 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 	}()
 	wg.Wait()
 	lookupDescendantGauge.Update(int64(len(l.descendants)))
-	lookupDescendantGauge.Update(int64(len(l.stateToLayerAccount)))
-	lookupDescendantGauge.Update(int64(len(l.stateToLayerStorage)))
+	lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
+	lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
 }
 
 func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
@@ -373,8 +373,8 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 
 	wg.Wait()
 	lookupDescendantGauge.Update(int64(len(l.descendants)))
-	lookupDescendantGauge.Update(int64(len(l.stateToLayerAccount)))
-	lookupDescendantGauge.Update(int64(len(l.stateToLayerStorage)))
+	lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
+	lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
 
 }
 
