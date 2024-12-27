@@ -504,9 +504,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	}
 	var remove func(root common.Hash, snap snapshot)
 	remove = func(root common.Hash, snap snapshot) {
-		delete(t.layers, root)
 		// TODO:
-		clearDiff(snap)
+		clearDiff(t.layers[root])
+		delete(t.layers, root)
 		for _, child := range children[root] {
 			remove(child, snap)
 		}

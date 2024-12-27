@@ -188,9 +188,12 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				exists bool
 				found  bool
 			)
-			if subset, exists = l.stateToLayerAccount[accountHash]; exists && subset == nil {
-				delete(l.stateToLayerAccount, accountHash)
-				return
+			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
+				if subset == nil {
+					//log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
+					delete(l.stateToLayerAccount, accountHash)
+					return
+				}
 			} else {
 				//TODO if error, this happens sometimes
 				return
@@ -230,11 +233,13 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				subset map[common.Hash][]*diffLayer
 				exist  bool
 			)
-			if subset, exist = l.stateToLayerStorage[accountHash]; exist && subset == nil {
-				delete(l.stateToLayerStorage, accountHash)
-				return
-				subset = make(map[common.Hash][]*diffLayer)
-				l.stateToLayerStorage[accountHash] = subset
+			if subset, exist = l.stateToLayerStorage[accountHash]; exist {
+				if subset == nil {
+					delete(l.stateToLayerStorage, accountHash)
+					return
+					subset = make(map[common.Hash][]*diffLayer)
+					l.stateToLayerStorage[accountHash] = subset
+				}
 			}
 
 			for storageHash := range slots {
@@ -242,10 +247,12 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					slotSubset []*diffLayer
 					slotExists bool
 				)
-				if slotSubset, slotExists = subset[storageHash]; slotExists && slotSubset == nil {
-					delete(subset, storageHash)
-					return
-					log.Error("unknown account addr hash %s", storageHash)
+				if slotSubset, slotExists = subset[storageHash]; slotExists {
+					if slotSubset == nil {
+						delete(subset, storageHash)
+						return
+						log.Error("unknown account addr hash %s", storageHash)
+					}
 				}
 
 				var found bool
