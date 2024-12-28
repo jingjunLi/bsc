@@ -58,6 +58,8 @@ type Lookup struct {
 	stateToLayerStorage map[common.Hash]map[common.Hash][]*diffLayer
 	descendants         map[common.Hash]map[common.Hash]struct{}
 
+	layers map[common.Hash]struct{}
+
 	lock sync.RWMutex
 	//descendantsLock ShardLock
 }
@@ -75,8 +77,9 @@ func newLookup(head Snapshot) *Lookup {
 			layers = append(layers, current)
 			current = current.Parent()
 		}
-		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer)
-		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer)
+		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer, 20000)
+		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer, 2000)
+		l.layers = make(map[common.Hash]struct{}, 128)
 
 		// Apply the layers from bottom to top
 		for i := len(layers) - 1; i >= 0; i-- {
@@ -128,6 +131,7 @@ var layerIDRemoveCounter int
 func (l *Lookup) addLayer(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupAddLayerTimer.UpdateSince(now)
+		lookupAddLayerCounter.Mark(1)
 	}(time.Now())
 	layerIDCounter++
 
@@ -169,6 +173,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 func (l *Lookup) removeLayer(diff *diffLayer) error {
 	defer func(now time.Time) {
 		lookupRemoveLayerTimer.UpdateSince(now)
+		lookupRemoveLayerCounter.Mark(1)
 	}(time.Now())
 	layerIDRemoveCounter++
 
@@ -369,6 +374,7 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 
 	l.lock.Lock()
 	defer l.lock.Unlock()
+	l.layers[diff.Root()] = struct{}{}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -394,6 +400,13 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 
 	l.lock.Lock()
 	defer l.lock.Unlock()
+
+	diffRoot := diff.Root()
+	if _, exist := l.layers[diffRoot]; exist {
+		delete(l.layers, diffRoot)
+	} else {
+		return
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)

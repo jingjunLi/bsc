@@ -575,9 +575,11 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		// write lock on grandparent.
 		prevParent := parent
 		flattened := parent.flatten().(*diffLayer)
-		t.layers[flattened.root] = flattened
-		t.baseDiff = flattened
-		t.lookup.RemoveSnapshot(prevParent)
+		if flattened != prevParent {
+			t.layers[flattened.root] = flattened
+			t.baseDiff = flattened
+			t.lookup.RemoveSnapshot(prevParent)
+		}
 
 		// Invoke the hook if it's registered. Ugly hack.
 		if t.onFlatten != nil {

@@ -56,8 +56,11 @@ var (
 	lookupAddSnapshotCounter    = metrics.NewRegisteredMeter("pathdb/lookup/addSnapshot/added", nil)
 	lookupRemoveSnapshotCounter = metrics.NewRegisteredMeter("pathdb/lookup/removeSnapshot/removed", nil)
 
-	lookupAddLayerTimer           = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/time", nil)
-	lookupRemoveLayerTimer        = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/time", nil)
+	lookupAddLayerTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/time", nil)
+	lookupRemoveLayerTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/time", nil)
+	lookupAddLayerCounter    = metrics.NewRegisteredMeter("pathdb/lookup/addLayer/added", nil)
+	lookupRemoveLayerCounter = metrics.NewRegisteredMeter("pathdb/lookup/removeLayer/removed", nil)
+
 	lookupAddLayerStorageTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/storage/time", nil)
 	lookupAddLayerAccountTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/account/time", nil)
 	lookupRemoveLayerStorageTimer = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/storage/time", nil)
