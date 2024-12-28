@@ -131,7 +131,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	}(time.Now())
 	layerIDCounter++
 
-	//log.Info("addLayer", "layerIDCounter", layerIDCounter, "root", diff.Root())
+	log.Info("addLayer", "layerIDCounter", layerIDCounter, "root", diff.Root())
 	var wg sync.WaitGroup
 	wg.Add(2)
 
