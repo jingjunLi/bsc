@@ -546,8 +546,8 @@ func TestSnaphotsDescendants(t *testing.T) {
 		head = makeRoot(uint64(i + 2))
 		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), nil)
 		last = head
+		snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 	}
-	snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 
 	{
 		// flatten 的数据丢弃了 ? 如何找到 ?

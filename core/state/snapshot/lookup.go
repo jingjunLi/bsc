@@ -378,7 +378,8 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 		lookupAddSnapshotTimer.UpdateSince(now)
 		lookupAddSnapshotCounter.Mark(1)
 	}(time.Now())
-
+	log.Info("add snapshot", "root", diff.Root())
+	diff.layerPrint()
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -403,6 +404,9 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 		lookupRemoveSnapshotTimer.UpdateSince(now)
 		lookupRemoveSnapshotCounter.Mark(1)
 	}(time.Now())
+
+	log.Info("Removing snapshot", "root", diff.Root())
+	diff.layerPrint()
 
 	l.lock.Lock()
 	defer l.lock.Unlock()

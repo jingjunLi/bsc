@@ -22,6 +22,8 @@ import (
 	"math"
 	"math/rand"
 	"slices"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -523,6 +525,7 @@ func (dl *diffLayer) flatten() snapshot {
 	// Parent is a diff, flatten it first (note, apart from weird corned cases,
 	// flatten will realistically only ever merge 1 layer, so there's no need to
 	// be smarter about grouping flattens together).
+	prev := parent
 	parent = parent.flatten().(*diffLayer)
 
 	parent.lock.Lock()
@@ -552,6 +555,12 @@ func (dl *diffLayer) flatten() snapshot {
 		// Storage exists in both parent and child, merge the slots
 		maps.Copy(parent.storageData[accountHash], storage)
 	}
+
+	prev.layerPrint()
+	parent.layerPrint()
+	dl.layerPrint()
+	log.Info("diff layer flattening", "prev parent", prev.Root(), "new parent", parent.Root(), "parent stale", parent.Root())
+
 	// Return the combo parent
 	return &diffLayer{
 		parent:      parent.parent,
@@ -620,4 +629,13 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
 	dl.storageList[accountHash] = storageList
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
 	return storageList
+}
+
+func (dl *diffLayer) layerPrint() {
+	var accounts []string
+	for acc := range dl.accountData {
+		accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
+	}
+	sort.Strings(accounts)
+	log.Info("-- layer debug --", "root", dl.Root(), "accounts", strings.Join(accounts, ", "))
 }

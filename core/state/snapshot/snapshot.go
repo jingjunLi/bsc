@@ -489,37 +489,53 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	persisted := t.cap(diff, layers)
 	//log.Info("cap after", "persisted", persisted)
 
+	/*
+		children 保存所有 parent root -> diff layer root 的映射
+		3 & 4 -> n_4, 4 如何访问到? t.layers 被覆盖了;
+		children 用于 3被删除 同时 4 也要删除的场景;
+	*/
 	// Remove any layer that is stale or links into a stale layer
 	children := make(map[common.Hash][]common.Hash)
 	for root, snap := range t.layers {
 		if diff, ok := snap.(*diffLayer); ok {
 			parent := diff.parent.Root()
 			children[parent] = append(children[parent], root)
-			//log.Info("clear data", "root", diff.Root())
-			//for accountHash, _ := range diff.accountData {
-			//	log.Info("clear data", "accountHash", accountHash)
-			//}
 		}
 	}
+
+	//for _, child := range children[root] {
+	//	var accounts []string
+	//	for acc := range diff.accountData {
+	//		accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
+	//	}
+	//	log.Info("--- layer data-----", "root", diff.Root(), "accounts", strings.Join(accounts, ", "))
+	//}
+
 	clearDiff := func(snap snapshot) {
 		//log.Info("Layer clearing RemoveSnapshot", "layer", snap)
 		diffLook, okLook := snap.(*diffLayer)
 		if !okLook {
 			return
 		}
-		//var accounts []string
-		//for acc := range diffLook.accountData {
-		//	accounts = append(accounts, acc.String())
-		//}
-		//sort.Strings(accounts)
-		//
-		//log.Info("Layer clearing RemoveSnapshot", "layer", diffLook.Root(), "accounts", strings.Join(accounts, ", "))
+		var accounts []string
+		for acc := range diffLook.accountData {
+			accounts = append(accounts, acc.String())
+		}
+		sort.Strings(accounts)
+
+		log.Info("Layer clearing RemoveSnapshot ---- clear diff", "layer", diffLook.Root(), "accounts", strings.Join(accounts, ", "))
 		t.lookup.RemoveSnapshot(diffLook)
 	}
 	var remove func(root common.Hash, snap snapshot)
 	remove = func(root common.Hash, snap snapshot) {
 		// TODO:
-		clearDiff(t.layers[root])
+		diffInRemove := t.layers[root].(*diffLayer)
+		//if !diffInRemove.Stale() {
+		//	log.Info("Layer clearing RemoveSnapshot ---- not stale", "layer root", t.layers[root].Root())
+		//	t.layers[root].(*diffLayer).layerPrint()
+		//	//return
+		//}
+		clearDiff(diffInRemove)
 
 		delete(t.layers, root)
 		for _, child := range children[root] {
@@ -529,6 +545,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	}
 	for root, snap := range t.layers {
 		if snap.Stale() {
+			log.Info("Layer mark stale RemoveSnapshot", "layer root ", root, "snap", snap.Root())
 			remove(root, snap)
 		}
 	}
@@ -586,11 +603,14 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 		// Flatten the parent into the grandparent. The flattening internally obtains a
 		// write lock on grandparent.
+		log.Info("before flattening")
+		parent.layerPrint()
+		prevParent := parent
 		flattened := parent.flatten().(*diffLayer)
 		t.layers[flattened.root] = flattened
 		t.baseDiff = flattened
-		log.Info("deleting flatten layer")
-		t.lookup.RemoveSnapshot(flattened)
+		log.Info("Layer clearing RemoveSnapshot ---- after cap")
+		t.lookup.RemoveSnapshot(prevParent)
 		{
 			var accounts []string
 			for acc := range flattened.accountData {
