@@ -609,7 +609,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		flattened := parent.flatten().(*diffLayer)
 		t.layers[flattened.root] = flattened
 		t.baseDiff = flattened
-		log.Info("Layer clearing RemoveSnapshot ---- after cap")
+		log.Info("Layer clearing RemoveSnapshot ---- after cap", "prevParent", prevParent.Root(), "current parent", flattened.Root())
 		t.lookup.RemoveSnapshot(prevParent)
 		{
 			var accounts []string

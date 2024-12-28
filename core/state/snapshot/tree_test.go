@@ -511,7 +511,6 @@ func TestDescendant(t *testing.T) {
 
 func TestSnaphotsDescendants(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
-	//fmt.Println(t.dump(false))
 
 	// setAccount is a helper to construct a random account entry and assign it to
 	// an account slot in a snapshot
