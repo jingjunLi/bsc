@@ -177,7 +177,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	}(time.Now())
 	layerIDRemoveCounter++
 
-	//log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root())
+	log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root())
 	diffRoot := diff.Root()
 
 	var wg sync.WaitGroup
@@ -188,13 +188,14 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			lookupRemoveLayerAccountTimer.UpdateSince(now)
 		}(time.Now())
 		defer wg.Done()
+		diff.layerPrint()
 		for accountHash, _ := range diff.accountData {
 			var (
 				subset []*diffLayer
 				exists bool
 				found  bool
 			)
-			//log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "accountHash", accountHash)
+			log.Info("removeLayer", "layerIDRemoveCounter", layerIDRemoveCounter, "accountHash", accountHash)
 			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
 				if subset == nil {
 					log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
@@ -204,7 +205,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			} else {
 				log.Info("removeLayer 222", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 				//TODO if error, this happens sometimes
-				return
+				continue
 				//log.Error("unknown account addr hash %s", accountHash)
 			}
 
@@ -222,7 +223,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			}
 			log.Info("removeLayer 444", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 			if !found {
-				return
+				continue
 				log.Error("failed to delete lookup %s", accountHash)
 			}
 			log.Info("removeLayer 555", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
