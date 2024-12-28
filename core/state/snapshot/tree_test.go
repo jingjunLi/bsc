@@ -683,3 +683,137 @@ func TestSnaphotsDescendants(t *testing.T) {
 	//	}
 	//}
 }
+
+func TestSnaphotsCap_1(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
+
+	// setAccount is a helper to construct a random account entry and assign it to
+	// an account slot in a snapshot
+	setAccount := func(accKey string) map[common.Hash][]byte {
+		return map[common.Hash][]byte{
+			common.HexToHash(accKey): randomAccount(),
+		}
+	}
+	makeRoot := func(height uint64) common.Hash {
+		var buffer [8]byte
+		binary.BigEndian.PutUint64(buffer[:], height)
+		return common.BytesToHash(buffer[:])
+	}
+	snaps := newTestLayerTree()
+	// Construct the snapshots with 129 layers, flattening whatever's above that
+	var (
+		last = common.HexToHash("0x01")
+		head common.Hash
+	)
+	for i := 1; i < 350; i++ {
+		head = makeRoot(uint64(i + 2))
+		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), nil)
+		last = head
+		snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
+	}
+
+	{
+		for i := 3; i <= 200; i++ {
+			var lookupAccount *types.SlimAccount
+			var err error
+
+			accountAddrHash := common.HexToHash(fmt.Sprintf("%d", i))
+
+			// fastpath
+			root := head
+			lookupAccount, err = snaps.LookupAccount(accountAddrHash, root)
+			if err != nil {
+				log.Info("GlobalLookup.lookupAccount err",
+					"hash", accountAddrHash,
+					"root", root,
+					"err", err)
+			}
+
+			ret, err := snaps.Snapshot(head).Account(accountAddrHash)
+			if !types.AreSlimAccountsEqual(ret, lookupAccount) {
+				t.Error("Snapshot match",
+					"index", i,
+					"accountAddrHash", accountAddrHash,
+					"lookupAccount", lookupAccount,
+					"ret", ret)
+			}
+		}
+	}
+	log.Info("lookup", "account size", len(snaps.lookup.stateToLayerAccount))
+	var accounts []string
+	for acc := range snaps.lookup.stateToLayerAccount {
+		accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
+	}
+	sort.Strings(accounts)
+	if len(snaps.lookup.stateToLayerAccount) != 128 {
+		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerAccount))
+	}
+	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
+}
+
+func TestSnaphotsCap_2(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
+
+	// setAccount is a helper to construct a random account entry and assign it to
+	// an account slot in a snapshot
+	setAccount := func(accKey string) map[common.Hash][]byte {
+		return map[common.Hash][]byte{
+			common.HexToHash(accKey): randomAccount(),
+		}
+	}
+	makeRoot := func(height uint64) common.Hash {
+		var buffer [8]byte
+		binary.BigEndian.PutUint64(buffer[:], height)
+		return common.BytesToHash(buffer[:])
+	}
+	snaps := newTestLayerTree()
+	// Construct the snapshots with 129 layers, flattening whatever's above that
+	var (
+		last = common.HexToHash("0x01")
+		head common.Hash
+	)
+	for i := 1; i < 350; i++ {
+		head = makeRoot(uint64(i + 2))
+		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), nil)
+		last = head
+	}
+	snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
+
+	{
+		for i := 3; i <= 200; i++ {
+			var lookupAccount *types.SlimAccount
+			var err error
+
+			accountAddrHash := common.HexToHash(fmt.Sprintf("%d", i))
+
+			// fastpath
+			root := head
+			lookupAccount, err = snaps.LookupAccount(accountAddrHash, root)
+			if err != nil {
+				log.Info("GlobalLookup.lookupAccount err",
+					"hash", accountAddrHash,
+					"root", root,
+					"err", err)
+			}
+
+			ret, err := snaps.Snapshot(head).Account(accountAddrHash)
+			if !types.AreSlimAccountsEqual(ret, lookupAccount) {
+				t.Error("Snapshot match",
+					"index", i,
+					"accountAddrHash", accountAddrHash,
+					"lookupAccount", lookupAccount,
+					"ret", ret)
+			}
+		}
+	}
+	log.Info("lookup", "account size", len(snaps.lookup.stateToLayerAccount))
+	var accounts []string
+	for acc := range snaps.lookup.stateToLayerAccount {
+		accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
+	}
+	sort.Strings(accounts)
+	if len(snaps.lookup.stateToLayerAccount) != 128 {
+		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerAccount))
+	}
+	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
+}
