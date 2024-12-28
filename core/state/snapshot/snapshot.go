@@ -604,21 +604,25 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 		// Flatten the parent into the grandparent. The flattening internally obtains a
 		// write lock on grandparent.
-		log.Info("before flattening")
+		log.Info("before flattening", "layers size", layers)
 		parent.layerPrint()
 		prevParent := parent
 		flattened := parent.flatten().(*diffLayer)
-		t.layers[flattened.root] = flattened
-		t.baseDiff = flattened
-		log.Info("Layer clearing RemoveSnapshot ---- after cap", "prevParent", prevParent.Root(), "current parent", flattened.Root())
-		t.lookup.RemoveSnapshot(prevParent)
-		{
-			var accounts []string
-			for acc := range flattened.accountData {
-				accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
+		if flattened != prevParent {
+			t.layers[flattened.root] = flattened
+			t.baseDiff = flattened
+			log.Info("Layer clearing RemoveSnapshot ---- after cap", "prevParent", prevParent.Root(), "current parent", flattened.Root())
+			t.lookup.RemoveSnapshot(prevParent)
+			{
+				var accounts []string
+				for acc := range flattened.accountData {
+					accounts = append(accounts, acc.String()) // 假设 acc 是 common.Hash 类型
+				}
+				sort.Strings(accounts)
+				log.Info("Flattened parent Merged accounts", "accounts", strings.Join(accounts, ", "))
 			}
-			sort.Strings(accounts)
-			log.Info("Flattened parent Merged accounts", "accounts", strings.Join(accounts, ", "))
+		} else {
+			log.Info("Layer flatten not change ", "prevParent", prevParent.Root(), "current parent", flattened.Root())
 		}
 
 		// Invoke the hook if it's registered. Ugly hack.
