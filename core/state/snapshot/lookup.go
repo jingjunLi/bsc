@@ -77,9 +77,9 @@ func newLookup(head Snapshot) *Lookup {
 			layers = append(layers, current)
 			current = current.Parent()
 		}
-		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer, 20000)
-		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer, 2000)
-		l.layers = make(map[common.Hash]struct{}, 128)
+		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer)
+		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer)
+		l.layers = make(map[common.Hash]struct{})
 
 		// Apply the layers from bottom to top
 		for i := len(layers) - 1; i >= 0; i-- {
@@ -182,53 +182,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	go func() {
-		defer func(now time.Time) {
-			lookupRemoveLayerAccountTimer.UpdateSince(now)
-		}(time.Now())
-		defer wg.Done()
-		for accountHash, _ := range diff.accountData {
-			var (
-				subset []*diffLayer
-				exists bool
-				found  bool
-			)
-			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
-				if subset == nil {
-					//log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
-					delete(l.stateToLayerAccount, accountHash)
-					continue
-				}
-			} else {
-				//TODO if error, this happens sometimes
-				continue
-				//log.Error("unknown account addr hash %s", accountHash)
-			}
-
-			for j := 0; j < len(subset); j++ {
-				if subset[j].Root() == diffRoot {
-					if j == 0 {
-						subset = subset[1:] // TODO what if the underlying slice is held forever?
-					} else {
-						subset = append(subset[:j], subset[j+1:]...)
-					}
-					found = true
-					break
-				}
-			}
-			if !found {
-				// deleted flattened layers
-				continue
-				log.Error("failed to delete lookup %s", accountHash)
-			}
-			if len(subset) == 0 {
-				delete(l.stateToLayerAccount, accountHash)
-			} else {
-				l.stateToLayerAccount[accountHash] = subset
-			}
-		}
-	}()
-
+	// remove layer storage cost time longer than remove account, so run it first
 	go func() {
 		defer func(now time.Time) {
 			lookupRemoveLayerStorageTimer.UpdateSince(now)
@@ -286,6 +240,53 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 
 			if len(subset) == 0 {
 				delete(l.stateToLayerStorage, accountHash)
+			}
+		}
+	}()
+
+	go func() {
+		defer func(now time.Time) {
+			lookupRemoveLayerAccountTimer.UpdateSince(now)
+		}(time.Now())
+		defer wg.Done()
+		for accountHash, _ := range diff.accountData {
+			var (
+				subset []*diffLayer
+				exists bool
+				found  bool
+			)
+			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
+				if subset == nil {
+					//log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
+					delete(l.stateToLayerAccount, accountHash)
+					continue
+				}
+			} else {
+				//TODO if error, this happens sometimes
+				continue
+				//log.Error("unknown account addr hash %s", accountHash)
+			}
+
+			for j := 0; j < len(subset); j++ {
+				if subset[j].Root() == diffRoot {
+					if j == 0 {
+						subset = subset[1:] // TODO what if the underlying slice is held forever?
+					} else {
+						subset = append(subset[:j], subset[j+1:]...)
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				// deleted flattened layers
+				continue
+				log.Error("failed to delete lookup %s", accountHash)
+			}
+			if len(subset) == 0 {
+				delete(l.stateToLayerAccount, accountHash)
+			} else {
+				l.stateToLayerAccount[accountHash] = subset
 			}
 		}
 	}()

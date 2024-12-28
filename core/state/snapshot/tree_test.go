@@ -674,6 +674,8 @@ func TestSnaphotsCap_1(t *testing.T) {
 }
 
 func TestSnaphotsCap_2(t *testing.T) {
+	//runtime.GOMAXPROCS(runtime.NumCPU())
+	//
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
 
 	makeRoot := func(height uint64) common.Hash {
