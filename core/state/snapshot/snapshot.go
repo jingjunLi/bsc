@@ -505,7 +505,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	var remove func(root common.Hash, snap snapshot)
 	remove = func(root common.Hash, snap snapshot) {
 		// TODO:
-		clearDiff(t.layers[root])
+		if diffInRemove, ok := t.layers[root].(*diffLayer); ok {
+			clearDiff(diffInRemove)
+		}
 		delete(t.layers, root)
 		for _, child := range children[root] {
 			remove(child, snap)
@@ -595,13 +597,14 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
 
-	clearDiff := func(snap snapshot) {
-		diff, ok := snap.(*diffLayer)
-		if !ok {
-			return
-		}
-		t.lookup.RemoveSnapshot(diff)
-	}
+	//clearDiff := func(snap snapshot) {
+	//	diff, ok := snap.(*diffLayer)
+	//	if !ok {
+	//		return
+	//	}
+	//	t.lookup.RemoveSnapshot(diff)
+	//	log.Info("Layer clearing RemoveSnapshot ---- after diffToDisk", "diff root", diff.Root())
+	//}
 
 	//TODO:check it?
 	// If the bottom-most layer is larger than our memory cap, persist to disk
@@ -617,7 +620,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	//}
 	t.baseDiff = diff
 	bottom.lock.RUnlock()
-	clearDiff(bottom)
+	//clearDiff(bottom)
 	t.layers[base.root] = base
 	diff.parent = base
 	return base
