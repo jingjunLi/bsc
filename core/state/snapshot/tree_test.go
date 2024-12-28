@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -509,17 +510,30 @@ func TestDescendant(t *testing.T) {
 	}
 }
 
+// setAccount is a helper to construct a random account entry and assign it to
+// an account slot in a snapshot
+func setAccount(accKey string) map[common.Hash][]byte {
+	return map[common.Hash][]byte{
+		common.HexToHash(accKey): randomAccount(),
+	}
+}
+func setStorage(accKey string) map[common.Hash]map[common.Hash][]byte {
+	storage := make(map[common.Hash]map[common.Hash][]byte)
+	accStorage := make(map[common.Hash][]byte)
+	for i := 0; i < 1; i++ {
+		value := make([]byte, 32)
+		crand.Read(value)
+		accStorage[randomHash()] = value
+	}
+	storage[common.HexToHash(accKey)] = accStorage
+
+	return storage
+}
+
 func TestSnaphotsDescendants(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
 	//fmt.Println(t.dump(false))
 
-	// setAccount is a helper to construct a random account entry and assign it to
-	// an account slot in a snapshot
-	setAccount := func(accKey string) map[common.Hash][]byte {
-		return map[common.Hash][]byte{
-			common.HexToHash(accKey): randomAccount(),
-		}
-	}
 	makeRoot := func(height uint64) common.Hash {
 		var buffer [8]byte
 		binary.BigEndian.PutUint64(buffer[:], height)
@@ -544,7 +558,7 @@ func TestSnaphotsDescendants(t *testing.T) {
 	)
 	for i := 1; i < 350; i++ {
 		head = makeRoot(uint64(i + 2))
-		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), nil)
+		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), setStorage(fmt.Sprintf("%d", i+2)))
 		last = head
 		snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 	}
@@ -594,106 +608,11 @@ func TestSnaphotsDescendants(t *testing.T) {
 	}
 	sort.Strings(accounts)
 	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
-
-	// {
-	// 	var lookupAccount *types.SlimAccount
-	// 	var err error
-	// 	accountAddrHash := common.HexToHash("105")
-
-	// 	//log.Info("stateReader Account 11", "addr", addr, "hash", accountAddrHash)
-	// 	{
-	// 		// fastpath
-	// 		root := head
-	// 		//log.Info("stateReader Account", "new root", root, "old root", r.snap.Root())
-	// 		targetLayer := snaps.LookupAccount(accountAddrHash, root)
-	// 		if targetLayer != nil {
-	// 			lookupAccount, err = targetLayer.CurrentLayerAccount(accountAddrHash)
-	// 			if err != nil {
-	// 				log.Info("GlobalLookup.lookupAccount err", "hash", accountAddrHash, "root", root, "err", err)
-	// 			}
-	// 			//log.Info("GlobalLookup.lookupAccount", "hash", accountAddrHash, "root", root, "res", lookupData, "targetLayer", targetLayer)
-	// 		}
-	// 	}
-
-	// 	ret, err := snaps.Snapshot(head).Account(accountAddrHash)
-	// 	if ret != lookupAccount {
-	// 		log.Info("Snapshot", "accountAddrHash", accountAddrHash, "lookupAccount", lookupAccount, "ret", ret)
-	// 	}
-	// }
-
-	//var cases = []struct {
-	//	headRoot     common.Hash
-	//	limit        int
-	//	nodisk       bool
-	//	expected     int
-	//	expectBottom common.Hash
-	//}{
-	//	{head, 0, false, 0, common.Hash{}},
-	//	{head, 64, false, 64, makeRoot(129 + 2 - 64)},
-	//	{head, 128, false, 128, makeRoot(3)}, // Normal diff layers, no accumulator
-	//	{head, 129, true, 129, makeRoot(2)},  // All diff layers, including accumulator
-	//	{head, 130, false, 130, makeRoot(1)}, // All diff layers + disk layer
-	//}
-	//for i, c := range cases {
-	//	layers := snaps.Snapshots(c.headRoot, c.limit, c.nodisk)
-	//	if len(layers) != c.expected {
-	//		t.Errorf("non-overflow test %d: returned snapshot layers are mismatched, want %v, got %v", i, c.expected, len(layers))
-	//	}
-	//	if len(layers) == 0 {
-	//		continue
-	//	}
-	//	bottommost := layers[len(layers)-1]
-	//	if bottommost.Root() != c.expectBottom {
-	//		t.Errorf("non-overflow test %d: snapshot mismatch, want %v, get %v", i, c.expectBottom, bottommost.Root())
-	//	}
-	//}
-	//// Above we've tested the normal capping, which leaves the accumulator live.
-	//// Test that if the bottommost accumulator diff layer overflows the allowed
-	//// memory limit, the snapshot tree gets capped to one less layer.
-	//// Commit the diff layer onto the disk and ensure it's persisted
-	//defer func(memcap uint64) { aggregatorMemoryLimit = memcap }(aggregatorMemoryLimit)
-	//aggregatorMemoryLimit = 0
-	//
-	//snaps.Cap(head, 128) // 129 (128 diffs + 1 overflown accumulator + 1 disk)
-	//
-	//cases = []struct {
-	//	headRoot     common.Hash
-	//	limit        int
-	//	nodisk       bool
-	//	expected     int
-	//	expectBottom common.Hash
-	//}{
-	//	{head, 0, false, 0, common.Hash{}},
-	//	{head, 64, false, 64, makeRoot(129 + 2 - 64)},
-	//	{head, 128, false, 128, makeRoot(3)}, // All diff layers, accumulator was flattened
-	//	{head, 129, true, 128, makeRoot(3)},  // All diff layers, accumulator was flattened
-	//	{head, 130, false, 129, makeRoot(2)}, // All diff layers + disk layer
-	//}
-	//for i, c := range cases {
-	//	layers := snaps.Snapshots(c.headRoot, c.limit, c.nodisk)
-	//	if len(layers) != c.expected {
-	//		t.Errorf("overflow test %d: returned snapshot layers are mismatched, want %v, got %v", i, c.expected, len(layers))
-	//	}
-	//	if len(layers) == 0 {
-	//		continue
-	//	}
-	//	bottommost := layers[len(layers)-1]
-	//	if bottommost.Root() != c.expectBottom {
-	//		t.Errorf("overflow test %d: snapshot mismatch, want %v, get %v", i, c.expectBottom, bottommost.Root())
-	//	}
-	//}
 }
 
 func TestSnaphotsCap_1(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
 
-	// setAccount is a helper to construct a random account entry and assign it to
-	// an account slot in a snapshot
-	setAccount := func(accKey string) map[common.Hash][]byte {
-		return map[common.Hash][]byte{
-			common.HexToHash(accKey): randomAccount(),
-		}
-	}
 	makeRoot := func(height uint64) common.Hash {
 		var buffer [8]byte
 		binary.BigEndian.PutUint64(buffer[:], height)
@@ -707,7 +626,7 @@ func TestSnaphotsCap_1(t *testing.T) {
 	)
 	for i := 1; i < 350; i++ {
 		head = makeRoot(uint64(i + 2))
-		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), nil)
+		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), setStorage(fmt.Sprintf("%d", i+2)))
 		last = head
 		snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
 	}
@@ -748,19 +667,15 @@ func TestSnaphotsCap_1(t *testing.T) {
 	if len(snaps.lookup.stateToLayerAccount) != 128 {
 		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerAccount))
 	}
+	if len(snaps.lookup.stateToLayerStorage) != 128 {
+		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerAccount))
+	}
 	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
 }
 
 func TestSnaphotsCap_2(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
 
-	// setAccount is a helper to construct a random account entry and assign it to
-	// an account slot in a snapshot
-	setAccount := func(accKey string) map[common.Hash][]byte {
-		return map[common.Hash][]byte{
-			common.HexToHash(accKey): randomAccount(),
-		}
-	}
 	makeRoot := func(height uint64) common.Hash {
 		var buffer [8]byte
 		binary.BigEndian.PutUint64(buffer[:], height)
@@ -774,7 +689,7 @@ func TestSnaphotsCap_2(t *testing.T) {
 	)
 	for i := 1; i < 350; i++ {
 		head = makeRoot(uint64(i + 2))
-		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), nil)
+		snaps.Update(head, last, setAccount(fmt.Sprintf("%d", i+2)), setStorage(fmt.Sprintf("%d", i+2)))
 		last = head
 	}
 	snaps.Cap(head, 128) // 130 layers (128 diffs + 1 accumulator + 1 disk)
@@ -814,6 +729,9 @@ func TestSnaphotsCap_2(t *testing.T) {
 	sort.Strings(accounts)
 	if len(snaps.lookup.stateToLayerAccount) != 128 {
 		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerAccount))
+	}
+	if len(snaps.lookup.stateToLayerStorage) != 128 {
+		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerStorage))
 	}
 	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
 }

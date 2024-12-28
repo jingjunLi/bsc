@@ -192,11 +192,11 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				if subset == nil {
 					//log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 					delete(l.stateToLayerAccount, accountHash)
-					return
+					continue
 				}
 			} else {
 				//TODO if error, this happens sometimes
-				return
+				continue
 				//log.Error("unknown account addr hash %s", accountHash)
 			}
 
@@ -212,7 +212,8 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				}
 			}
 			if !found {
-				return
+				// deleted flattened layers
+				continue
 				log.Error("failed to delete lookup %s", accountHash)
 			}
 			if len(subset) == 0 {
@@ -236,7 +237,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			if subset, exist = l.stateToLayerStorage[accountHash]; exist {
 				if subset == nil {
 					delete(l.stateToLayerStorage, accountHash)
-					return
+					continue
 					subset = make(map[common.Hash][]*diffLayer)
 					l.stateToLayerStorage[accountHash] = subset
 				}
@@ -250,7 +251,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				if slotSubset, slotExists = subset[storageHash]; slotExists {
 					if slotSubset == nil {
 						delete(subset, storageHash)
-						return
+						continue
 						log.Error("unknown account addr hash %s", storageHash)
 					}
 				}
@@ -268,7 +269,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					}
 				}
 				if !found {
-					return
+					continue
 					log.Error("failed to delete lookup %s", storageHash)
 				}
 				if len(slotSubset) == 0 {
