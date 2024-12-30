@@ -484,7 +484,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 
 		return nil
 	}
-	persisted := t.cap(diff, layers)
+	persisted, prev, bottom := t.cap(diff, layers)
 	//log.Info("cap after", "persisted", persisted)
 
 	// Remove any layer that is stale or links into a stale layer
@@ -532,6 +532,12 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 		rebloom(persisted.root)
 	}
+	if prev != nil {
+		clearDiff(prev)
+	}
+	if bottom != nil {
+		clearDiff(bottom)
+	}
 	//log.Info("Snapshot capped", "root", root, "base", t.base)
 	return nil
 }
@@ -547,7 +553,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 // which may or may not overflow and cascade to disk. Since this last layer's
 // survival is only known *after* capping, we need to omit it from the count if
 // we want to ensure that *at least* the requested number of diff layers remain.
-func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
+func (t *Tree) cap(diff *diffLayer, layers int) (*diskLayer, *diffLayer, *diffLayer) {
+
+	var prevParent *diffLayer = nil
 	// Dive until we run out of layers or reach the persistent database
 	for i := 0; i < layers-1; i++ {
 		// If we still have diff layers below, continue down
@@ -555,14 +563,14 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 			diff = parent
 		} else {
 			// Diff stack too shallow, return without modifications
-			return nil
+			return nil, nil, nil
 		}
 	}
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
 	switch parent := diff.parent.(type) {
 	case *diskLayer:
-		return nil
+		return nil, nil, nil
 
 	case *diffLayer:
 		// Hold the write lock until the flattened parent is linked correctly.
@@ -573,12 +581,13 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 		// Flatten the parent into the grandparent. The flattening internally obtains a
 		// write lock on grandparent.
-		prevParent := parent
+		pre := parent
 		flattened := parent.flatten().(*diffLayer)
 		if flattened != prevParent {
 			t.layers[flattened.root] = flattened
 			t.baseDiff = flattened
-			t.lookup.RemoveSnapshot(prevParent)
+			prevParent = pre
+			//t.lookup.RemoveSnapshot(prevParent)
 		}
 
 		// Invoke the hook if it's registered. Ugly hack.
@@ -592,28 +601,17 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 			// will move from underneath the generator so we **must** merge all the
 			// partial data down into the snapshot and restart the generation.
 			if flattened.parent.(*diskLayer).genAbort == nil {
-				return nil
+				return nil, nil, nil
 			}
 		}
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
 
-	clearDiff := func(snap snapshot) {
-		diff, ok := snap.(*diffLayer)
-		if !ok {
-			return
-		}
-		t.lookup.RemoveSnapshot(diff)
-		//log.Info("Layer clearing RemoveSnapshot ---- after diffToDisk", "diff root", diff.Root())
-	}
-
 	//TODO:check it?
 	// If the bottom-most layer is larger than our memory cap, persist to disk
 	bottom := diff.parent.(*diffLayer)
-
 	bottom.lock.RLock()
-
 	base := diffToDisk(bottom)
 	//// Before actually writing all our data to the parent, first ensure that the
 	//// parent hasn't been 'corrupted' by someone else already flattening into it
@@ -622,10 +620,9 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	//}
 	t.baseDiff = diff
 	bottom.lock.RUnlock()
-	clearDiff(bottom)
 	t.layers[base.root] = base
 	diff.parent = base
-	return base
+	return base, prevParent, bottom
 }
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
