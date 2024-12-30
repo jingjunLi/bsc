@@ -151,9 +151,6 @@ func newLookup(head Snapshot) *Lookup {
 	return l
 }
 
-var layerIDCounter int
-var layerIDRemoveCounter int
-
 func (l *Lookup) addAccount(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupAddLayerAccountTimer.UpdateSince(now)
@@ -166,7 +163,6 @@ func (l *Lookup) addAccount(diff *diffLayer) {
 			l.stateToLayerAccount[accountHash] = subset
 		}
 		l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
-		//subset = append(subset, diff)
 		//avgSize += len(l.stateToLayerAccount[accountHash])
 	}
 }
@@ -217,6 +213,7 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 		//appendIndex := 0
 		for j := 0; j < len(subset); j++ {
 			if subset[j].Root() == diffRoot {
+				subset[j] = nil
 				if j == 0 {
 					//appendIndex += 1
 					subset = subset[1:] // TODO what if the underlying slice is held forever?
@@ -290,6 +287,7 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 			var found bool
 			for j := 0; j < len(slotSubset); j++ {
 				if slotSubset[j].Root() == diffRoot {
+					slotSubset[j] = nil
 					if j == 0 {
 						slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
 					} else {
