@@ -76,4 +76,7 @@ var (
 	lookupValueAccountGauge       = metrics.NewRegisteredGauge("pathdb/lookupValue/account", nil)
 	lookupValueFirstStorageGauge  = metrics.NewRegisteredGauge("pathdb/lookupValue/firstStorage", nil)
 	lookupValueSecondStorageGauge = metrics.NewRegisteredGauge("pathdb/lookupValue/secondStorage", nil)
+
+	lookupAccountAppendIndexGauge = metrics.NewRegisteredGauge("pathdb/AppendIndex/account", nil)
+	lookupStorageAppendIndexGauge = metrics.NewRegisteredGauge("pathdb/AppendIndex/storage", nil)
 )

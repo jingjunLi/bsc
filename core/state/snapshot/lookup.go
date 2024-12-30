@@ -174,9 +174,11 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		for accountHash, _ := range diff.accountData {
 			subset := l.stateToLayerAccount[accountHash]
 			if subset == nil {
-				subset = getSlice()
+				subset = make([]*diffLayer, 0, 16)
 				l.stateToLayerAccount[accountHash] = subset
 			}
+			l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
+			//subset = append(subset, diff)
 			//avgSize += len(l.stateToLayerAccount[accountHash])
 		}
 		//lookupValueAccountGauge.Update(int64(avgSize / len(diff.accountData)))
@@ -242,6 +244,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				}
 			}
 
+			//appendIndex := 0
 			for storageHash := range slots {
 				var (
 					slotSubset []*diffLayer
@@ -261,9 +264,10 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 						if j == 0 {
 							slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
 						} else {
-							slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
-							//copy(slotSubset[j:], slotSubset[j+1:])
-							//slotSubset = slotSubset[:len(slotSubset)-1]
+							//appendIndex += j
+							//slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
+							copy(slotSubset[j:], slotSubset[j+1:])
+							slotSubset = slotSubset[:len(slotSubset)-1]
 						}
 						//if j == 0 {
 						//	slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
@@ -313,14 +317,17 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				//log.Error("unknown account addr hash %s", accountHash)
 			}
 
+			//appendIndex := 0
 			for j := 0; j < len(subset); j++ {
 				if subset[j].Root() == diffRoot {
 					if j == 0 {
+						//appendIndex += 1
 						subset = subset[1:] // TODO what if the underlying slice is held forever?
 					} else {
-						subset = append(subset[:j], subset[j+1:]...)
-						//copy(subset[j:], subset[j+1:])
-						//subset = subset[:len(subset)-1]
+						//appendIndex += j + 1
+						//subset = append(subset[:j], subset[j+1:]...)
+						copy(subset[j:], subset[j+1:])
+						subset = subset[:len(subset)-1]
 					}
 					//subset[j] = nil
 					//copy(subset[j:], subset[j+1:])
@@ -335,13 +342,13 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					break
 				}
 			}
+			//lookupAccountAppendIndexGauge.Update(int64(appendIndex / len(subset)))
 			if !found {
 				// deleted flattened layers
 				continue
 				log.Error("failed to delete lookup %s", accountHash)
 			}
 			if len(subset) == 0 {
-				returnSlice(l.stateToLayerAccount[accountHash])
 				delete(l.stateToLayerAccount, accountHash)
 			} else {
 				l.stateToLayerAccount[accountHash] = subset
