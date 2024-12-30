@@ -261,9 +261,9 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 						if j == 0 {
 							slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
 						} else {
-							//slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
-							copy(slotSubset[j:], slotSubset[j+1:])
-							slotSubset = slotSubset[:len(slotSubset)-1]
+							slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
+							//copy(slotSubset[j:], slotSubset[j+1:])
+							//slotSubset = slotSubset[:len(slotSubset)-1]
 						}
 						//if j == 0 {
 						//	slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
@@ -318,8 +318,9 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					if j == 0 {
 						subset = subset[1:] // TODO what if the underlying slice is held forever?
 					} else {
-						copy(subset[j:], subset[j+1:])
-						subset = subset[:len(subset)-1]
+						subset = append(subset[:j], subset[j+1:]...)
+						//copy(subset[j:], subset[j+1:])
+						//subset = subset[:len(subset)-1]
 					}
 					//subset[j] = nil
 					//copy(subset[j:], subset[j+1:])
