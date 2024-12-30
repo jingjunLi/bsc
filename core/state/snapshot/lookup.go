@@ -141,30 +141,41 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 	wg.Add(2)
 
 	go func() {
+		defer wg.Done()
 		defer func(now time.Time) {
 			lookupAddLayerAccountTimer.UpdateSince(now)
 		}(time.Now())
+		avgSize := 0
 		for accountHash, _ := range diff.accountData {
 			l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
+			avgSize += len(l.stateToLayerAccount[accountHash])
 		}
-		wg.Done()
+		lookupValueAccountGauge.Update(int64(avgSize / len(diff.accountData)))
 	}()
 
 	go func() {
+		defer wg.Done()
 		defer func(now time.Time) {
 			lookupAddLayerStorageTimer.UpdateSince(now)
 		}(time.Now())
+		avgFirstSize := 0
+		avgSecondSize := 0
+
 		for accountHash, slots := range diff.storageData {
 			subset := l.stateToLayerStorage[accountHash]
 			if subset == nil {
 				subset = make(map[common.Hash][]*diffLayer)
 				l.stateToLayerStorage[accountHash] = subset
 			}
+			avgFirstSize += len(l.stateToLayerStorage[accountHash])
 			for storageHash := range slots {
 				subset[storageHash] = append(subset[storageHash], diff)
+				avgSecondSize += len(subset[storageHash])
 			}
 		}
-		wg.Done()
+		lookupValueFirstStorageGauge.Update(int64(avgFirstSize / len(diff.storageData)))
+		lookupValueSecondStorageGauge.Update(int64(avgSecondSize / len(diff.storageData)))
+
 	}()
 
 	wg.Wait()
