@@ -407,6 +407,7 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 	if _, exist := l.layers[diffRoot]; exist {
 		delete(l.layers, diffRoot)
 	} else {
+		l.removeDescendant(diff)
 		return
 	}
 
