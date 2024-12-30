@@ -391,6 +391,7 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 	lookupDescendantGauge.Update(int64(len(l.descendants)))
 	lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
 	lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
+	lookupLayersGauge.Update(int64(len(l.layers)))
 }
 
 func (l *Lookup) RemoveSnapshot(diff *diffLayer) {

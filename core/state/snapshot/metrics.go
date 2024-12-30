@@ -71,4 +71,5 @@ var (
 	lookupDescendantGauge = metrics.NewRegisteredGauge("pathdb/lookup/descendant", nil)
 	lookupAccountGauge    = metrics.NewRegisteredGauge("pathdb/lookup/account", nil)
 	lookupStorageGauge    = metrics.NewRegisteredGauge("pathdb/lookup/storage", nil)
+	lookupLayersGauge     = metrics.NewRegisteredGauge("pathdb/lookup/layers", nil)
 )
