@@ -167,7 +167,7 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 				subset = make(map[common.Hash][]*diffLayer)
 				l.stateToLayerStorage[accountHash] = subset
 			}
-			avgFirstSize += len(l.stateToLayerStorage[accountHash])
+			avgFirstSize += len(subset)
 			for storageHash := range slots {
 				subset[storageHash] = append(subset[storageHash], diff)
 				avgSecondSize += len(subset[storageHash])
