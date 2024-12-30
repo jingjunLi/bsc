@@ -11,14 +11,39 @@ import (
 // slicePool is a shared pool of hash slice, for reducing the GC pressure.
 var slicePool = sync.Pool{
 	New: func() interface{} {
-		slice := make([]Snapshot, 0, 16) // Pre-allocate a slice with a reasonable capacity.
+		slice := make([]*diffLayer, 0, 16) // Pre-allocate a slice with a reasonable capacity.
 		return &slice
 	},
 }
 
 // getSlice obtains the hash slice from the shared pool.
-func getSlice() []Snapshot {
-	slice := *slicePool.Get().(*[]Snapshot)
+func getSlice() []*diffLayer {
+	slice := *slicePool.Get().(*[]*diffLayer)
+	slice = slice[:0]
+	return slice
+}
+
+// returnSlice returns the hash slice back to the shared pool for following usage.
+func returnSlice(slice []*diffLayer) {
+	// Discard the large slice for recycling
+	if len(slice) > 128 {
+		return
+	}
+	// Reset the slice before putting it back into the pool
+	slicePool.Put(&slice)
+}
+
+// slicePool is a shared pool of hash slice, for reducing the GC pressure.
+var sliceMapPool = sync.Pool{
+	New: func() interface{} {
+		slice := make([]*diffLayer, 0, 16) // Pre-allocate a slice with a reasonable capacity.
+		return &slice
+	},
+}
+
+// getSlice obtains the hash slice from the shared pool.
+func getSliceMap() []*diffLayer {
+	slice := *slicePool.Get().(*[]*diffLayer)
 	slice = slice[:0]
 	return slice
 }
@@ -145,12 +170,16 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		defer func(now time.Time) {
 			lookupAddLayerAccountTimer.UpdateSince(now)
 		}(time.Now())
-		avgSize := 0
+		//avgSize := 0
 		for accountHash, _ := range diff.accountData {
-			l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
-			avgSize += len(l.stateToLayerAccount[accountHash])
+			subset := l.stateToLayerAccount[accountHash]
+			if subset == nil {
+				subset = getSlice()
+				l.stateToLayerAccount[accountHash] = subset
+			}
+			//avgSize += len(l.stateToLayerAccount[accountHash])
 		}
-		lookupValueAccountGauge.Update(int64(avgSize / len(diff.accountData)))
+		//lookupValueAccountGauge.Update(int64(avgSize / len(diff.accountData)))
 	}()
 
 	go func() {
@@ -158,24 +187,23 @@ func (l *Lookup) addLayer(diff *diffLayer) {
 		defer func(now time.Time) {
 			lookupAddLayerStorageTimer.UpdateSince(now)
 		}(time.Now())
-		avgFirstSize := 0
-		avgSecondSize := 0
+		//avgFirstSize := 0
+		//avgSecondSize := 0
 
 		for accountHash, slots := range diff.storageData {
 			subset := l.stateToLayerStorage[accountHash]
 			if subset == nil {
-				subset = make(map[common.Hash][]*diffLayer)
+				subset = make(map[common.Hash][]*diffLayer, 16)
 				l.stateToLayerStorage[accountHash] = subset
 			}
-			avgFirstSize += len(subset)
+			//avgFirstSize += len(subset)
 			for storageHash := range slots {
 				subset[storageHash] = append(subset[storageHash], diff)
-				avgSecondSize += len(subset[storageHash])
+				//avgSecondSize += len(subset[storageHash])
 			}
 		}
-		lookupValueFirstStorageGauge.Update(int64(avgFirstSize / len(diff.storageData)))
-		lookupValueSecondStorageGauge.Update(int64(avgSecondSize / len(diff.storageData)))
-
+		//lookupValueFirstStorageGauge.Update(int64(avgFirstSize / len(diff.storageData)))
+		//lookupValueSecondStorageGauge.Update(int64(avgSecondSize / len(diff.storageData)))
 	}()
 
 	wg.Wait()
@@ -230,11 +258,15 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				var found bool
 				for j := 0; j < len(slotSubset); j++ {
 					if slotSubset[j].Root() == diffRoot {
-						if j == 0 {
-							slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
-						} else {
-							slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
-						}
+						slotSubset[j] = nil
+						copy(slotSubset[j:], slotSubset[j+1:])
+						slotSubset = slotSubset[:len(slotSubset)-1]
+
+						//if j == 0 {
+						//	slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
+						//} else {
+						//	slotSubset = append(slotSubset[:j], slotSubset[j+1:]...)
+						//}
 						found = true
 						break
 					}
@@ -269,7 +301,6 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 			)
 			if subset, exists = l.stateToLayerAccount[accountHash]; exists {
 				if subset == nil {
-					//log.Info("removeLayer 111", "layerIDRemoveCounter", layerIDRemoveCounter, "root", diff.Root(), "accountHash", accountHash)
 					delete(l.stateToLayerAccount, accountHash)
 					continue
 				}
@@ -281,11 +312,15 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 
 			for j := 0; j < len(subset); j++ {
 				if subset[j].Root() == diffRoot {
-					if j == 0 {
-						subset = subset[1:] // TODO what if the underlying slice is held forever?
-					} else {
-						subset = append(subset[:j], subset[j+1:]...)
-					}
+					subset[j] = nil
+					copy(subset[j:], subset[j+1:])
+					subset = subset[:len(subset)-1]
+
+					//if j == 0 {
+					//	subset = subset[1:] // TODO what if the underlying slice is held forever?
+					//} else {
+					//	subset = append(subset[:j], subset[j+1:]...)
+					//}
 					found = true
 					break
 				}
@@ -296,6 +331,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				log.Error("failed to delete lookup %s", accountHash)
 			}
 			if len(subset) == 0 {
+				returnSlice(l.stateToLayerAccount[accountHash])
 				delete(l.stateToLayerAccount, accountHash)
 			} else {
 				l.stateToLayerAccount[accountHash] = subset
