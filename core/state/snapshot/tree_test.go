@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -32,6 +33,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+
+	"github.com/fortytw2/leaktest"
 )
 
 func newTestLayerTree() *Tree {
@@ -613,6 +616,15 @@ func TestSnaphotsDescendants(t *testing.T) {
 func TestSnaphotsCap_1(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
 
+	defer leaktest.Check(t)()
+
+	// 强制 GC
+	runtime.GC()
+
+	var mBefore, mAfter runtime.MemStats
+	// 记录测试前的内存使用
+	runtime.ReadMemStats(&mBefore)
+
 	makeRoot := func(height uint64) common.Hash {
 		var buffer [8]byte
 		binary.BigEndian.PutUint64(buffer[:], height)
@@ -671,6 +683,18 @@ func TestSnaphotsCap_1(t *testing.T) {
 		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerAccount))
 	}
 	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
+
+	// 强制 GC
+	runtime.GC()
+
+	// 记录测试后的内存使用
+	runtime.ReadMemStats(&mAfter)
+
+	// 比较内存分配
+	if mAfter.Alloc > mBefore.Alloc {
+		//t.Errorf("Potential memory leak detected: Alloc before=%d, Alloc after=%d", mBefore.Alloc, mAfter.Alloc)
+	}
+	log.Info("Potential memory leak detected: Alloc before=%d, Alloc after=%d", mBefore.Alloc, mAfter.Alloc)
 }
 
 func TestSnaphotsCap_2(t *testing.T) {

@@ -36,6 +36,8 @@ func (s *ShardLock) getLock(hash common.Hash) *sync.Mutex {
 	return &s.locks[accountBloomHash(hash)%shardCount]
 }
 
+// diffAncestors returns all the ancestors of the specific layer (disk layer
+// is not included).
 func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 	set := make(map[common.Hash]struct{})
 	for {
@@ -197,8 +199,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 				if subset == nil {
 					delete(l.stateToLayerStorage, accountHash)
 					continue
-					subset = make(map[common.Hash][]*diffLayer)
-					l.stateToLayerStorage[accountHash] = subset
+					//TODO slice pool
 				}
 			}
 
@@ -211,7 +212,7 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 					if slotSubset == nil {
 						delete(subset, storageHash)
 						continue
-						log.Error("unknown account addr hash %s", storageHash)
+						//log.Error("unknown account addr hash %s", storageHash)
 					}
 				}
 
@@ -295,24 +296,6 @@ func (l *Lookup) removeLayer(diff *diffLayer) error {
 	return nil
 }
 
-// diffAncestors returns all the ancestors of the specific layer (disk layer
-// is not included).
-func diffAncestors(layer Snapshot) map[common.Hash]struct{} {
-	set := make(map[common.Hash]struct{}, 128)
-	for {
-		parent := layer.Parent()
-		if parent == nil {
-			break
-		}
-		if _, ok := parent.(*diskLayer); ok {
-			break
-		}
-		set[parent.Root()] = struct{}{}
-		layer = parent
-	}
-	return set
-}
-
 func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 	defer func(now time.Time) {
 		lookupAddDescendantTimer.UpdateSince(now)
@@ -326,7 +309,7 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 	//
 	//workers.SetLimit(3)
 
-	for h := range diffAncestors(topDiffLayer) {
+	for h := range collectDiffLayerAncestors(topDiffLayer) {
 		//workers.Go(func() error {
 		//	lock := l.descendantsLock.getLock(h)
 		//	lock.Lock()
