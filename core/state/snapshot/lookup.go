@@ -164,7 +164,6 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 
 		for j := 0; j < len(list); j++ {
 			if list[j].Root() == diffRoot {
-				list[j] = nil
 				lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
 				lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
 				if j == 0 {
@@ -253,7 +252,6 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 				if slotSubset[j].Root() == diffRoot {
 					lookupStorageListMaxVal = max(int64(cap(slotSubset)), lookupStorageListMaxVal)
 					lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
-					slotSubset[j] = nil
 					if j == 0 {
 						slotSubset = slotSubset[1:]
 						if cap(slotSubset) > 1024 {
