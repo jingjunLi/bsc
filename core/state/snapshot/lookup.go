@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"sync"
 	"time"
 
@@ -152,7 +153,9 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 			found  bool
 		)
 		if list, exists = l.stateToLayerAccount[accountHash]; exists {
+			log.Info("ttt11")
 			if list == nil {
+				log.Info("222")
 				returnSlice(list)
 				delete(l.stateToLayerAccount, accountHash)
 				continue
@@ -162,11 +165,13 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 			continue
 		}
 
+		log.Info("333")
 		for j := 0; j < len(list); j++ {
 			if list[j].Root() == diffRoot {
 				list[j] = nil
 				lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
 				lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
+				log.Info("333", "lookupAccountListMaxVal", lookupAccountListMaxVal)
 				if j == 0 {
 					list = list[1:]
 					if cap(list) > 1024 {
@@ -360,6 +365,7 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	l.layers[diff.Root()] = struct{}{}
+	log.Info("add snapshot", "root", diff.Root())
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -399,6 +405,7 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 		return
 	}
 
+	log.Info("remove snapshot", "root", diff.Root())
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
