@@ -250,7 +250,7 @@ func (dl *diffLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, 
 	pstart := time.Now()
 	defer func() {
 		ptime := time.Since(pstart)
-		snapshotDiffLayerAccountTimer.Update(ptime)
+		snapshotCurrentLayerAccountTimer.Update(ptime)
 		snapshotDiffLayerAccountMeter.Mark(1)
 	}()
 	data, err := dl.CurrentLayerAccountRLP(hash)
@@ -400,7 +400,7 @@ func (dl *diffLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) (
 	pstart := time.Now()
 	defer func() {
 		ptime := time.Since(pstart)
-		snapshotDiffLayerStorageTimer.Update(ptime)
+		snapshotCurrentLayerStorageTimer.Update(ptime)
 		snapshotDiffLayerStorageMeter.Mark(1)
 	}()
 	dl.lock.RLock()

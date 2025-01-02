@@ -695,6 +695,9 @@ func TestSnaphotsCap_1(t *testing.T) {
 		//t.Errorf("Potential memory leak detected: Alloc before=%d, Alloc after=%d", mBefore.Alloc, mAfter.Alloc)
 	}
 	log.Info("Potential memory leak detected: Alloc before=%d, Alloc after=%d", mBefore.Alloc, mAfter.Alloc)
+	if len(snaps.layers) != 130 {
+		t.Error("size not equal 128", "size", len(snaps.layers))
+	}
 }
 
 func TestSnaphotsCap_2(t *testing.T) {
@@ -758,6 +761,9 @@ func TestSnaphotsCap_2(t *testing.T) {
 	}
 	if len(snaps.lookup.stateToLayerStorage) != 128 {
 		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerStorage))
+	}
+	if len(snaps.layers) != 130 {
+		t.Error("size not equal 128", "size", len(snaps.layers))
 	}
 	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
 }

@@ -36,27 +36,31 @@ func returnSlice(slice []*diffLayer) {
 // slicePool is a shared pool of hash slice, for reducing the GC pressure.
 var sliceMapPool = sync.Pool{
 	New: func() interface{} {
-		slice := make([]*diffLayer, 0, 16) // Pre-allocate a slice with a reasonable capacity.
+		slice := make(map[common.Hash][]*diffLayer, 16) // Pre-allocate a slice with a reasonable capacity.
 		return &slice
 	},
 }
 
-// getSlice obtains the hash slice from the shared pool.
-func getSliceMap() []*diffLayer {
-	slice := *slicePool.Get().(*[]*diffLayer)
-	slice = slice[:0]
-	return slice
-}
+//// getSlice obtains the hash slice from the shared pool.
+//func getSliceMap() map[common.Hash][]*diffLayer {
+//	slice := *sliceMapPool.Get().(*map[common.Hash][]*diffLayer)
+//	return slice
+//}
+//
+//func returnMapToPool(m map[common.Hash][]*diffLayer) {
+//	// 清空 map
+//	for k := range m {
+//		delete(m, k)
+//	}
+//	sliceMapPool.Put(m)
+//}
 
-// 定义分段锁的数量
 const shardCount = 32
 
-// ShardLock 是一个分段锁的结构
 type ShardLock struct {
 	locks [shardCount]sync.Mutex
 }
 
-// 获取特定哈希值的锁
 func (s *ShardLock) getLock(hash common.Hash) *sync.Mutex {
 	return &s.locks[accountBloomHash(hash)%shardCount]
 }
@@ -81,8 +85,8 @@ func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 
 // Lookup is an internal help structure to quickly identify
 type Lookup struct {
-	stateToLayerAccount map[common.Hash][]*diffLayer
-	stateToLayerStorage map[common.Hash]map[common.Hash][]*diffLayer
+	stateToLayerAccount map[common.Hash][]*diffLayer                 // 2w
+	stateToLayerStorage map[common.Hash]map[common.Hash][]*diffLayer // 5k
 	descendants         map[common.Hash]map[common.Hash]struct{}
 
 	layers map[common.Hash]struct{}
@@ -104,8 +108,8 @@ func newLookup(head Snapshot) *Lookup {
 			layers = append(layers, current)
 			current = current.Parent()
 		}
-		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer)
-		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer)
+		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer, 60000)
+		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer, 2000)
 		l.layers = make(map[common.Hash]struct{})
 
 		// Apply the layers from bottom to top
@@ -159,32 +163,11 @@ func (l *Lookup) addAccount(diff *diffLayer) {
 	for accountHash, _ := range diff.accountData {
 		subset := l.stateToLayerAccount[accountHash]
 		if subset == nil {
-			subset = make([]*diffLayer, 0, 16)
+			subset = getSlice()
 			l.stateToLayerAccount[accountHash] = subset
 		}
 		l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
 		//avgSize += len(l.stateToLayerAccount[accountHash])
-	}
-}
-
-func (l *Lookup) addStorage(diff *diffLayer) {
-	defer func(now time.Time) {
-		lookupAddLayerStorageTimer.UpdateSince(now)
-	}(time.Now())
-	//avgFirstSize := 0
-	//avgSecondSize := 0
-
-	for accountHash, slots := range diff.storageData {
-		subset := l.stateToLayerStorage[accountHash]
-		if subset == nil {
-			subset = make(map[common.Hash][]*diffLayer, 16)
-			l.stateToLayerStorage[accountHash] = subset
-		}
-		//avgFirstSize += len(subset)
-		for storageHash := range slots {
-			subset[storageHash] = append(subset[storageHash], diff)
-			//avgSecondSize += len(subset[storageHash])
-		}
 	}
 }
 
@@ -201,6 +184,7 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 		)
 		if subset, exists = l.stateToLayerAccount[accountHash]; exists {
 			if subset == nil {
+				returnSlice(subset)
 				delete(l.stateToLayerAccount, accountHash)
 				continue
 			}
@@ -243,12 +227,35 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 			log.Error("failed to delete lookup %s", accountHash)
 		}
 		if len(subset) == 0 {
+			returnSlice(subset)
 			delete(l.stateToLayerAccount, accountHash)
 		} else {
 			l.stateToLayerAccount[accountHash] = subset
 		}
 	}
 	return nil
+}
+
+func (l *Lookup) addStorage(diff *diffLayer) {
+	defer func(now time.Time) {
+		lookupAddLayerStorageTimer.UpdateSince(now)
+	}(time.Now())
+	//avgFirstSize := 0
+	//avgSecondSize := 0
+
+	for accountHash, slots := range diff.storageData {
+		subset := l.stateToLayerStorage[accountHash]
+		if subset == nil {
+			subset = make(map[common.Hash][]*diffLayer, 16)
+			//subset = getSliceMap()
+			l.stateToLayerStorage[accountHash] = subset
+		}
+		//avgFirstSize += len(subset)
+		for storageHash := range slots {
+			subset[storageHash] = append(subset[storageHash], diff)
+			//avgSecondSize += len(subset[storageHash])
+		}
+	}
 }
 
 func (l *Lookup) removeStorage(diff *diffLayer) error {
@@ -264,6 +271,7 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 		)
 		if subset, exist = l.stateToLayerStorage[accountHash]; exist {
 			if subset == nil {
+				//returnMapToPool(subset)
 				delete(l.stateToLayerStorage, accountHash)
 				continue
 				//TODO slice pool
@@ -317,6 +325,7 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 		}
 
 		if len(subset) == 0 {
+			//returnMapToPool(subset)
 			delete(l.stateToLayerStorage, accountHash)
 		}
 	}
@@ -418,16 +427,16 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
+		defer wg.Done()
 		l.addStorage(diff)
-		wg.Done()
 	}()
 	go func() {
+		defer wg.Done()
 		l.addAccount(diff)
-		wg.Done()
 	}()
 	go func() {
+		defer wg.Done()
 		l.addDescendant(diff)
-		wg.Done()
 	}()
 	wg.Wait()
 	lookupDescendantGauge.Update(int64(len(l.descendants)))
@@ -456,30 +465,43 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
+		defer wg.Done()
+
 		// remove layer storage cost time longer than remove account, so run it first
 		l.removeStorage(diff)
-		wg.Done()
 	}()
 	go func() {
+		defer wg.Done()
+
 		l.removeAccount(diff)
-		wg.Done()
 	}()
 	go func() {
+		defer wg.Done()
+
 		l.removeDescendant(diff)
-		wg.Done()
 	}()
 
 	wg.Wait()
 	lookupDescendantGauge.Update(int64(len(l.descendants)))
 	lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
 	lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
-
 }
 
 func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
+	defer func(now time.Time) {
+		lookupLookupAccountTimer.UpdateSince(now)
+	}(time.Now())
+
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
+	defer func(now time.Time) {
+		lookupLookupAccountNoLockTimer.UpdateSince(now)
+	}(time.Now())
+
+	// a ->  1 2 3 4 5 6 7 8 9 merge
+	// 4 -> stale & flatten list[]
+	//
 	list, exists := l.stateToLayerAccount[accountAddrHash]
 	if !exists {
 		return nil
@@ -496,8 +518,16 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 }
 
 func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) Snapshot {
+	defer func(now time.Time) {
+		lookupLookupStorageTimer.UpdateSince(now)
+	}(time.Now())
+
 	l.lock.RLock()
 	defer l.lock.RUnlock()
+
+	defer func(now time.Time) {
+		lookupStorageNoLockTimer.UpdateSince(now)
+	}(time.Now())
 
 	subset, exists := l.stateToLayerStorage[accountAddrHash]
 	if !exists {

@@ -51,15 +51,12 @@ var (
 	// snapStorageCleanCounter measures time spent on deleting storages
 	snapStorageCleanCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/clean", nil)
 
+	snapLayersGuage = metrics.NewRegisteredGauge("pathdb/snaps/layers", nil)
+
 	lookupAddSnapshotTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addSnapshot/time", nil)
 	lookupRemoveSnapshotTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeSnapshot/time", nil)
 	lookupAddSnapshotCounter    = metrics.NewRegisteredMeter("pathdb/lookup/addSnapshot/added", nil)
 	lookupRemoveSnapshotCounter = metrics.NewRegisteredMeter("pathdb/lookup/removeSnapshot/removed", nil)
-
-	lookupAddLayerTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/time", nil)
-	lookupRemoveLayerTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/time", nil)
-	lookupAddLayerCounter    = metrics.NewRegisteredMeter("pathdb/lookup/addLayer/added", nil)
-	lookupRemoveLayerCounter = metrics.NewRegisteredMeter("pathdb/lookup/removeLayer/removed", nil)
 
 	lookupAddLayerStorageTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/storage/time", nil)
 	lookupAddLayerAccountTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/account/time", nil)
@@ -67,6 +64,14 @@ var (
 	lookupRemoveLayerAccountTimer = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/account/time", nil)
 	lookupAddDescendantTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addDescendant/time", nil)
 	lookupRemoveDescendantTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeDescendant/time", nil)
+
+	//lookupAccountTimer             = metrics.NewRegisteredResettingTimer("snapshot/tree/api/LookupAccount", nil)
+	lookupLookupAccountTimer       = metrics.NewRegisteredResettingTimer("snapshot/lookup/api/LookupAccount", nil)
+	lookupLookupAccountNoLockTimer = metrics.NewRegisteredResettingTimer("snapshot/lookup/api/LookupAccountNoLock", nil)
+
+	//lookupStorageTimer             = metrics.NewRegisteredResettingTimer("snapshot/tree/api/LookupStorage", nil)
+	lookupLookupStorageTimer = metrics.NewRegisteredResettingTimer("snapshot/lookup/api/LookupStorage", nil)
+	lookupStorageNoLockTimer = metrics.NewRegisteredResettingTimer("snapshot/lookup/api/LookupStorageNoLock", nil)
 
 	lookupDescendantGauge = metrics.NewRegisteredGauge("pathdb/lookup/descendant", nil)
 	lookupAccountGauge    = metrics.NewRegisteredGauge("pathdb/lookup/account", nil)
@@ -79,4 +84,10 @@ var (
 
 	lookupAccountAppendIndexGauge = metrics.NewRegisteredGauge("pathdb/AppendIndex/account", nil)
 	lookupStorageAppendIndexGauge = metrics.NewRegisteredGauge("pathdb/AppendIndex/storage", nil)
+
+	//lookupAddLayerTimer      = metrics.NewRegisteredResettingTimer("pathdb/lookup/addLayer/time", nil)
+	//lookupRemoveLayerTimer   = metrics.NewRegisteredResettingTimer("pathdb/lookup/removeLayer/time", nil)
+	//lookupAddLayerCounter    = metrics.NewRegisteredMeter("pathdb/lookup/addLayer/added", nil)
+	//lookupRemoveLayerCounter = metrics.NewRegisteredMeter("pathdb/lookup/removeLayer/removed", nil)
+
 )

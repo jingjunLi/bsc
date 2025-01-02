@@ -78,6 +78,9 @@ var (
 	snapshotBloomStorageFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/falsehit", nil)
 	snapshotBloomStorageMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/miss", nil)
 
+	snapshotCurrentLayerAccountTimer = metrics.NewRegisteredResettingTimer("state/snapshot/currentLayerAccount", nil)
+	snapshotCurrentLayerStorageTimer = metrics.NewRegisteredResettingTimer("state/snapshot/currentLayerStorage", nil)
+
 	snapshotDiffLayerAccountTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/account", nil)
 	snapshotDiskLayerAccountTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/diskLayer/account", nil)
 	snapshotBaseDiffLayerAccountTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/base/account", nil)
@@ -425,6 +428,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 	if t.baseDiff == nil || reflect.ValueOf(t.baseDiff).IsNil() {
 		t.baseDiff = snap
 	}
+	snapLayersGuage.Update(int64(len(t.layers)))
 	//log.Info("Snapshot loaded ", "snap.baseDiff", t.baseDiff)
 	//log.Info("Snapshot updated", "blockRoot", blockRoot, "snap.baseDiff", t.baseDiff)
 	return nil
