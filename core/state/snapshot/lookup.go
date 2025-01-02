@@ -45,7 +45,12 @@ type Lookup struct {
 
 // newLookup initializes the lookup structure.
 func newLookup(head Snapshot) *Lookup {
-	l := new(Lookup)
+	l := &Lookup{
+		stateToLayerAccount: make(map[common.Hash][]*diffLayer, 60000),
+		stateToLayerStorage: make(map[common.Hash]map[common.Hash][]*diffLayer, 2000),
+		descendants:         make(map[common.Hash]map[common.Hash]struct{}, 128),
+		layers:              make(map[common.Hash]struct{}, 128),
+	}
 
 	{ // setup state mapping
 		var (
@@ -56,9 +61,6 @@ func newLookup(head Snapshot) *Lookup {
 			layers = append(layers, current)
 			current = current.Parent()
 		}
-		l.stateToLayerAccount = make(map[common.Hash][]*diffLayer, 60000)
-		l.stateToLayerStorage = make(map[common.Hash]map[common.Hash][]*diffLayer, 2000)
-		l.layers = make(map[common.Hash]struct{})
 
 		// Apply the layers from bottom to top
 		for i := len(layers) - 1; i >= 0; i-- {
@@ -74,8 +76,7 @@ func newLookup(head Snapshot) *Lookup {
 
 	{ // setup descendant mapping
 		var (
-			current     = head
-			descendants = make(map[common.Hash]map[common.Hash]struct{})
+			current = head
 		)
 		for {
 			l.fillAncestors(current)
@@ -85,7 +86,6 @@ func newLookup(head Snapshot) *Lookup {
 			}
 			current = parent
 		}
-		l.descendants = descendants
 	}
 
 	return l
