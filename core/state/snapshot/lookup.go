@@ -492,8 +492,8 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 		lookupLookupAccountTimer.UpdateSince(now)
 	}(time.Now())
 
-	l.lock.RLock()
-	defer l.lock.RUnlock()
+	//l.lock.RLock()
+	//defer l.lock.RUnlock()
 
 	defer func(now time.Time) {
 		lookupLookupAccountNoLockTimer.UpdateSince(now)
@@ -522,8 +522,8 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 		lookupLookupStorageTimer.UpdateSince(now)
 	}(time.Now())
 
-	l.lock.RLock()
-	defer l.lock.RUnlock()
+	//l.lock.RLock()
+	//defer l.lock.RUnlock()
 
 	defer func(now time.Time) {
 		lookupStorageNoLockTimer.UpdateSince(now)
