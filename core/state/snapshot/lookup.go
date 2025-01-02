@@ -127,12 +127,12 @@ func (l *Lookup) addAccount(diff *diffLayer) {
 		lookupAddLayerAccountTimer.UpdateSince(now)
 	}(time.Now())
 	for accountHash, _ := range diff.accountData {
-		subset := l.stateToLayerAccount[accountHash]
-		if subset == nil {
-			subset = getSlice()
-			l.stateToLayerAccount[accountHash] = subset
+		list, exists := l.stateToLayerAccount[accountHash]
+		if !exists {
+			list = getSlice()
 		}
-		l.stateToLayerAccount[accountHash] = append(l.stateToLayerAccount[accountHash], diff)
+		list = append(list, diff)
+		l.stateToLayerAccount[accountHash] = list
 	}
 }
 
@@ -163,6 +163,9 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 				subset[j] = nil
 				if j == 0 {
 					subset = subset[1:] // TODO what if the underlying slice is held forever?
+					if cap(subset) > 1024 {
+						subset = append(getSlice(), subset...)
+					}
 				} else {
 					copy(subset[j:], subset[j+1:])
 					subset = subset[:len(subset)-1]
@@ -198,8 +201,13 @@ func (l *Lookup) addStorage(diff *diffLayer) {
 			subset = make(map[common.Hash][]*diffLayer, 16)
 			l.stateToLayerStorage[accountHash] = subset
 		}
-		for storageHash := range slots {
-			subset[storageHash] = append(subset[storageHash], diff)
+		for slotHash := range slots {
+			list, exists := subset[slotHash]
+			if !exists {
+				list = getSlice()
+			}
+			list = append(list, diff)
+			subset[slotHash] = list
 		}
 	}
 }
@@ -219,18 +227,18 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 			if subset == nil {
 				delete(l.stateToLayerStorage, accountHash)
 				continue
-				//TODO slice pool
 			}
 		}
 
-		for storageHash := range slots {
+		for slotHash := range slots {
 			var (
 				slotSubset []*diffLayer
 				slotExists bool
 			)
-			if slotSubset, slotExists = subset[storageHash]; slotExists {
+			if slotSubset, slotExists = subset[slotHash]; slotExists {
 				if slotSubset == nil {
-					delete(subset, storageHash)
+					returnSlice(subset[slotHash])
+					delete(subset, slotHash)
 					continue
 				}
 			}
@@ -240,7 +248,10 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 				if slotSubset[j].Root() == diffRoot {
 					slotSubset[j] = nil
 					if j == 0 {
-						slotSubset = slotSubset[1:] // TODO what if the underlying slice is held forever?
+						slotSubset = slotSubset[1:]
+						if cap(slotSubset) > 1024 {
+							slotSubset = append(getSlice(), slotSubset...)
+						}
 					} else {
 						copy(slotSubset[j:], slotSubset[j+1:])
 						slotSubset = slotSubset[:len(slotSubset)-1]
@@ -253,9 +264,10 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 				continue
 			}
 			if len(slotSubset) == 0 {
-				delete(subset, storageHash)
+				returnSlice(subset[slotHash])
+				delete(subset, slotHash)
 			} else {
-				subset[storageHash] = slotSubset
+				subset[slotHash] = slotSubset
 			}
 		}
 
