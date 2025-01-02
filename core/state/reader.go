@@ -17,10 +17,8 @@
 package state
 
 import (
-	"bytes"
 	"errors"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"time"
 
@@ -38,7 +36,6 @@ import (
 )
 
 var (
-	printInternal          = 50000
 	snapshotCacheTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/cache/account/hit", nil)
 	snapshotCacheMissTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/cache/account/miss", nil)
 )
@@ -153,12 +150,6 @@ func newFlatReader(reader database.StateReader, root common.Hash, snap *snapshot
 	}
 }
 
-var accountSameCounter int
-var accountDiffCounter int
-
-var storageSameCounter int
-var storageDiffCounter int
-
 // Account implements StateReader, retrieving the account specified by the address.
 //
 // An error will be returned if the associated snapshot is already stale or
@@ -166,14 +157,10 @@ var storageDiffCounter int
 //
 // The returned account might be nil if it's not existent.
 func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
-	accountAddrHash := crypto.HashData(r.buff, addr.Bytes())
-	var lookupAccount *types.SlimAccount
-	var err error
-
 	if r.snap != nil {
 		// fastpath
 		pstart := time.Now()
-		lookupAccount, err = r.snap.LookupAccount(accountAddrHash, r.stateRoot)
+		lookupAccount, err := r.snap.LookupAccount(crypto.HashData(r.buff, addr.Bytes()), r.stateRoot)
 		ptime := time.Since(pstart)
 		snapshotCacheTimer.Update(ptime)
 		if err != nil {
@@ -206,10 +193,6 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 		return nil, err
 	}
 	if account == nil {
-		if types.AreSlimAccountsEqual(account, lookupAccount) == false {
-			accountDiffCounter++
-			log.Info("stateReader Account not same real account 11", "real data", account, "lookupData", lookupAccount)
-		}
 		return nil, nil
 	}
 	acct := &types.StateAccount{
@@ -224,18 +207,6 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 	if acct.Root == (common.Hash{}) {
 		acct.Root = types.EmptyRootHash
 	}
-
-	if types.AreSlimAccountsEqual(account, lookupAccount) == false {
-		accountDiffCounter++
-		log.Info("stateReader Account not same real account 22", "real data", account, "lookupData", lookupAccount)
-	} else {
-		accountSameCounter++
-	}
-
-	if (accountDiffCounter+accountSameCounter)%printInternal == 0 {
-		log.Info("stateReader Account", "accountSameCounter", accountSameCounter, "accountDiffCounter", accountDiffCounter)
-	}
-
 	return acct, nil
 }
 
@@ -249,13 +220,9 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
 	addrHash := crypto.HashData(r.buff, addr.Bytes())
 	slotHash := crypto.HashData(r.buff, key.Bytes())
-
-	var lookupData []byte
-	var err error
-
 	if r.snap != nil {
 		// fastpath
-		lookupData, err = r.snap.LookupStorage(addrHash, slotHash, r.stateRoot)
+		lookupData, err := r.snap.LookupStorage(addrHash, slotHash, r.stateRoot)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -280,23 +247,8 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 		return common.Hash{}, err
 	}
 	if len(ret) == 0 {
-		if len(lookupData) != 0 {
-			storageDiffCounter++
-			log.Info("stateReader Storage not same real account 11", "real data", ret, "lookupData", lookupData)
-		}
 		return common.Hash{}, nil
 	}
-
-	if !bytes.Equal(ret, lookupData) {
-		storageDiffCounter++
-		log.Info("stateReader Storage not same real storage 22", "data", ret, "lookupData", lookupData)
-	} else {
-		storageSameCounter++
-	}
-	if (storageDiffCounter+storageSameCounter)%printInternal == 0 {
-		log.Info("stateReader Storage", "storageSameCounter", storageSameCounter, "storageDiffCounter", storageDiffCounter)
-	}
-
 	// Perform the rlp-decode as the slot value is RLP-encoded in the state
 	// snapshot.
 	_, content, _, err := rlp.Split(ret)

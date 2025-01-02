@@ -20,14 +20,13 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"os"
 	"runtime"
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/VictoriaMetrics/fastcache"
 
@@ -507,7 +506,6 @@ func TestDescendant(t *testing.T) {
 					fmt.Printf("  Descendant: %v\n", descendant)
 				}
 			}
-			println("snapshotB", c.snapshotB, "descendants", tr.descendants)
 			t.Fatalf("Unexpected descendants")
 		}
 	}
@@ -704,6 +702,8 @@ func TestSnaphotsCap_2(t *testing.T) {
 	//runtime.GOMAXPROCS(runtime.NumCPU())
 	//
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true)))
+
+	defer leaktest.Check(t)()
 
 	makeRoot := func(height uint64) common.Hash {
 		var buffer [8]byte

@@ -207,7 +207,6 @@ type Tree struct {
 	enableLookUp bool
 	base         *diskLayer
 	baseDiff     *diffLayer
-	descendants  map[common.Hash]map[common.Hash]struct{}
 	lookup       *Lookup
 
 	// Test hooks
@@ -429,8 +428,6 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 		t.baseDiff = snap
 	}
 	snapLayersGuage.Update(int64(len(t.layers)))
-	//log.Info("Snapshot loaded ", "snap.baseDiff", t.baseDiff)
-	//log.Info("Snapshot updated", "blockRoot", blockRoot, "snap.baseDiff", t.baseDiff)
 	return nil
 }
 
@@ -489,7 +486,6 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		return nil
 	}
 	persisted := t.cap(diff, layers)
-	//log.Info("cap after", "persisted", persisted)
 
 	// Remove any layer that is stale or links into a stale layer
 	children := make(map[common.Hash][]common.Hash)
@@ -536,7 +532,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 		rebloom(persisted.root)
 	}
-	//log.Info("Snapshot capped", "root", root, "base", t.base)
+	log.Debug("Snapshot capped", "root", root)
 	return nil
 }
 
@@ -609,7 +605,6 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 			return
 		}
 		t.lookup.RemoveSnapshot(diff)
-		//log.Info("Layer clearing RemoveSnapshot ---- after diffToDisk", "diff root", diff.Root())
 	}
 
 	//TODO:check it?
@@ -619,11 +614,6 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	bottom.lock.RLock()
 
 	base := diffToDisk(bottom)
-	//// Before actually writing all our data to the parent, first ensure that the
-	//// parent hasn't been 'corrupted' by someone else already flattening into it
-	//if bottom.stale.Swap(true) {
-	//	panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
-	//}
 	t.baseDiff = diff
 	bottom.lock.RUnlock()
 	clearDiff(bottom)

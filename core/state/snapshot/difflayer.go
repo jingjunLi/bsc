@@ -133,7 +133,6 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 		storageList: make(map[common.Hash][]common.Hash),
 	}
 
-	//if !enableLookUp {
 	switch parent := parent.(type) {
 	case *diskLayer:
 		dl.rebloom(parent)
@@ -142,7 +141,6 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 	default:
 		panic("unknown parent type")
 	}
-	//}
 
 	// Sanity check that accounts or storage slots are never nil
 	for _, blob := range accounts {
@@ -175,7 +173,7 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 
 	// Inject the new origin that triggered the rebloom
 	dl.origin = origin
-	return
+	//return
 
 	// Retrieve the parent bloom or create a fresh empty one
 	if parent, ok := dl.parent.(*diffLayer); ok {
@@ -531,14 +529,12 @@ func (dl *diffLayer) flatten() snapshot {
 	// Before actually writing all our data to the parent, first ensure that the
 	// parent hasn't been 'corrupted' by someone else already flattening into it
 	if parent.canLookup.Swap(true) {
-		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
+		panic("parent diff layer is stale, can also be read by lookup")
 	}
 
 	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
-
-	//log.Info("Layer flattening stale", "layer", parent.Root(), "destructs", len(dl.destructSet))
 	for hash, data := range dl.accountData {
 		parent.accountData[hash] = data
 	}

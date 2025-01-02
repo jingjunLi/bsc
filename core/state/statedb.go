@@ -1456,7 +1456,7 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 		go func() {
-			wg.Done()
+			defer wg.Done()
 			// If snapshotting is enabled, update the snapshot tree with this new version
 			if snap := s.db.Snapshot(); snap != nil && snap.Snapshot(ret.originRoot) != nil {
 				start := time.Now()
@@ -1475,7 +1475,6 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 				s.SnapshotCommits += time.Since(start)
 			}
 		}()
-
 		// If trie database is enabled, commit the state update as a new layer
 		if db := s.db.TrieDB(); db != nil && !s.noTrie {
 			start := time.Now()

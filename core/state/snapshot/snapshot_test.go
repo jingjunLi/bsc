@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/fortytw2/leaktest"
 	"math/rand"
 	"os"
 	"testing"
@@ -345,6 +346,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 func TestSnaphots(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	//fmt.Println(t.dump(false))
+	defer leaktest.Check(t)()
 
 	// setAccount is a helper to construct a random account entry and assign it to
 	// an account slot in a snapshot
@@ -482,6 +484,8 @@ func TestSnaphots(t *testing.T) {
 // right state back(block until the flattening is finished) instead of
 // an unexpected error(snapshot layer is stale).
 func TestReadStateDuringFlattening(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	// setAccount is a helper to construct a random account entry and assign it to
 	// an account slot in a snapshot
 	setAccount := func(accKey string) map[common.Hash][]byte {
