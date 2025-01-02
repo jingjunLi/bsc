@@ -32,6 +32,24 @@ func returnSlice(slice []*diffLayer) {
 	slicePool.Put(&slice)
 }
 
+// diffAncestors returns all the ancestors of the specific layer (disk layer
+// is not included).
+func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
+	set := make(map[common.Hash]struct{})
+	for {
+		parent := layer.Parent()
+		if parent == nil {
+			break // finished
+		}
+		if _, ok := parent.(*diskLayer); ok {
+			break // finished
+		}
+		set[parent.Root()] = struct{}{}
+		layer = parent
+	}
+	return set
+}
+
 // Lookup is an internal help structure to quickly identify
 type Lookup struct {
 	stateToLayerAccount map[common.Hash][]*diffLayer                 // 2w
@@ -76,16 +94,30 @@ func newLookup(head Snapshot) *Lookup {
 
 	{ // setup descendant mapping
 		var (
-			current = head
+			current     = head
+			layers      = make(map[common.Hash]Snapshot)
+			descendants = make(map[common.Hash]map[common.Hash]struct{})
 		)
 		for {
-			l.fillAncestors(current)
+			hash := current.Root()
+			layers[hash] = current
+
+			// Traverse the ancestors (diff only) of the current layer and link them
+			for h := range collectDiffLayerAncestors(current) {
+				subset := descendants[h]
+				if subset == nil {
+					subset = make(map[common.Hash]struct{})
+					descendants[h] = subset
+				}
+				subset[hash] = struct{}{}
+			}
 			parent := current.Parent()
 			if parent == nil {
 				break
 			}
 			current = parent
 		}
+		l.descendants = descendants
 	}
 
 	return l
@@ -133,10 +165,10 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 		for j := 0; j < len(list); j++ {
 			if list[j].Root() == diffRoot {
 				list[j] = nil
+				lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
+				lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
 				if j == 0 {
 					list = list[1:]
-					lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
-					lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
 					if cap(list) > 1024 {
 						list = append(getSlice(), list...)
 						lookupAccountListMaxVal = 0
@@ -219,11 +251,11 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 			var found bool
 			for j := 0; j < len(slotSubset); j++ {
 				if slotSubset[j].Root() == diffRoot {
+					lookupStorageListMaxVal = max(int64(cap(slotSubset)), lookupStorageListMaxVal)
+					lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
 					slotSubset[j] = nil
 					if j == 0 {
 						slotSubset = slotSubset[1:]
-						lookupStorageListMaxVal = max(int64(cap(slotSubset)), lookupStorageListMaxVal)
-						lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
 						if cap(slotSubset) > 1024 {
 							slotSubset = append(getSlice(), slotSubset...)
 							lookupStorageListMaxVal = 0
@@ -283,7 +315,22 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 		lookupAddDescendantTimer.UpdateSince(now)
 	}(time.Now())
 
-	l.fillAncestors(topDiffLayer)
+	// Link the new layer into the descendents set
+	// TODO parallel
+	//var (
+	//	workers errgroup.Group
+	//)
+	//
+	//workers.SetLimit(3)
+
+	for h := range collectDiffLayerAncestors(topDiffLayer) {
+		subset := l.descendants[h]
+		if subset == nil {
+			subset = make(map[common.Hash]struct{})
+			l.descendants[h] = subset
+		}
+		subset[topDiffLayer.Root()] = struct{}{}
+	}
 }
 
 func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {

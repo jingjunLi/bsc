@@ -696,6 +696,9 @@ func TestSnaphotsCap_1(t *testing.T) {
 	if len(snaps.layers) != 130 {
 		t.Error("size not equal 128", "size", len(snaps.layers))
 	}
+	if len(snaps.lookup.descendants) != 128 {
+		t.Error("size not equal 128", "size", len(snaps.layers))
+	}
 }
 
 func TestSnaphotsCap_2(t *testing.T) {
@@ -763,6 +766,9 @@ func TestSnaphotsCap_2(t *testing.T) {
 		t.Error("size not equal 128", "size", len(snaps.lookup.stateToLayerStorage))
 	}
 	if len(snaps.layers) != 130 {
+		t.Error("size not equal 128", "size", len(snaps.layers))
+	}
+	if len(snaps.lookup.descendants) != 128 {
 		t.Error("size not equal 128", "size", len(snaps.layers))
 	}
 	log.Info("Layer stateToLayerAccount", "accounts", strings.Join(accounts, ", "))
