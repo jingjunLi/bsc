@@ -173,7 +173,7 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 
 	// Inject the new origin that triggered the rebloom
 	dl.origin = origin
-	//return
+	return
 
 	// Retrieve the parent bloom or create a fresh empty one
 	if parent, ok := dl.parent.(*diffLayer); ok {
