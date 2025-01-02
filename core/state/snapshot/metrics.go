@@ -78,6 +78,9 @@ var (
 	lookupStorageGauge    = metrics.NewRegisteredGauge("pathdb/lookup/storage", nil)
 	lookupLayersGauge     = metrics.NewRegisteredGauge("pathdb/lookup/layers", nil)
 
+	lookupAccountListMaxValGauge = metrics.NewRegisteredGauge("pathdb/lookup/AccountListMaxVal", nil)
+	lookupStorageListMaxValGauge = metrics.NewRegisteredGauge("pathdb/lookup/StorageListMaxVal", nil)
+
 	lookupValueAccountGauge       = metrics.NewRegisteredGauge("pathdb/lookupValue/account", nil)
 	lookupValueFirstStorageGauge  = metrics.NewRegisteredGauge("pathdb/lookupValue/firstStorage", nil)
 	lookupValueSecondStorageGauge = metrics.NewRegisteredGauge("pathdb/lookupValue/secondStorage", nil)

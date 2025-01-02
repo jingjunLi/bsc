@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // slicePool is a shared pool of hash slice, for reducing the GC pressure.
@@ -31,24 +30,6 @@ func returnSlice(slice []*diffLayer) {
 	}
 	// Reset the slice before putting it back into the pool
 	slicePool.Put(&slice)
-}
-
-// diffAncestors returns all the ancestors of the specific layer (disk layer
-// is not included).
-func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
-	set := make(map[common.Hash]struct{})
-	for {
-		parent := layer.Parent()
-		if parent == nil {
-			break // finished
-		}
-		if _, ok := parent.(*diskLayer); ok {
-			break // finished
-		}
-		set[parent.Root()] = struct{}{}
-		layer = parent
-	}
-	return set
 }
 
 // Lookup is an internal help structure to quickly identify
@@ -94,22 +75,10 @@ func newLookup(head Snapshot) *Lookup {
 	{ // setup descendant mapping
 		var (
 			current     = head
-			layers      = make(map[common.Hash]Snapshot)
 			descendants = make(map[common.Hash]map[common.Hash]struct{})
 		)
 		for {
-			hash := current.Root()
-			layers[hash] = current
-
-			// Traverse the ancestors (diff only) of the current layer and link them
-			for h := range collectDiffLayerAncestors(current) {
-				subset := descendants[h]
-				if subset == nil {
-					subset = make(map[common.Hash]struct{})
-					descendants[h] = subset
-				}
-				subset[hash] = struct{}{}
-			}
+			l.fillAncestors(current)
 			parent := current.Parent()
 			if parent == nil {
 				break
@@ -136,6 +105,9 @@ func (l *Lookup) addAccount(diff *diffLayer) {
 	}
 }
 
+var lookupAccountListMaxVal int64 = 0
+var lookupStorageListMaxVal int64 = 0
+
 func (l *Lookup) removeAccount(diff *diffLayer) error {
 	diffRoot := diff.Root()
 	defer func(now time.Time) {
@@ -143,13 +115,13 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 	}(time.Now())
 	for accountHash, _ := range diff.accountData {
 		var (
-			subset []*diffLayer
+			list   []*diffLayer
 			exists bool
 			found  bool
 		)
-		if subset, exists = l.stateToLayerAccount[accountHash]; exists {
-			if subset == nil {
-				returnSlice(subset)
+		if list, exists = l.stateToLayerAccount[accountHash]; exists {
+			if list == nil {
+				returnSlice(list)
 				delete(l.stateToLayerAccount, accountHash)
 				continue
 			}
@@ -158,33 +130,34 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 			continue
 		}
 
-		for j := 0; j < len(subset); j++ {
-			if subset[j].Root() == diffRoot {
-				subset[j] = nil
+		for j := 0; j < len(list); j++ {
+			if list[j].Root() == diffRoot {
+				list[j] = nil
 				if j == 0 {
-					subset = subset[1:] // TODO what if the underlying slice is held forever?
-					if cap(subset) > 1024 {
-						subset = append(getSlice(), subset...)
+					list = list[1:]
+					lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
+					lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
+					if cap(list) > 1024 {
+						list = append(getSlice(), list...)
+						lookupAccountListMaxVal = 0
 					}
 				} else {
-					copy(subset[j:], subset[j+1:])
-					subset = subset[:len(subset)-1]
+					copy(list[j:], list[j+1:])
+					list = list[:len(list)-1]
 				}
 				found = true
 				break
 			}
 		}
-		//lookupAccountAppendIndexGauge.Update(int64(appendIndex / len(subset)))
 		if !found {
 			// deleted flattened layers
 			continue
-			log.Error("failed to delete lookup %s", accountHash)
 		}
-		if len(subset) == 0 {
-			returnSlice(subset)
+		if len(list) == 0 {
+			returnSlice(list)
 			delete(l.stateToLayerAccount, accountHash)
 		} else {
-			l.stateToLayerAccount[accountHash] = subset
+			l.stateToLayerAccount[accountHash] = list
 		}
 	}
 	return nil
@@ -249,8 +222,11 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 					slotSubset[j] = nil
 					if j == 0 {
 						slotSubset = slotSubset[1:]
+						lookupStorageListMaxVal = max(int64(cap(slotSubset)), lookupStorageListMaxVal)
+						lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
 						if cap(slotSubset) > 1024 {
 							slotSubset = append(getSlice(), slotSubset...)
+							lookupStorageListMaxVal = 0
 						}
 					} else {
 						copy(slotSubset[j:], slotSubset[j+1:])
@@ -278,27 +254,36 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 	return nil
 }
 
+// fillAncestors identifies the ancestors of the given layer and populates the
+// descendants set. The ancestors include the diff layers below the supplied
+// layer and also the disk layer.
+//
+// This function assumes the write lock has been held.
+func (l *Lookup) fillAncestors(layer Snapshot) {
+	hash := layer.Root()
+	for {
+		parent := layer.Parent()
+		if parent == nil {
+			break
+		}
+		layer = parent
+
+		phash := parent.Root()
+		subset := l.descendants[phash]
+		if subset == nil {
+			subset = make(map[common.Hash]struct{})
+			l.descendants[phash] = subset
+		}
+		subset[hash] = struct{}{}
+	}
+}
+
 func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 	defer func(now time.Time) {
 		lookupAddDescendantTimer.UpdateSince(now)
 	}(time.Now())
 
-	// Link the new layer into the descendents set
-	// TODO parallel
-	//var (
-	//	workers errgroup.Group
-	//)
-	//
-	//workers.SetLimit(3)
-
-	for h := range collectDiffLayerAncestors(topDiffLayer) {
-		subset := l.descendants[h]
-		if subset == nil {
-			subset = make(map[common.Hash]struct{})
-			l.descendants[h] = subset
-		}
-		subset[topDiffLayer.Root()] = struct{}{}
-	}
+	l.fillAncestors(topDiffLayer)
 }
 
 func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
