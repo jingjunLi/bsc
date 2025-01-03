@@ -32,6 +32,8 @@ func returnSlice(slice []*diffLayer) {
 	slicePool.Put(&slice)
 }
 
+var listCapSize = 256
+
 // diffAncestors returns all the ancestors of the specific layer (disk layer
 // is not included).
 func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
@@ -168,7 +170,7 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 				lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
 				if j == 0 {
 					list = list[1:]
-					if cap(list) > 1024 {
+					if cap(list) > listCapSize {
 						list = append(getSlice(), list...)
 						lookupAccountListMaxVal = 0
 					}
@@ -254,7 +256,7 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 					lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
 					if j == 0 {
 						slotSubset = slotSubset[1:]
-						if cap(slotSubset) > 1024 {
+						if cap(slotSubset) > listCapSize {
 							slotSubset = append(getSlice(), slotSubset...)
 							lookupStorageListMaxVal = 0
 						}
