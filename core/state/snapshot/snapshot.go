@@ -981,13 +981,21 @@ func (t *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) (*ty
 	}(time.Now())
 
 	//t.lock.RLock()
-	targetLayer := t.lookup.LookupAccount(accountAddrHash, head)
-	if targetLayer == nil {
+	var targetLayer Snapshot
+	tip := t.lookup.LookupAccount(accountAddrHash, head)
+	if tip == (common.Hash{}) {
 		if t.baseDiff == nil {
 			targetLayer = t.base
 		} else {
 			targetLayer = t.baseDiff
 		}
+	} else {
+		t.lock.RLock()
+		targetLayer = t.layers[tip]
+		t.lock.RUnlock()
+		//log.Info("LookupAccount", "targetLayer", targetLayer)
+		//t.lock.RUnlock()
+		//return nil, fmt.Errorf("account not found in the tree")
 	}
 	//t.lock.RUnlock()
 
@@ -1006,14 +1014,19 @@ func (t *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head
 	}(time.Now())
 
 	//t.lock.RLock()
-	targetLayer := t.lookup.LookupStorage(accountAddrHash, slot, head)
-	if targetLayer == nil {
+	var targetLayer Snapshot
+	tip := t.lookup.LookupStorage(accountAddrHash, slot, head)
+	if tip == (common.Hash{}) {
 		if t.baseDiff == nil {
 			targetLayer = t.base
 			log.Info("LookupStorage", "targetLayer", targetLayer)
 		} else {
 			targetLayer = t.baseDiff
 		}
+	} else {
+		t.lock.RLock()
+		targetLayer = t.layers[tip]
+		t.lock.RUnlock()
 	}
 	//t.lock.RUnlock()
 

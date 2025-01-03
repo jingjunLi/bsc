@@ -10,20 +10,20 @@ import (
 // slicePool is a shared pool of hash slice, for reducing the GC pressure.
 var slicePool = sync.Pool{
 	New: func() interface{} {
-		slice := make([]*diffLayer, 0, 16) // Pre-allocate a slice with a reasonable capacity.
+		slice := make([]common.Hash, 0, 16) // Pre-allocate a slice with a reasonable capacity.
 		return &slice
 	},
 }
 
 // getSlice obtains the hash slice from the shared pool.
-func getSlice() []*diffLayer {
-	slice := *slicePool.Get().(*[]*diffLayer)
+func getSlice() []common.Hash {
+	slice := *slicePool.Get().(*[]common.Hash)
 	slice = slice[:0]
 	return slice
 }
 
 // returnSlice returns the hash slice back to the shared pool for following usage.
-func returnSlice(slice []*diffLayer) {
+func returnSlice(slice []common.Hash) {
 	// Discard the large slice for recycling
 	if len(slice) > 128 {
 		return
@@ -54,8 +54,8 @@ func collectDiffLayerAncestors(layer Snapshot) map[common.Hash]struct{} {
 
 // Lookup is an internal help structure to quickly identify
 type Lookup struct {
-	stateToLayerAccount map[common.Hash][]*diffLayer                 // 2w
-	stateToLayerStorage map[common.Hash]map[common.Hash][]*diffLayer // 5k
+	stateToLayerAccount map[common.Hash][]common.Hash                 // 2w
+	stateToLayerStorage map[common.Hash]map[common.Hash][]common.Hash // 5k
 	descendants         map[common.Hash]map[common.Hash]struct{}
 
 	layers map[common.Hash]struct{}
@@ -66,8 +66,8 @@ type Lookup struct {
 // newLookup initializes the lookup structure.
 func newLookup(head Snapshot) *Lookup {
 	l := &Lookup{
-		stateToLayerAccount: make(map[common.Hash][]*diffLayer, 60000),
-		stateToLayerStorage: make(map[common.Hash]map[common.Hash][]*diffLayer, 2000),
+		stateToLayerAccount: make(map[common.Hash][]common.Hash, 60000),
+		stateToLayerStorage: make(map[common.Hash]map[common.Hash][]common.Hash, 2000),
 		descendants:         make(map[common.Hash]map[common.Hash]struct{}, 128),
 		layers:              make(map[common.Hash]struct{}, 128),
 	}
@@ -134,7 +134,7 @@ func (l *Lookup) addAccount(diff *diffLayer) {
 		if !exists {
 			list = getSlice()
 		}
-		list = append(list, diff)
+		list = append(list, diff.Root())
 		l.stateToLayerAccount[accountHash] = list
 	}
 }
@@ -149,7 +149,7 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 	}(time.Now())
 	for accountHash, _ := range diff.accountData {
 		var (
-			list   []*diffLayer
+			list   []common.Hash
 			exists bool
 			found  bool
 		)
@@ -165,7 +165,7 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 		}
 
 		for j := 0; j < len(list); j++ {
-			if list[j].Root() == diffRoot {
+			if list[j] == diffRoot {
 				lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
 				lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
 				if j == 0 {
@@ -204,7 +204,7 @@ func (l *Lookup) addStorage(diff *diffLayer) {
 	for accountHash, slots := range diff.storageData {
 		subset := l.stateToLayerStorage[accountHash]
 		if subset == nil {
-			subset = make(map[common.Hash][]*diffLayer, 16)
+			subset = make(map[common.Hash][]common.Hash, 16)
 			l.stateToLayerStorage[accountHash] = subset
 		}
 		for slotHash := range slots {
@@ -212,7 +212,7 @@ func (l *Lookup) addStorage(diff *diffLayer) {
 			if !exists {
 				list = getSlice()
 			}
-			list = append(list, diff)
+			list = append(list, diff.Root())
 			subset[slotHash] = list
 		}
 	}
@@ -226,7 +226,7 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 	}(time.Now())
 	for accountHash, slots := range diff.storageData {
 		var (
-			subset map[common.Hash][]*diffLayer
+			subset map[common.Hash][]common.Hash
 			exist  bool
 		)
 		if subset, exist = l.stateToLayerStorage[accountHash]; exist {
@@ -238,7 +238,7 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 
 		for slotHash := range slots {
 			var (
-				slotSubset []*diffLayer
+				slotSubset []common.Hash
 				slotExists bool
 			)
 			if slotSubset, slotExists = subset[slotHash]; slotExists {
@@ -251,7 +251,7 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 
 			var found bool
 			for j := 0; j < len(slotSubset); j++ {
-				if slotSubset[j].Root() == diffRoot {
+				if slotSubset[j] == diffRoot {
 					lookupStorageListMaxVal = max(int64(cap(slotSubset)), lookupStorageListMaxVal)
 					lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
 					if j == 0 {
@@ -424,7 +424,7 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 	lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
 }
 
-func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Snapshot {
+func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) common.Hash {
 	defer func(now time.Time) {
 		lookupLookupAccountTimer.UpdateSince(now)
 	}(time.Now())
@@ -438,20 +438,20 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) Sn
 
 	list, exists := l.stateToLayerAccount[accountAddrHash]
 	if !exists {
-		return nil
+		return common.Hash{}
 	}
 
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.
 	for i := len(list) - 1; i >= 0; i-- {
-		if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
+		if list[i] == head || l.isDescendant(head, list[i]) {
 			return list[i]
 		}
 	}
-	return nil
+	return common.Hash{}
 }
 
-func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) Snapshot {
+func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) common.Hash {
 	defer func(now time.Time) {
 		lookupLookupStorageTimer.UpdateSince(now)
 	}(time.Now())
@@ -465,20 +465,20 @@ func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, he
 
 	subset, exists := l.stateToLayerStorage[accountAddrHash]
 	if !exists {
-		return nil
+		return common.Hash{}
 	}
 
 	list, exists := subset[slot]
 	if !exists {
-		return nil
+		return common.Hash{}
 	}
 
 	// Traverse the list in reverse order to find the first entry that either
 	// matches the specified head or is a descendant of it.
 	for i := len(list) - 1; i >= 0; i-- {
-		if list[i].Root() == head || l.isDescendant(head, list[i].Root()) {
+		if list[i] == head || l.isDescendant(head, list[i]) {
 			return list[i]
 		}
 	}
-	return nil
+	return common.Hash{}
 }
