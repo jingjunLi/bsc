@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"golang.org/x/exp/maps"
@@ -95,8 +96,9 @@ type diffLayer struct {
 	parent snapshot   // Parent snapshot modified by this one, never nil
 	memory uint64     // Approximate guess as to how much memory we use
 
-	root  common.Hash // Root hash to which this snapshot diff belongs to
-	stale atomic.Bool // Signals that the layer became stale (state progressed)
+	root      common.Hash // Root hash to which this snapshot diff belongs to
+	stale     atomic.Bool // Signals that the layer became stale (state progressed)
+	canLookup atomic.Bool // Signals that the layer became stale (state progressed) but can ready by lookup cache
 
 	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrieval (nil means deleted)
 	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrieval. one per account (nil means deleted)
@@ -171,6 +173,7 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 
 	// Inject the new origin that triggered the rebloom
 	dl.origin = origin
+	return
 
 	// Retrieve the parent bloom or create a fresh empty one
 	if parent, ok := dl.parent.(*diffLayer); ok {
@@ -216,6 +219,12 @@ func (dl *diffLayer) Stale() bool {
 	return dl.stale.Load()
 }
 
+// CanLookup return whether this layer has become stale (was flattened across) or if
+// it's still live.
+func (dl *diffLayer) CanLookup() bool {
+	return dl.canLookup.Load()
+}
+
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
 func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
@@ -231,6 +240,70 @@ func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 		panic(err)
 	}
 	return account, nil
+}
+
+// CurrentLayerAccount directly retrieves the account associated with a particular hash in
+// the snapshot slim data format.
+func (dl *diffLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotCurrentLayerAccountTimer.Update(ptime)
+		snapshotDiffLayerAccountMeter.Mark(1)
+	}()
+	data, err := dl.CurrentLayerAccountRLP(hash)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 { // can be both nil and []byte{}
+		return nil, nil
+	}
+	account := new(types.SlimAccount)
+	if err := rlp.DecodeBytes(data, account); err != nil {
+		panic(err)
+	}
+	return account, nil
+}
+
+// CurrentLayerAccountRLP directly retrieves the account RLP associated with a particular
+// hash in the snapshot slim data format.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diffLayer) CurrentLayerAccountRLP(hash common.Hash) ([]byte, error) {
+	pstart := time.Now()
+
+	// Check staleness before reaching further.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.Stale() && !dl.CanLookup() {
+		return nil, ErrSnapshotStale
+	}
+	// If the account is known locally, return it
+	if data, ok := dl.accountData[hash]; ok {
+		snapshotDirtyAccountHitMeter.Mark(1)
+		snapshotDirtyAccountReadMeter.Mark(int64(len(data)))
+		snapshotBloomAccountTrueHitMeter.Mark(1)
+		ptime := time.Since(pstart)
+		snapshotBaseDiffLayerAccountTimer.Update(ptime)
+		snapshotBaseDiffLayerAccountMeter.Mark(1)
+		return data, nil
+	}
+
+	ptime := time.Since(pstart)
+	snapshotBaseDiffLayerAccountTimer.Update(ptime)
+
+	// Storage slot unknown to this diff, resolve from parent
+	if disk, ok := dl.parent.(*diskLayer); ok {
+		return disk.AccountRLP(hash)
+	} else {
+		// TODO may error look up cache failed
+		log.Error("Account error look up cache failed ----")
+	}
+
+	return nil, nil
 }
 
 // Accounts directly retrieves all accounts in current snapshot in
@@ -312,6 +385,56 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 	// Failed to resolve through diff layers, mark a bloom error and use the disk
 	snapshotBloomAccountFalseHitMeter.Mark(1)
 	return dl.parent.AccountRLP(hash)
+}
+
+// CurrentLayerStorage directly retrieves the storage data associated with a particular hash,
+// within a particular account. If the slot is unknown to this diff, it's parent
+// is consulted.
+//
+// Note the returned slot is not a copy, please don't modify it.
+func (dl *diffLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotCurrentLayerStorageTimer.Update(ptime)
+		snapshotDiffLayerStorageMeter.Mark(1)
+	}()
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.Stale() && !dl.CanLookup() {
+		return nil, ErrSnapshotStale
+	}
+	// If the account is known locally, try to resolve the slot locally
+	if storage, ok := dl.storageData[accountHash]; ok {
+		if data, ok := storage[storageHash]; ok {
+			snapshotDirtyStorageHitMeter.Mark(1)
+			//snapshotDirtyStorageHitDepthHist.Update(int64(depth))
+			if n := len(data); n > 0 {
+				snapshotDirtyStorageReadMeter.Mark(int64(n))
+			} else {
+				snapshotDirtyStorageInexMeter.Mark(1)
+			}
+			snapshotBloomStorageTrueHitMeter.Mark(1)
+			snapshotBaseDiffLayerStorageTimer.Update(time.Since(pstart))
+			return data, nil
+		}
+	}
+
+	snapshotBaseDiffLayerStorageTimer.Update(time.Since(pstart))
+	// Storage slot unknown to this diff, resolve from parent
+	if disk, ok := dl.parent.(*diskLayer); ok {
+		return disk.Storage(accountHash, storageHash)
+	} else {
+		// TODO may error look up cache failed
+		log.Error("Account error look up cache failed ----")
+	}
+
+	return nil, nil
 }
 
 // Storage directly retrieves the storage data associated with a particular hash,
@@ -405,6 +528,10 @@ func (dl *diffLayer) flatten() snapshot {
 
 	// Before actually writing all our data to the parent, first ensure that the
 	// parent hasn't been 'corrupted' by someone else already flattening into it
+	if parent.canLookup.Swap(true) {
+		panic("parent diff layer is stale, can also be read by lookup")
+	}
+
 	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}

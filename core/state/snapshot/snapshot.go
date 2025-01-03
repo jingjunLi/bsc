@@ -21,7 +21,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -76,6 +78,27 @@ var (
 	snapshotBloomStorageFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/falsehit", nil)
 	snapshotBloomStorageMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/miss", nil)
 
+	snapshotCurrentLayerAccountTimer = metrics.NewRegisteredResettingTimer("state/snapshot/currentLayerAccount", nil)
+	snapshotCurrentLayerStorageTimer = metrics.NewRegisteredResettingTimer("state/snapshot/currentLayerStorage", nil)
+
+	snapshotDiffLayerAccountTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/account", nil)
+	snapshotDiskLayerAccountTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/diskLayer/account", nil)
+	snapshotBaseDiffLayerAccountTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/base/account", nil)
+	snapshotDiffLayerStorageTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/storage", nil)
+	snapshotBaseDiffLayerStorageTimer = metrics.NewRegisteredResettingTimer("state/snapshot/diffLayer/base/storage", nil)
+	snapshotDiskLayerStorageTimer     = metrics.NewRegisteredResettingTimer("state/snapshot/diskLayer/storage", nil)
+
+	snapshotUpdateAPITimer        = metrics.NewRegisteredResettingTimer("state/snapshot/API/Update", nil)
+	snapshotCapAPITimer           = metrics.NewRegisteredResettingTimer("state/snapshot/API/Cap", nil)
+	snapshotLookUpStorageAPITimer = metrics.NewRegisteredResettingTimer("state/snapshot/API/LookUpStorage", nil)
+	snapshotLookUpAccountAPITimer = metrics.NewRegisteredResettingTimer("state/snapshot/API/LookUpAccount", nil)
+
+	snapshotDiffLayerAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/diffLayer/accounthit", nil)
+	snapshotBaseDiffLayerAccountMeter = metrics.NewRegisteredMeter("state/snapshot/diffLayer/base/accounthit", nil)
+	snapshotDiskLayerAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/diskLayer/accounthit", nil)
+	snapshotDiffLayerStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/diffLayer/storagehit", nil)
+	snapshotDiskLayerStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/diskLayer/storagehit", nil)
+
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough
 	// to not maintain the layer's original state.
@@ -104,6 +127,10 @@ type Snapshot interface {
 	// the snapshot slim data format.
 	Account(hash common.Hash) (*types.SlimAccount, error)
 
+	// CurrentLayerAccount directly retrieves the account associated with a particular hash in
+	// the snapshot slim data format.
+	CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error)
+
 	// Accounts directly retrieves all accounts in current snapshot in
 	// the snapshot slim data format.
 	Accounts() (map[common.Hash]*types.SlimAccount, error)
@@ -115,6 +142,10 @@ type Snapshot interface {
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account.
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
+
+	// CurrentLayerStorage directly retrieves the storage data associated with a particular hash,
+	// within a particular account.
+	CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error)
 
 	// Parent returns the subsequent layer of a snapshot, or nil if the base was
 	// reached.
@@ -173,6 +204,11 @@ type Tree struct {
 	lock     sync.RWMutex
 	capLimit int
 
+	enableLookUp bool
+	base         *diskLayer
+	baseDiff     *diffLayer
+	lookup       *Lookup
+
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
 }
@@ -195,11 +231,12 @@ type Tree struct {
 //     a background thread.
 func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash, cap int, withoutTrie bool) (*Tree, error) {
 	snap := &Tree{
-		config:   config,
-		diskdb:   diskdb,
-		triedb:   triedb,
-		capLimit: cap,
-		layers:   make(map[common.Hash]snapshot),
+		config:       config,
+		diskdb:       diskdb,
+		triedb:       triedb,
+		capLimit:     cap,
+		layers:       make(map[common.Hash]snapshot),
+		enableLookUp: true,
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, root, config.CacheSize, config.Recovery, config.NoBuild, withoutTrie)
@@ -219,12 +256,28 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 		}
 		return nil, err // Bail out the error, don't rebuild automatically.
 	}
+
+	// TODO:
+	snap.lookup = newLookup(head)
+	snap.baseDiff = nil
+	snap.base = nil
+
 	// Existing snapshot loaded, seed all the layers
+	var prev snapshot
 	for head != nil {
+		if _, ok := head.(*diskLayer); ok {
+			// TODO prev is nil, when load
+			snap.base = head.(*diskLayer)
+			if prev != nil {
+				snap.baseDiff = prev.(*diffLayer)
+				log.Info("Snapshot loaded set", "diskRoot", snap.diskRoot(), "root", root, "snap.baseDiff root", snap.baseDiff.Root())
+			}
+		}
 		snap.layers[head.Root()] = head
+		prev = head
 		head = head.Parent()
 	}
-	log.Info("Snapshot loaded", "diskRoot", snap.diskRoot(), "root", root)
+	log.Info("Snapshot loaded", "diskRoot", snap.diskRoot(), "root", root, "base diff layer root", snap.baseDiff, "base disk layer root", snap.base)
 	return snap, nil
 }
 
@@ -343,6 +396,10 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
 func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
+	defer func(now time.Time) {
+		snapshotUpdateAPITimer.UpdateSince(now)
+	}(time.Now())
+
 	// Reject noop updates to avoid self-loops in the snapshot tree. This is a
 	// special case that can only happen for Clique networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -359,12 +416,18 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 	}
 	snap := parent.(snapshot).Update(blockRoot, accounts, storage)
 
+	t.lookup.AddSnapshot(snap)
 	// Save the new snapshot for later
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	t.layers[snap.root] = snap
-	log.Debug("Snapshot updated", "blockRoot", blockRoot)
+	// update lookup, which in the tree lock guard.
+	//t.lookup.AddSnapshot(snap)
+	if t.baseDiff == nil || reflect.ValueOf(t.baseDiff).IsNil() {
+		t.baseDiff = snap
+	}
+	snapLayersGuage.Update(int64(len(t.layers)))
 	return nil
 }
 
@@ -382,6 +445,10 @@ func (t *Tree) CapLimit() int {
 // survival is only known *after* capping, we need to omit it from the count if
 // we want to ensure that *at least* the requested number of diff layers remain.
 func (t *Tree) Cap(root common.Hash, layers int) error {
+	defer func(now time.Time) {
+		snapshotCapAPITimer.UpdateSince(now)
+	}(time.Now())
+
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
 	if snap == nil {
@@ -413,6 +480,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 
 		// Replace the entire snapshot tree with the flat base
 		t.layers = map[common.Hash]snapshot{base.root: base}
+		// TODO:
+		t.lookup = newLookup(base)
+
 		return nil
 	}
 	persisted := t.cap(diff, layers)
@@ -425,17 +495,28 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			children[parent] = append(children[parent], root)
 		}
 	}
-	var remove func(root common.Hash)
-	remove = func(root common.Hash) {
+	clearDiff := func(snap snapshot) {
+		diffLook, okLook := snap.(*diffLayer)
+		if !okLook {
+			return
+		}
+		t.lookup.RemoveSnapshot(diffLook)
+	}
+	var remove func(root common.Hash, snap snapshot)
+	remove = func(root common.Hash, snap snapshot) {
+		// TODO:
+		if diffInRemove, ok := t.layers[root].(*diffLayer); ok {
+			clearDiff(diffInRemove)
+		}
 		delete(t.layers, root)
 		for _, child := range children[root] {
-			remove(child)
+			remove(child, snap)
 		}
 		delete(children, root)
 	}
 	for root, snap := range t.layers {
 		if snap.Stale() {
-			remove(root)
+			remove(root, snap)
 		}
 	}
 	// If the disk layer was modified, regenerate all the cumulative blooms
@@ -492,8 +573,13 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 		// Flatten the parent into the grandparent. The flattening internally obtains a
 		// write lock on grandparent.
+		prevParent := parent
 		flattened := parent.flatten().(*diffLayer)
-		t.layers[flattened.root] = flattened
+		if flattened != prevParent {
+			t.layers[flattened.root] = flattened
+			t.baseDiff = flattened
+			t.lookup.RemoveSnapshot(prevParent)
+		}
 
 		// Invoke the hook if it's registered. Ugly hack.
 		if t.onFlatten != nil {
@@ -512,13 +598,25 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
+
+	clearDiff := func(snap snapshot) {
+		diff, ok := snap.(*diffLayer)
+		if !ok {
+			return
+		}
+		t.lookup.RemoveSnapshot(diff)
+	}
+
+	//TODO:check it?
 	// If the bottom-most layer is larger than our memory cap, persist to disk
 	bottom := diff.parent.(*diffLayer)
 
 	bottom.lock.RLock()
-	base := diffToDisk(bottom)
-	bottom.lock.RUnlock()
 
+	base := diffToDisk(bottom)
+	t.baseDiff = diff
+	bottom.lock.RUnlock()
+	clearDiff(bottom)
 	t.layers[base.root] = base
 	diff.parent = base
 	return base
@@ -550,6 +648,8 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		panic("parent disk layer is stale") // we've committed into the same base from two children, boo
 	}
 	base.stale = true
+	base.canLookUp = true
+
 	base.lock.Unlock()
 
 	// Push all updated accounts into the database
@@ -734,9 +834,13 @@ func (t *Tree) Rebuild(root common.Hash) {
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
+	disk := generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root)
 	t.layers = map[common.Hash]snapshot{
-		root: generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root),
+		root: disk,
 	}
+	// TODO : check it ??
+	t.lookup = newLookup(t.layers[root])
+	t.base = disk
 }
 
 // AccountIterator creates a new account iterator for the specified root hash and
@@ -869,4 +973,54 @@ func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize, preimag
 		}
 	}
 	return size, 0, 0
+}
+
+func (t *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) (*types.SlimAccount, error) {
+	defer func(now time.Time) {
+		snapshotLookUpAccountAPITimer.UpdateSince(now)
+	}(time.Now())
+
+	//t.lock.RLock()
+	targetLayer := t.lookup.LookupAccount(accountAddrHash, head)
+	if targetLayer == nil {
+		if t.baseDiff == nil {
+			targetLayer = t.base
+		} else {
+			targetLayer = t.baseDiff
+		}
+	}
+	//t.lock.RUnlock()
+
+	if targetLayer != nil && !reflect.ValueOf(targetLayer).IsNil() {
+		lookupAccount, err := targetLayer.CurrentLayerAccount(accountAddrHash)
+		return lookupAccount, err
+	} else {
+		log.Error("GlobalLookup.lookupAccount err", "acc hash", accountAddrHash, "targetLayer", targetLayer)
+	}
+	return nil, nil
+}
+
+func (t *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) ([]byte, error) {
+	defer func(now time.Time) {
+		snapshotLookUpStorageAPITimer.UpdateSince(now)
+	}(time.Now())
+
+	//t.lock.RLock()
+	targetLayer := t.lookup.LookupStorage(accountAddrHash, slot, head)
+	if targetLayer == nil {
+		if t.baseDiff == nil {
+			targetLayer = t.base
+			log.Info("LookupStorage", "targetLayer", targetLayer)
+		} else {
+			targetLayer = t.baseDiff
+		}
+	}
+	//t.lock.RUnlock()
+
+	if targetLayer != nil && !reflect.ValueOf(targetLayer).IsNil() {
+		lookupData, err := targetLayer.CurrentLayerStorage(accountAddrHash, slot)
+		return lookupData, err
+	}
+
+	return nil, nil
 }

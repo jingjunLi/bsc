@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"sync"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,8 +36,9 @@ type diskLayer struct {
 	triedb *triedb.Database    // Trie node cache for reconstruction purposes
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
-	root  common.Hash // Root hash of the base snapshot
-	stale bool        // Signals that the layer became stale (state progressed)
+	root      common.Hash // Root hash of the base snapshot
+	stale     bool        // Signals that the layer became stale (state progressed)
+	canLookUp bool        //
 
 	genMarker  []byte                    // Marker for the state that's indexed during initial layer generation
 	genPending chan struct{}             // Notification channel when generation is done (test synchronicity)
@@ -74,6 +76,13 @@ func (dl *diskLayer) Stale() bool {
 	return dl.stale
 }
 
+func (dl *diskLayer) CanLookUp() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.canLookUp
+}
+
 // Accounts directly retrieves all accounts in current snapshot in
 // the snapshot slim data format.
 func (dl *diskLayer) Accounts() (map[common.Hash]*types.SlimAccount, error) {
@@ -105,15 +114,45 @@ func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 	return account, nil
 }
 
+// CurrentLayerAccount directly retrieves the account associated with a particular hash in
+// the snapshot slim data format.
+func (dl *diskLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerAccountTimer.Update(ptime)
+		snapshotDiskLayerAccountMeter.Mark(1)
+	}()
+	data, err := dl.AccountRLP(hash)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 { // can be both nil and []byte{}
+		return nil, nil
+	}
+	account := new(types.SlimAccount)
+	if err := rlp.DecodeBytes(data, account); err != nil {
+		panic(err)
+	}
+	return account, nil
+}
+
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
 func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerAccountTimer.Update(ptime)
+		snapshotDiskLayerAccountMeter.Mark(1)
+	}()
+
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.stale && !dl.canLookUp {
 		return nil, ErrSnapshotStale
 	}
 	// If the layer is being generated, ensure the requested hash has already been
@@ -146,6 +185,59 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
 func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerStorageTimer.Update(ptime)
+		snapshotDiskLayerStorageMeter.Mark(1)
+	}()
+
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.stale && !dl.canLookUp {
+		return nil, ErrSnapshotStale
+	}
+	key := append(accountHash[:], storageHash[:]...)
+
+	// If the layer is being generated, ensure the requested hash has already been
+	// covered by the generator.
+	if dl.genMarker != nil && bytes.Compare(key, dl.genMarker) > 0 {
+		return nil, ErrNotCoveredYet
+	}
+	// If we're in the disk layer, all diff layers missed
+	snapshotDirtyStorageMissMeter.Mark(1)
+
+	// Try to retrieve the storage slot from the memory cache
+	if blob, found := dl.cache.HasGet(nil, key); found {
+		snapshotCleanStorageHitMeter.Mark(1)
+		snapshotCleanStorageReadMeter.Mark(int64(len(blob)))
+		return blob, nil
+	}
+	// Cache doesn't contain storage slot, pull from disk and cache for later
+	blob := rawdb.ReadStorageSnapshot(dl.diskdb, accountHash, storageHash)
+	dl.cache.Set(key, blob)
+
+	snapshotCleanStorageMissMeter.Mark(1)
+	if n := len(blob); n > 0 {
+		snapshotCleanStorageWriteMeter.Mark(int64(n))
+	} else {
+		snapshotCleanStorageInexMeter.Mark(1)
+	}
+	return blob, nil
+}
+
+// CurrentLayerStorage directly retrieves the storage data associated with a particular hash,
+// within a particular account.
+func (dl *diskLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error) {
+	pstart := time.Now()
+	defer func() {
+		ptime := time.Since(pstart)
+		snapshotDiskLayerStorageTimer.Update(ptime)
+		snapshotDiskLayerStorageMeter.Mark(1)
+	}()
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
