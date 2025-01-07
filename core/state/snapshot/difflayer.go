@@ -270,7 +270,7 @@ func (dl *diffLayer) CurrentLayerAccount(hash common.Hash) (*types.SlimAccount, 
 //
 // Note the returned account is not a copy, please don't modify it.
 func (dl *diffLayer) CurrentLayerAccountRLP(hash common.Hash) ([]byte, error) {
-	pstart := time.Now()
+	//pstart := time.Now()
 
 	// Check staleness before reaching further.
 	dl.lock.RLock()
@@ -286,14 +286,14 @@ func (dl *diffLayer) CurrentLayerAccountRLP(hash common.Hash) ([]byte, error) {
 		snapshotDirtyAccountHitMeter.Mark(1)
 		snapshotDirtyAccountReadMeter.Mark(int64(len(data)))
 		snapshotBloomAccountTrueHitMeter.Mark(1)
-		ptime := time.Since(pstart)
-		snapshotBaseDiffLayerAccountTimer.Update(ptime)
-		snapshotBaseDiffLayerAccountMeter.Mark(1)
+		//ptime := time.Since(pstart)
+		//snapshotBaseDiffLayerAccountTimer.Update(ptime)
+		//snapshotBaseDiffLayerAccountMeter.Mark(1)
 		return data, nil
 	}
 
-	ptime := time.Since(pstart)
-	snapshotBaseDiffLayerAccountTimer.Update(ptime)
+	//ptime := time.Since(pstart)
+	//snapshotBaseDiffLayerAccountTimer.Update(ptime)
 
 	// Storage slot unknown to this diff, resolve from parent
 	if disk, ok := dl.parent.(*diskLayer); ok {
@@ -395,12 +395,12 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 func (dl *diffLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) ([]byte, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
-	pstart := time.Now()
-	defer func() {
-		ptime := time.Since(pstart)
-		snapshotCurrentLayerStorageTimer.Update(ptime)
-		snapshotDiffLayerStorageMeter.Mark(1)
-	}()
+	//pstart := time.Now()
+	//defer func() {
+	//	ptime := time.Since(pstart)
+	//	snapshotCurrentLayerStorageTimer.Update(ptime)
+	//	snapshotDiffLayerStorageMeter.Mark(1)
+	//}()
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -419,13 +419,13 @@ func (dl *diffLayer) CurrentLayerStorage(accountHash, storageHash common.Hash) (
 			} else {
 				snapshotDirtyStorageInexMeter.Mark(1)
 			}
-			snapshotBloomStorageTrueHitMeter.Mark(1)
-			snapshotBaseDiffLayerStorageTimer.Update(time.Since(pstart))
+			//snapshotBloomStorageTrueHitMeter.Mark(1)
+			//snapshotBaseDiffLayerStorageTimer.Update(time.Since(pstart))
 			return data, nil
 		}
 	}
 
-	snapshotBaseDiffLayerStorageTimer.Update(time.Since(pstart))
+	//snapshotBaseDiffLayerStorageTimer.Update(time.Since(pstart))
 	// Storage slot unknown to this diff, resolve from parent
 	if disk, ok := dl.parent.(*diskLayer); ok {
 		return disk.Storage(accountHash, storageHash)

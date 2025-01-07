@@ -185,12 +185,12 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
 func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
-	pstart := time.Now()
-	defer func() {
-		ptime := time.Since(pstart)
-		snapshotDiskLayerStorageTimer.Update(ptime)
-		snapshotDiskLayerStorageMeter.Mark(1)
-	}()
+	//pstart := time.Now()
+	//defer func() {
+	//	ptime := time.Since(pstart)
+	//	snapshotDiskLayerStorageTimer.Update(ptime)
+	//	snapshotDiskLayerStorageMeter.Mark(1)
+	//}()
 
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()

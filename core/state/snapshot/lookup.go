@@ -126,9 +126,9 @@ func newLookup(head Snapshot) *Lookup {
 }
 
 func (l *Lookup) addAccount(diff *diffLayer) {
-	defer func(now time.Time) {
-		lookupAddLayerAccountTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupAddLayerAccountTimer.UpdateSince(now)
+	//}(time.Now())
 	for accountHash, _ := range diff.accountData {
 		list, exists := l.stateToLayerAccount[accountHash]
 		if !exists {
@@ -144,9 +144,9 @@ var lookupStorageListMaxVal int64 = 0
 
 func (l *Lookup) removeAccount(diff *diffLayer) error {
 	diffRoot := diff.Root()
-	defer func(now time.Time) {
-		lookupRemoveLayerAccountTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupRemoveLayerAccountTimer.UpdateSince(now)
+	//}(time.Now())
 	for accountHash, _ := range diff.accountData {
 		var (
 			list   []common.Hash
@@ -166,13 +166,13 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 
 		for j := 0; j < len(list); j++ {
 			if list[j] == diffRoot {
-				lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
-				lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
+				//lookupAccountListMaxVal = max(int64(cap(list)), lookupAccountListMaxVal)
+				//lookupAccountListMaxValGauge.Update(lookupAccountListMaxVal)
 				if j == 0 {
 					list = list[1:]
 					if cap(list) > listCapSize {
 						list = append(getSlice(), list...)
-						lookupAccountListMaxVal = 0
+						//lookupAccountListMaxVal = 0
 					}
 				} else {
 					copy(list[j:], list[j+1:])
@@ -197,9 +197,9 @@ func (l *Lookup) removeAccount(diff *diffLayer) error {
 }
 
 func (l *Lookup) addStorage(diff *diffLayer) {
-	defer func(now time.Time) {
-		lookupAddLayerStorageTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupAddLayerStorageTimer.UpdateSince(now)
+	//}(time.Now())
 
 	for accountHash, slots := range diff.storageData {
 		subset := l.stateToLayerStorage[accountHash]
@@ -221,9 +221,9 @@ func (l *Lookup) addStorage(diff *diffLayer) {
 func (l *Lookup) removeStorage(diff *diffLayer) error {
 	diffRoot := diff.Root()
 
-	defer func(now time.Time) {
-		lookupRemoveLayerStorageTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupRemoveLayerStorageTimer.UpdateSince(now)
+	//}(time.Now())
 	for accountHash, slots := range diff.storageData {
 		var (
 			subset map[common.Hash][]common.Hash
@@ -252,13 +252,13 @@ func (l *Lookup) removeStorage(diff *diffLayer) error {
 			var found bool
 			for j := 0; j < len(slotSubset); j++ {
 				if slotSubset[j] == diffRoot {
-					lookupStorageListMaxVal = max(int64(cap(slotSubset)), lookupStorageListMaxVal)
-					lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
+					//lookupStorageListMaxVal = max(int64(cap(slotSubset)), lookupStorageListMaxVal)
+					//lookupStorageListMaxValGauge.Update(lookupStorageListMaxVal)
 					if j == 0 {
 						slotSubset = slotSubset[1:]
 						if cap(slotSubset) > listCapSize {
 							slotSubset = append(getSlice(), slotSubset...)
-							lookupStorageListMaxVal = 0
+							//lookupStorageListMaxVal = 0
 						}
 					} else {
 						copy(slotSubset[j:], slotSubset[j+1:])
@@ -311,9 +311,9 @@ func (l *Lookup) fillAncestors(layer Snapshot) {
 }
 
 func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
-	defer func(now time.Time) {
-		lookupAddDescendantTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupAddDescendantTimer.UpdateSince(now)
+	//}(time.Now())
 
 	// Link the new layer into the descendents set
 	// TODO parallel
@@ -334,9 +334,9 @@ func (l *Lookup) addDescendant(topDiffLayer Snapshot) {
 }
 
 func (l *Lookup) removeDescendant(bottomDiffLayer Snapshot) {
-	defer func(now time.Time) {
-		lookupRemoveDescendantTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupRemoveDescendantTimer.UpdateSince(now)
+	//}(time.Now())
 
 	delete(l.descendants, bottomDiffLayer.Root())
 }
@@ -376,10 +376,10 @@ func (l *Lookup) AddSnapshot(diff *diffLayer) {
 		l.addDescendant(diff)
 	}()
 	wg.Wait()
-	lookupDescendantGauge.Update(int64(len(l.descendants)))
-	lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
-	lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
-	lookupLayersGauge.Update(int64(len(l.layers)))
+	//lookupDescendantGauge.Update(int64(len(l.descendants)))
+	//lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
+	//lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
+	//lookupLayersGauge.Update(int64(len(l.layers)))
 }
 
 func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
@@ -419,22 +419,22 @@ func (l *Lookup) RemoveSnapshot(diff *diffLayer) {
 	}()
 
 	wg.Wait()
-	lookupDescendantGauge.Update(int64(len(l.descendants)))
-	lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
-	lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
+	//lookupDescendantGauge.Update(int64(len(l.descendants)))
+	//lookupAccountGauge.Update(int64(len(l.stateToLayerAccount)))
+	//lookupStorageGauge.Update(int64(len(l.stateToLayerStorage)))
 }
 
 func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) common.Hash {
-	defer func(now time.Time) {
-		lookupLookupAccountTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupLookupAccountTimer.UpdateSince(now)
+	//}(time.Now())
 
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	defer func(now time.Time) {
-		lookupLookupAccountNoLockTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupLookupAccountNoLockTimer.UpdateSince(now)
+	//}(time.Now())
 
 	list, exists := l.stateToLayerAccount[accountAddrHash]
 	if !exists {
@@ -452,16 +452,16 @@ func (l *Lookup) LookupAccount(accountAddrHash common.Hash, head common.Hash) co
 }
 
 func (l *Lookup) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) common.Hash {
-	defer func(now time.Time) {
-		lookupLookupStorageTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupLookupStorageTimer.UpdateSince(now)
+	//}(time.Now())
 
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	defer func(now time.Time) {
-		lookupStorageNoLockTimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	lookupStorageNoLockTimer.UpdateSince(now)
+	//}(time.Now())
 
 	subset, exists := l.stateToLayerStorage[accountAddrHash]
 	if !exists {

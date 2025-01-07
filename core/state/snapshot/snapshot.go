@@ -976,9 +976,9 @@ func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize, preimag
 }
 
 func (t *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) (*types.SlimAccount, error) {
-	defer func(now time.Time) {
-		snapshotLookUpAccountAPITimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	snapshotLookUpAccountAPITimer.UpdateSince(now)
+	//}(time.Now())
 
 	//t.lock.RLock()
 	var targetLayer Snapshot
@@ -1009,9 +1009,9 @@ func (t *Tree) LookupAccount(accountAddrHash common.Hash, head common.Hash) (*ty
 }
 
 func (t *Tree) LookupStorage(accountAddrHash common.Hash, slot common.Hash, head common.Hash) ([]byte, error) {
-	defer func(now time.Time) {
-		snapshotLookUpStorageAPITimer.UpdateSince(now)
-	}(time.Now())
+	//defer func(now time.Time) {
+	//	snapshotLookUpStorageAPITimer.UpdateSince(now)
+	//}(time.Now())
 
 	//t.lock.RLock()
 	var targetLayer Snapshot
